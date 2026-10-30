@@ -294,13 +294,12 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 }
 async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
- if(!usePuter&&aiAssistButton)aiAssistButton.hidden=false;
  lyricState.loading=true;
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const cacheKey=video.id;
  const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
- if(cached){
+ if(cached&&!usePuter){
   lyricState.lines=cached.lines;lyricState.plain=cached.plain||"";lyricState.wordSynced=Boolean(cached.wordSynced);
   lyricState.loading=false;renderLyrics();return;
  }
@@ -426,10 +425,12 @@ async function loadLyrics(video,usePuter=false){
  selected=await Promise.race([searchRace,delay(4900).then(()=>null)]);
  if(requestId!==lyricLoadToken)return;
  if(!selected){
+  if(aiAssistButton)aiAssistButton.hidden=false;
   lyricState.loading=false;
   showLyricsMessage("제목·가수 정보가 일치하는 가사를 찾지 못했어요. 다른 영상 버전도 확인해 주세요.");
   return;
  }
+ if(aiAssistButton)aiAssistButton.hidden=true;
  const wordLines=selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[]);
  const hasWords=wordLines.some(item=>item.words?.length);
  lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
