@@ -25,17 +25,35 @@ function parseLrc(source){
  return lines.sort((a,b)=>a.time-b.time);
 }
 function parseQrc(source){
- if(!source||typeof DOMParser==="undefined")return [];
- const doc=new DOMParser().parseFromString(String(source),"application/xml");
- if(doc.querySelector("parsererror"))return [];
+ if(!source)return [];
+ let body=String(source);
+ const doc=typeof DOMParser!=="undefined"?new DOMParser().parseFromString(body,"application/xml"):null;
+ const lyricNode=doc?.querySelector("Lyric_1");
+ if(lyricNode)body=lyricNode.getAttribute("LyricContent")||"";
+ else {
+  const match=body.match(/LyricContent="([\s\S]*?)"\s*(?:\/>|[a-zA-Z]+=)/);
+  if(match)body=match[1];
+ }
+ body=body.replace(/&quot;/g,'"').replace(/&amp;/g,"&").replace(/&#10;/g,"\n").replace(/&#13;/g,"");
  const output=[];
- doc.querySelectorAll("LyricContent").forEach(node=>{
-  const raw=node.textContent||"";
-  const tokens=[...raw.matchAll(/\((\d+),(\d+)\)([^()]+)/g)];
-  if(!tokens.length)return;
-  const words=tokens.map(match=>({start:Number(match[1])/1000,end:(Number(match[1])+Number(match[2]))/1000,text:match[3]}));
-  output.push({time:words[0].start,text:words.map(word=>word.text).join(""),words});
- });
+ for(const raw of body.split(/\r?\n/)){
+  const line=raw.trim();
+  const header=line.match(/^\[(\d+),(\d+)\]/);
+  if(!header)continue;
+  const rest=line.slice(header[0].length),words=[];
+  let textStart=0;
+  for(const token of rest.matchAll(/\((\d+),(\d+)\)/g)){
+   const text=rest.slice(textStart,token.index);
+   if(text)words.push({text,start:Number(token[1])/1000,end:(Number(token[1])+Number(token[2]))/1000});
+   textStart=token.index+token[0].length;
+  }
+  const tail=rest.slice(textStart);
+  if(tail)words.push({text:tail,start:NaN,end:NaN});
+  const cleanText=words.map(word=>word.text).join("");
+  if(!cleanText.trim())continue;
+  if(/^(lyrics by|composed by|arranged by|producer|작사|작곡|편곡|제작|作词|作曲|编曲|制作人)[:：]/i.test(cleanText.trim()))continue;
+  output.push({time:Number(header[1])/1000,text:cleanText,words:words.filter(word=>Number.isFinite(word.start))});
+ }
  return output.sort((a,b)=>a.time-b.time);
 }
 function parseEnhancedLrc(source){
