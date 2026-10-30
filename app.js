@@ -82,9 +82,9 @@ function setLoading(loading){el.searchButton.disabled=loading;el.searchButton.in
 function showMessage(title,description,kind="empty"){el.resultsList.replaceChildren();el.messageState.hidden=false;el.messageState.replaceChildren();const heading=document.createElement("h3"),paragraph=document.createElement("p"),art=document.createElement("div");heading.textContent=title;paragraph.textContent=description;art.className="empty-art";art.innerHTML=kind==="empty"?'<span class="disc"></span><span class="disc-hole"></span><span class="note">♪</span>':'<span class="note">!</span>';el.messageState.append(art,heading,paragraph);}
 function formatTime(seconds){if(!Number.isFinite(seconds)||seconds<0)return"0:00";const n=Math.floor(seconds);return Math.floor(n/60)+":"+String(n%60).padStart(2,"0");}
 function isCreditMetadata(value){
- const text=String(value||"").replace(/^[\\s\\u200B\\uFEFF]+/,"").trim();
+ const text=String(value||"").replace(/^[\s\u200B\uFEFF]+/,"").trim();
  if(!text)return false;
- return /^(?:词|曲|词曲|作词|作曲|编曲|作词作曲|作词人|作曲人|编曲人|制作人|制作|演唱|出品|监制|录音|混音|母带|lyrics?|music|written\\s+by|composed\\s+by|arranged\\s+by|produced\\s+by|songwriter|composer|arranger|producer|작사|작곡|작사·작곡|작사작곡|편곡|프로듀서|제작|노래|가수)\\s*[:：：]/i.test(text);
+ return /^(?:词|曲|词曲|作词|作曲|编曲|作词作曲|作词人|作曲人|编曲人|制作人|制作|演唱|出品|监制|录音|混音|母带|lyrics?|music|written\s+by|composed\s+by|arranged\s+by|produced\s+by|songwriter|composer|arranger|producer|작사|작곡|작사·작곡|작사작곡|편곡|프로듀서|제작|노래|가수)\s*[:：]/i.test(text);
 }
 function parseLrc(source){
  const lines=[];
@@ -472,10 +472,10 @@ async function loadLyrics(video,usePuter=false){
   return;
  }
  if(aiAssistButton)aiAssistButton.hidden=true;
- const wordLines=selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[]);
+ const wordLines=(selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[])).filter(item=>item&&!isCreditMetadata(item.text));
  const hasWords=wordLines.some(item=>item.words?.length);
- lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
- lyricState.plain=selected.plainLyrics||"";
+ lyricState.lines=(hasWords?wordLines:parseLrc(selected.syncedLyrics||"")).filter(item=>!isCreditMetadata(item.text));
+ lyricState.plain=String(selected.plainLyrics||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  if(!lyricState.lines.length&&!lyricState.plain){
