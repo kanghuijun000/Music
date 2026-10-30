@@ -116,53 +116,74 @@ async function loadLyrics(video){
  }
  const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const duration=video.duration||0;
+ const cleanTitle=String(video.title||"")
+  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
+  .replace(/\s+/g," ").trim();
  const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
- const wanted=normalize(video.title);
- const artist=normalize(video.channelTitle.replace(/\s*-\s*Topic$/i,""));
+ const wanted=normalize(cleanTitle);
+ const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
  let candidates=[];
+ const seen=new Set();
+ const addResults=items=>{
+  for(const item of (Array.isArray(items)?items:[])){
+   if(item&&item.id&&!seen.has(item.id)){seen.add(item.id);candidates.push(item);}
+  }
+ };
  try{
-  if(duration>0){
+  // 채널명이 실제 가수명이라는 보장이 없으므로, 제목 전체 검색을 먼저 수행한다.
+  const queries=[cleanTitle,video.title].filter((value,index,array)=>value&&array.indexOf(value)===index);
+  for(const query of queries){
+   const search=new URL(LYRIC_API+"/search");
+   search.searchParams.set("q",query);
+   const response=await fetch(search,{headers});
+   if(response.status===429){
+    const wait=response.headers.get("Retry-After");
+    throw new Error("가사 서버 요청이 잠시 제한됐어요."+ (wait?" "+wait+"초 후 다시 시도해 주세요.":" 잠시 후 다시 시도해 주세요."));
+   }
+   if(!response.ok)throw new Error("가사 검색 서버 응답 "+response.status);
+   addResults(await response.json());
+   if(candidates.some(item=>normalize(item.trackName||item.name)===wanted))break;
+  }
+  // 제목으로 찾은 후보 중 제목과 재생 시간이 잘 맞는 음원을 우선한다.
+  const ranked=candidates.map(item=>{
+   const title=normalize(item.trackName||item.name);
+   const recordArtist=normalize(item.artistName);
+   const titleMatch=title&&wanted&&(title===wanted||title.includes(wanted)||wanted.includes(title));
+   const durationDifference=item.duration&&duration?Math.abs(item.duration-duration):9999;
+   const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?100:-100)+(durationDifference<=2?55:durationDifference<=8?30:durationDifference<=20?5:-30);
+   return {...item,_score:score,_durationDifference:durationDifference,_artist:recordArtist};
+  }).sort((a,b)=>b._score-a._score);
+  let selected=ranked.find(item=>(item.syncedLyrics||item.plainLyrics)&&item._score>0);
+  // 후보 검색으로 찾지 못한 경우에만 가수/길이 기반 정확 검색을 보조로 시도한다.
+  if(!selected&&channel&&duration>0){
    const exact=new URL(LYRIC_API+"/get");
-   exact.searchParams.set("track_name",video.title);
-   exact.searchParams.set("artist_name",video.channelTitle.replace(/\s*-\s*Topic$/i,""));
+   exact.searchParams.set("track_name",cleanTitle);
+   exact.searchParams.set("artist_name",channel);
    exact.searchParams.set("duration",String(duration));
    const exactResponse=await fetch(exact,{headers});
-   if(exactResponse.ok){const item=await exactResponse.json();if(item)candidates.push(item);}
-  }
-  if(!candidates.length){
-   const search=new URL(LYRIC_API+"/search");
-   search.searchParams.set("track_name",video.title);
-   search.searchParams.set("artist_name",video.channelTitle.replace(/\s*-\s*Topic$/i,""));
-   const response=await fetch(search,{headers});
-   if(response.ok){const results=await response.json();candidates=Array.isArray(results)?results:[];}
-   if(!candidates.length){
-    const broad=new URL(LYRIC_API+"/search");broad.searchParams.set("q",video.title);
-    const fallback=await fetch(broad,{headers});
-    if(!fallback.ok)throw new Error("가사 검색 서버 응답 "+fallback.status);
-    const results=await fallback.json();candidates=Array.isArray(results)?results:[];
+   if(exactResponse.ok){
+    const exactItem=await exactResponse.json();
+    if(exactItem&&(exactItem.syncedLyrics||exactItem.plainLyrics))selected=exactItem;
+   }else if(exactResponse.status===429){
+    throw new Error("가사 서버 요청이 잠시 제한됐어요. 잠시 후 다시 시도해 주세요.");
    }
   }
-  const ranked=candidates.map(item=>{
-   const title=normalize(item.trackName||item.name),recordArtist=normalize(item.artistName);
-   const titleMatch=title&&wanted&&(title===wanted||wanted.includes(title)||title.includes(wanted));
-   const artistMatch=recordArtist&&artist&&(recordArtist===artist||artist.includes(recordArtist)||recordArtist.includes(artist));
-   const durationDifference=item.duration&&duration?Math.abs(item.duration-duration):9999;
-   const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?60:-60)+(artistMatch?35:-15)+(durationDifference<=2?50:durationDifference<=8?25:durationDifference<=20?5:-25);
-   return {...item,_score:score};
-  }).sort((a,b)=>b._score-a._score);
-  const selected=ranked[0];
-  if(!selected||(!selected.syncedLyrics&&!selected.plainLyrics)){showLyricsMessage("이 곡의 가사를 찾지 못했어요");return;}
-  const wordLines=parseLyricsfile(selected.lyricsfile);
+  if(!selected){showLyricsMessage("이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");return;}
+  const wordLines=selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[];
   const hasWords=wordLines.some(item=>item.words.length>0);
   lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
   lyricState.plain=selected.plainLyrics||"";
   lyricState.wordSynced=hasWords;
   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
+  if(!lyricState.lines.length&&!lyricState.plain){
+   showLyricsMessage("이 곡의 가사 데이터가 비어 있어요");return;
+  }
   lyricCache.set(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
   renderLyrics();
  }catch(error){
   console.warn("Lyrics lookup failed:",error);
-  showLyricsMessage("무료 가사 검색에 실패했어요. 잠시 후 다시 시도해 주세요.");
+  showLyricsMessage(error?.message||"무료 가사 검색에 실패했어요. 잠시 후 다시 시도해 주세요.");
  }
 }
 function updateProgress(){
