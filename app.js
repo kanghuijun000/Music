@@ -308,7 +308,7 @@ async function loadLyrics(video,usePuter=false){
  const cacheKey=video.id;
  const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
  if(cached&&!usePuter){
-  lyricState.lines=cached.lines;lyricState.plain=cached.plain||"";lyricState.wordSynced=Boolean(cached.wordSynced);
+  lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));lyricState.plain=String(cached.plain||"").split(/\\r?\\n/).filter(line=>!isCreditMetadata(line)).join("\\n");lyricState.wordSynced=Boolean(cached.wordSynced);
   lyricState.loading=false;renderLyrics();return;
  }
  const normalize=value=>String(value||"").toLocaleLowerCase()
