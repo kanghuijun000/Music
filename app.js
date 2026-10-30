@@ -1,7 +1,8 @@
 const API_BASE="https://www.googleapis.com/youtube/v3";
 const STORAGE_KEY="musiq_youtube_api_key_v1";
 const LYRIC_API="https://lrclib.net/api";
-const lyricState={lines:[],plain:"",lastIndex:-1};
+const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false};
+const lyricCache=new Map();
 const ids=["searchForm","searchInput","searchButton","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
 let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false;
@@ -19,9 +20,42 @@ function parseLrc(source){
   const fraction=(m[3]||"0").padEnd(3,"0");
   const time=Number(m[1])*60+Number(m[2])+Number(fraction)/1000;
   const text=m[4].trim();
-  if(text)lines.push({time,text});
+  if(text)lines.push({time,text,words:[]});
  }
  return lines.sort((a,b)=>a.time-b.time);
+}
+function parseYamlText(value){
+ const raw=String(value||"").trim();
+ if(raw.startsWith("'")&&raw.endsWith("'"))return raw.slice(1,-1).replace(/''/g,"'");
+ if(raw.startsWith('"')){try{return JSON.parse(raw);}catch(_){}}
+ return raw;
+}
+function parseLyricsfile(source){
+ if(!source||typeof source!=="string")return [];
+ const output=[];let line=null,word=null,insideLines=false,insideWords=false;
+ const saveWord=()=>{if(line&&word&&Number.isFinite(word.start)&&word.text!==undefined)line.words.push(word);word=null;};
+ const saveLine=()=>{saveWord();if(line&&line.text!==undefined&&Number.isFinite(line.time))output.push(line);line=null;insideWords=false;};
+ for(const raw of source.split(/\r?\n/)){
+  const indent=(raw.match(/^ */)||[""])[0].length;
+  const s=raw.trim();
+  if(!s||s.startsWith("#"))continue;
+  if(indent===0){insideLines=s==="lines:";continue;}
+  if(!insideLines)continue;
+  if(indent===2&&s.startsWith("- text:")){
+   saveLine();line={text:parseYamlText(s.slice(7).trim()),time:NaN,end:NaN,words:[]};insideWords=false;continue;
+  }
+  if(!line)continue;
+  if(indent===4&&s.startsWith("start_ms:")){line.time=Number(s.slice(9).trim())/1000;continue;}
+  if(indent===4&&s.startsWith("end_ms:")){line.end=Number(s.slice(7).trim())/1000;continue;}
+  if(indent===4&&s==="words:"){insideWords=true;continue;}
+  if(indent===6&&insideWords&&s.startsWith("- text:")){
+   saveWord();word={text:parseYamlText(s.slice(7).trim()),start:NaN,end:NaN};continue;
+  }
+  if(indent===8&&insideWords&&word&&s.startsWith("start_ms:")){word.start=Number(s.slice(9).trim())/1000;continue;}
+  if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=Number(s.slice(7).trim())/1000;continue;}
+ }
+ saveLine();
+ return output.filter(item=>Number.isFinite(item.time)).sort((a,b)=>a.time-b.time);
 }
 function showLyricsMessage(message){
  el.lyricsView.replaceChildren();
@@ -47,56 +81,84 @@ function renderLyrics(){
  const current=ytPlayer&&typeof ytPlayer.getCurrentTime==="function"?ytPlayer.getCurrentTime():0;
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=current)index=i;else break;}
- if(index===lyricState.lastIndex)return;
- lyricState.lastIndex=index;
+ let wordIndex=-1;
+ const activeLine=index>=0?lyricState.lines[index]:null;
+ if(lyricState.wordSynced&&activeLine?.words?.length){
+  for(let i=0;i<activeLine.words.length;i++){if(activeLine.words[i].start<=current)wordIndex=i;else break;}
+ }
+ if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex)return;
+ lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
  el.lyricsView.replaceChildren();
  const start=Math.max(0,index-2),end=Math.min(lyricState.lines.length,index+5);
  for(let i=start;i<end;i++){
-  const row=document.createElement("div");
+  const item=lyricState.lines[i],row=document.createElement("div");
   row.className="lyric-line"+(i===index?" current":"")+(i<index?" past":"");
-  row.textContent=lyricState.lines[i].text;
+  if(i===index&&lyricState.wordSynced&&item.words?.length){
+   item.words.forEach((part,j)=>{
+    const span=document.createElement("span");
+    span.className="lyric-word"+(j===wordIndex?" active":"")+(j>wordIndex?" upcoming":"");
+    span.textContent=part.text;
+    row.append(span);
+   });
+  }else row.textContent=item.text;
   el.lyricsView.append(row);
  }
- el.lyricsStatus.textContent="시간 동기화 가사";
+ el.lyricsStatus.textContent=lyricState.wordSynced?"단어 단위 동기화":"시간 동기화 가사";
 }
 async function loadLyrics(video){
- lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;
+ lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("무료 가사 데이터에서 검색하고 있어요…");
+ const cacheKey=video.id;
+ if(lyricCache.has(cacheKey)){
+  const cached=lyricCache.get(cacheKey);
+  lyricState.lines=cached.lines;lyricState.plain=cached.plain;lyricState.wordSynced=cached.wordSynced;
+  renderLyrics();return;
+ }
  const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const duration=video.duration||0;
- const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
+ const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const wanted=normalize(video.title);
+ const artist=normalize(video.channelTitle.replace(/\s*-\s*Topic$/i,""));
  let candidates=[];
  try{
   if(duration>0){
    const exact=new URL(LYRIC_API+"/get");
    exact.searchParams.set("track_name",video.title);
-   exact.searchParams.set("artist_name",video.channelTitle);
+   exact.searchParams.set("artist_name",video.channelTitle.replace(/\s*-\s*Topic$/i,""));
    exact.searchParams.set("duration",String(duration));
    const exactResponse=await fetch(exact,{headers});
    if(exactResponse.ok){const item=await exactResponse.json();if(item)candidates.push(item);}
   }
   if(!candidates.length){
    const search=new URL(LYRIC_API+"/search");
-   search.searchParams.set("q",video.title+" "+video.channelTitle);
+   search.searchParams.set("track_name",video.title);
+   search.searchParams.set("artist_name",video.channelTitle.replace(/\s*-\s*Topic$/i,""));
    const response=await fetch(search,{headers});
-   if(!response.ok)throw new Error("가사 검색 서버 응답 "+response.status);
-   const results=await response.json();
-   candidates=Array.isArray(results)?results:[];
+   if(response.ok){const results=await response.json();candidates=Array.isArray(results)?results:[];}
+   if(!candidates.length){
+    const broad=new URL(LYRIC_API+"/search");broad.searchParams.set("q",video.title);
+    const fallback=await fetch(broad,{headers});
+    if(!fallback.ok)throw new Error("가사 검색 서버 응답 "+fallback.status);
+    const results=await fallback.json();candidates=Array.isArray(results)?results:[];
+   }
   }
   const ranked=candidates.map(item=>{
-   const title=normalize(item.trackName||item.name);
-   const artist=normalize(item.artistName);
-   const titleMatch=title&&wanted&&(wanted.includes(title)||title.includes(wanted));
+   const title=normalize(item.trackName||item.name),recordArtist=normalize(item.artistName);
+   const titleMatch=title&&wanted&&(title===wanted||wanted.includes(title)||title.includes(wanted));
+   const artistMatch=recordArtist&&artist&&(recordArtist===artist||artist.includes(recordArtist)||recordArtist.includes(artist));
    const durationDifference=item.duration&&duration?Math.abs(item.duration-duration):9999;
-   const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?35:0)+(durationDifference<=2?40:durationDifference<=8?20:0)+(artist&&normalize(video.channelTitle).includes(artist)?8:0);
+   const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?60:-60)+(artistMatch?35:-15)+(durationDifference<=2?50:durationDifference<=8?25:durationDifference<=20?5:-25);
    return {...item,_score:score};
   }).sort((a,b)=>b._score-a._score);
   const selected=ranked[0];
   if(!selected||(!selected.syncedLyrics&&!selected.plainLyrics)){showLyricsMessage("이 곡의 가사를 찾지 못했어요");return;}
-  lyricState.lines=parseLrc(selected.syncedLyrics||"");
+  const wordLines=parseLyricsfile(selected.lyricsfile);
+  const hasWords=wordLines.some(item=>item.words.length>0);
+  lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
   lyricState.plain=selected.plainLyrics||"";
-  lyricState.lastIndex=-1;
+  lyricState.wordSynced=hasWords;
+  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
+  lyricCache.set(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
   renderLyrics();
  }catch(error){
   console.warn("Lyrics lookup failed:",error);
