@@ -126,6 +126,7 @@ async function loadLyrics(video){
   .replace(/\s+/g," ").trim();
  const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
  const duration=Number(video.duration)||0;
+ const titleVariants=[...new Set([cleanTitle,...cleanTitle.split(/\s+[-–|]\s+/).map(value=>value.trim())].filter(value=>value&&normalize(value).length>=2))];
  const wanted=normalize(cleanTitle);
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function requestJson(url,headersArg={}){
@@ -165,14 +166,17 @@ async function loadLyrics(video){
   });
  }
  let identity={track:cleanTitle,artist:"",album:"",duration};
- const appleTerms=[cleanTitle,rawTitle].filter((value,index,array)=>value&&array.indexOf(value)===index);
+ const appleTerms=[cleanTitle,...titleVariants.slice(1),rawTitle].filter((value,index,array)=>value&&array.indexOf(value)===index).slice(0,3);
  for(const term of appleTerms){
   try{
    const results=await searchApple(term);
    const ranked=results.map(item=>{
     const title=normalize(item.trackName);
     const artist=normalize(item.artistName);
-    const titleMatch=title&&wanted&&(title===wanted||title.includes(wanted)||wanted.includes(title));
+    const titleMatch=titleVariants.some(candidate=>{
+     const target=normalize(candidate);
+     return target&&(title===target||title.includes(target)||target.includes(title));
+    });
     const durationDifference=duration&&item.trackTimeMillis?Math.abs(item.trackTimeMillis/1000-duration):9999;
     const channelMatch=channel&&artist&&(artist===normalize(channel)||normalize(channel).includes(artist)||artist.includes(normalize(channel)));
     const score=(titleMatch?100:0)+(channelMatch?20:0)+(durationDifference<=3?60:durationDifference<=10?30:durationDifference<=30?5:-20);
