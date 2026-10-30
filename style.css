@@ -66,3 +66,26 @@
 .lyric-line.current{order:0}
 
 #lyricsStatus[hidden]{display:none}
+
+/* Final responsive and accessibility polish */
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+button:disabled{cursor:not-allowed}
+.search-form input{min-height:42px}
+.track{min-height:76px}
+.track-thumb{flex:none}
+.player-panel,.results-panel{overflow:hidden}
+@supports(padding:max(0px)){
+ .app-shell{padding-left:max(4%,env(safe-area-inset-left));padding-right:max(4%,env(safe-area-inset-right))}
+ footer{padding-bottom:env(safe-area-inset-bottom)}
+}
+@media(max-width:560px){
+ .hero{padding-top:46px}
+ h1{font-size:clamp(34px,10vw,42px)}
+ .search-form button{min-width:76px}
+ .connection{max-width:92px;white-space:nowrap}
+ .lyrics-view{scrollbar-width:none}
+ .lyrics-view::-webkit-scrollbar{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
