@@ -161,27 +161,29 @@ function parseTtml(source){
  const doc=new DOMParser().parseFromString(String(source),"application/xml");
  if(doc.querySelector("parsererror"))return [];
  const output=[];
- doc.querySelectorAll("p").forEach(p=>{
+ const paragraphs=[...doc.getElementsByTagName("*")].filter(node=>node.localName==="p");
+ paragraphs.forEach(p=>{
   const words=[];
   const collect=(node)=>{
    node.childNodes.forEach(child=>{
+    if(child.nodeType===3||child.nodeType===4)return;
     if(child.nodeType!==1)return;
-    if(child.localName==="span"){
-     const begin=child.getAttribute("begin");
-     if(begin){
-      const start=parseTimedTextTime(begin),end=parseTimedTextTime(child.getAttribute("end"));
-      const text=child.textContent||"";
-      if(Number.isFinite(start)&&text)words.push({start,end,text});
-     }else collect(child);
-    }
+    if(child.localName==="span"&&child.hasAttribute("begin")){
+     const start=parseTimedTextTime(child.getAttribute("begin"));
+     const end=parseTimedTextTime(child.getAttribute("end"));
+     const text=child.textContent||"";
+     if(Number.isFinite(start)&&text)words.push({start,end,text});
+    }else collect(child);
    });
   };
   collect(p);
-  const time=parseTimedTextTime(p.getAttribute("begin"))||words[0]?.start;
+  const ownTime=parseTimedTextTime(p.getAttribute("begin"));
+  const time=Number.isFinite(ownTime)?ownTime:(words[0]?.start??NaN);
+  const fullText=(p.textContent||"").replace(/\\s+/g," ").trim();
   if(Number.isFinite(time)&&words.length){
    output.push({time,text:words.map(word=>word.text).join(""),words});
-  }else if(Number.isFinite(time)&&(p.textContent||"").trim()){
-   output.push({time,text:p.textContent.trim(),words:[]});
+  }else if(Number.isFinite(time)&&fullText){
+   output.push({time,text:fullText,words:[]});
   }
  });
  return output.sort((a,b)=>a.time-b.time);
@@ -322,8 +324,20 @@ async function loadLyrics(video,usePuter=false){
  const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function getJson(url,customHeaders=headers){
-  let response=await fetch(url,{headers:customHeaders});
-  if(response.status===429||response.status===503){await delay(700);response=await fetch(url,{headers:customHeaders});}
+  const request=async()=>{
+   const controller=new AbortController();
+   const timer=setTimeout(()=>controller.abort(),12000);
+   try{return await fetch(url,{headers:customHeaders,signal:controller.signal});}
+   finally{clearTimeout(timer);}
+  };
+  let response;
+  try{response=await request();}
+  catch(error){if(error?.name==="AbortError")throw new Error("요청 시간 초과");throw error;}
+  if(response.status===429||response.status===503){
+   await delay(1000);
+   try{response=await request();}
+   catch(error){if(error?.name==="AbortError")throw new Error("재시도 시간 초과");throw error;}
+  }
   if(!response.ok)throw new Error("HTTP "+response.status);
   return response.json();
  }
@@ -362,7 +376,20 @@ async function loadLyrics(video,usePuter=false){
   if(!isGood(item))return null;
   return item;
  })());
- // 2) Better Lyrics syllable-synced TTML provider. Cached matches work without an API key.
+ // 2) Better Lyrics default endpoint: documented response field is `ttml`.
+ jobs.push((async()=>{
+  const url=new URL("https://api.betterlyrics.org/getLyrics");
+  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
+  url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
+  url.searchParams.set("v",video.id);
+  const data=await getJson(url,{});
+  const rawLyrics=data.ttml||data.lyrics||"";
+  const lines=parseTtml(rawLyrics);
+  if(!lines.length)return null;
+  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
+  return isGood(item)?item:null;
+ })());
+ // 3) Better Lyrics provider-specific TTML endpoint.
  jobs.push((async()=>{
   const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
@@ -431,12 +458,12 @@ async function loadLyrics(video,usePuter=false){
  const providerJobs=jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;}));
  const aiVerifiedJob=aiJob.then(item=>{if(!item)throw new Error("No AI-verified lyric match");return item;});
  const searchRace=Promise.any([...providerJobs,aiVerifiedJob]).catch(()=>null);
- selected=await Promise.race([searchRace,delay(4900).then(()=>null)]);
+ selected=await Promise.race([searchRace,delay(25000).then(()=>null)]);
  if(requestId!==lyricLoadToken)return;
  if(!selected){
   if(aiAssistButton)aiAssistButton.hidden=false;
   lyricState.loading=false;
-  showLyricsMessage("제목·가수 정보가 일치하는 가사를 찾지 못했어요. 다른 영상 버전도 확인해 주세요.");
+  showLyricsMessage("가사 제공처를 모두 확인했지만 일치하는 결과를 찾지 못했어요. 다른 영상 버전이나 표기 정보가 필요할 수 있어요.");
   return;
  }
  if(aiAssistButton)aiAssistButton.hidden=true;
