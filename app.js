@@ -24,6 +24,45 @@ function parseLrc(source){
  }
  return lines.sort((a,b)=>a.time-b.time);
 }
+function parseTimedTextTime(value){
+ if(!value)return NaN;
+ const parts=String(value).trim().split(":");
+ let seconds=0;
+ if(parts.length===3)seconds=Number(parts[0])*3600+Number(parts[1])*60+Number(parts[2]);
+ else if(parts.length===2)seconds=Number(parts[0])*60+Number(parts[1]);
+ else seconds=Number(parts[0]);
+ return Number.isFinite(seconds)?seconds:NaN;
+}
+function parseTtml(source){
+ if(!source||typeof DOMParser==="undefined")return [];
+ const doc=new DOMParser().parseFromString(String(source),"application/xml");
+ if(doc.querySelector("parsererror"))return [];
+ const output=[];
+ doc.querySelectorAll("p").forEach(p=>{
+  const words=[];
+  const collect=(node)=>{
+   node.childNodes.forEach(child=>{
+    if(child.nodeType!==1)return;
+    if(child.localName==="span"){
+     const begin=child.getAttribute("begin");
+     if(begin){
+      const start=parseTimedTextTime(begin),end=parseTimedTextTime(child.getAttribute("end"));
+      const text=child.textContent||"";
+      if(Number.isFinite(start)&&text)words.push({start,end,text});
+     }else collect(child);
+    }
+   });
+  };
+  collect(p);
+  const time=parseTimedTextTime(p.getAttribute("begin"))||words[0]?.start;
+  if(Number.isFinite(time)&&words.length){
+   output.push({time,text:words.map(word=>word.text).join(""),words});
+  }else if(Number.isFinite(time)&&(p.textContent||"").trim()){
+   output.push({time,text:p.textContent.trim(),words:[]});
+  }
+ });
+ return output.sort((a,b)=>a.time-b.time);
+}
 function parseYamlText(value){
  const raw=String(value||"").trim();
  if(raw.startsWith("'")&&raw.endsWith("'"))return raw.slice(1,-1).replace(/''/g,"'");
@@ -132,11 +171,11 @@ async function loadLyrics(video){
  async function requestJson(url,headersArg={}){
   let response=await fetch(url,{headers:headersArg});
   if(response.status===429||response.status===503){
-   const retry=Number(response.headers.get("Retry-After")||0);
-   if(retry>0&&retry<=2){
-    await delay(retry*1000);
-    response=await fetch(url,{headers:headersArg});
-   }
+   const retryHeader=response.headers.get("Retry-After");
+   const retrySeconds=retryHeader?Number(retryHeader):0;
+   const waitMs=Number.isFinite(retrySeconds)&&retrySeconds>0?Math.min(retrySeconds*1000,5000):1000;
+   await delay(waitMs);
+   response=await fetch(url,{headers:headersArg});
   }
   return response;
  }
@@ -243,6 +282,62 @@ async function loadLyrics(video){
   }).sort((a,b)=>b._score-a._score);
   selected=ranked.find(item=>(item.syncedLyrics||item.plainLyrics)&&item._score>0)||null;
  }
+ // Additional independent lyric catalogs. Prefer timed lyrics over a plain-text hit.
+ // Karalyr is LRCLIB-compatible and focuses on word-synced karaoke data.
+ if(!selected?.syncedLyrics&&!selected?.hasWordSync){
+  try{
+   const url=new URL("https://karalyr.com/api/get");
+   url.searchParams.set("track_name",identity.track);
+   url.searchParams.set("artist_name",identity.artist);
+   if(identity.album)url.searchParams.set("album_name",identity.album);
+   if(identity.duration)url.searchParams.set("duration",String(identity.duration));
+   const response=await requestJson(url,{ "X-Karalyr-Client":"Music/1.0 (https://kanghuijun000.github.io/)" });
+   if(response.ok){
+    const data=await response.json();
+    if(data?.syncedLyrics||data?.plainLyrics)selected=data;
+   }else if(response.status===429||response.status===503)temporaryFailure=true;
+  }catch(error){temporaryFailure=true;console.warn("Karalyr lookup:",error?.message||error);}
+ }
+ // SyncLRC offers karaoke, line-synced and plain variants through a documented public API.
+ if(!selected?.hasWordSync&&!selected?.syncedLyrics){
+  try{
+   const url=new URL("https://api.synclrc.dev/lyrics");
+   url.searchParams.set("track",identity.track);
+   url.searchParams.set("artist",identity.artist);
+   if(identity.album)url.searchParams.set("album",identity.album);
+   if(identity.duration)url.searchParams.set("duration",String(identity.duration));
+   url.searchParams.set("type","karaoke");
+   const response=await requestJson(url);
+   if(response.ok){
+    const data=await response.json();
+    const timed=data.karaoke||data.synced||data.lyrics||"";
+    if(timed){
+     const lines=parseLrc(timed);
+     if(lines.length){
+      const enhanced=timed.includes("<")||timed.includes("{");
+      selected={...(selected||{}),syncedLyrics:timed,plainLyrics:data.plain||selected?.plainLyrics||"",hasWordSync:enhanced,lyricsfile:null};
+     }
+    }
+    if(!selected?.syncedLyrics&&data.plain)selected={...(selected||{}),plainLyrics:data.plain};
+   }else if(response.status===429||response.status===503)temporaryFailure=true;
+  }catch(error){temporaryFailure=true;console.warn("SyncLRC lookup:",error?.message||error);}
+ }
+ // Better Lyrics serves cached TTML with syllable-level timestamps without a key.
+ if(!selected?.hasWordSync&&!selected?.syncedLyrics){
+  try{
+   const url=new URL("https://api.betterlyrics.org/getLyrics");
+   url.searchParams.set("s",identity.track);
+   url.searchParams.set("a",identity.artist);
+   url.searchParams.set("al",identity.album||identity.track);
+   url.searchParams.set("d",String(identity.duration||Math.round(duration)||1));
+   const response=await requestJson(url);
+   if(response.ok){
+    const data=await response.json();
+    const timed=parseTtml(data.ttml||"");
+    if(timed.length)selected={...(selected||{}),ttml:data.ttml,ttmlLines:timed,hasWordSync:true};
+   }else if(response.status===429||response.status===503)temporaryFailure=true;
+  }catch(error){temporaryFailure=true;console.warn("Better Lyrics lookup:",error?.message||error);}
+ }
  // Independent plain-lyrics fallback. This provider does not provide line timing.
  if(!selected||(!selected.syncedLyrics&&!selected.plainLyrics)){
   if(identity.artist&&identity.track){
@@ -264,7 +359,7 @@ async function loadLyrics(video){
    :"이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");
   return;
  }
- const wordLines=selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[];
+ const wordLines=selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[]);
  const hasWords=wordLines.some(item=>item.words.length>0);
  lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
  lyricState.plain=selected.plainLyrics||"";
