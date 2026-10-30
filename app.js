@@ -6,7 +6,7 @@ const LYRIC_LEAD_SECONDS=0.25;
 const lyricCache=new Map();
 const ids=["searchForm","searchInput","searchButton","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
-let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false;
+let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false,lyricLoadToken=0;
 const HISTORY_KEY="music_recent_searches_v1";
 const HISTORY_LIMIT=8;
 let recentSearches=loadRecentSearches();
@@ -246,6 +246,7 @@ function renderLyrics(){
  el.lyricsStatus.textContent="";
 }
 async function loadLyrics(video){
+ const requestId=++lyricLoadToken;
  lyricState.loading=true;
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
@@ -255,239 +256,96 @@ async function loadLyrics(video){
   lyricState.lines=cached.lines;lyricState.plain=cached.plain;lyricState.wordSynced=cached.wordSynced;
   lyricState.loading=false;renderLyrics();return;
  }
- const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
- const normalize=value=>String(value||"").toLowerCase()
+ const normalize=value=>String(value||"").toLocaleLowerCase()
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
+  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
+  .replace(/가사|뮤직비디오|뮤비|공식영상|오디오/gi," ")
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
- const rawTitle=String(video.title||"").trim();
- const titleWithoutTags=rawTitle
-  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+ const raw=String(video.title||"").trim();
+ const cleaned=raw.replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\s*(?:\/|\|)\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video).*$/i," ")
-  .replace(/\b(official music video|official audio|lyrics video|lyric video|lyrics|lyric)\b/gi," ")
-  .replace(/가사|뮤직비디오|뮤비/gi," ")
   .replace(/\s+/g," ").trim();
- const titleParts=titleWithoutTags.split(/\s+[-–|]\s+/).map(value=>value.trim()).filter(Boolean);
- const parsedArtist=titleParts.length>1?titleParts[0]:"";
- const cleanTitle=titleParts.length>1?titleParts.slice(1).join(" - "):titleWithoutTags;
+ const parts=cleaned.split(/\s+[-–|]\s+/).map(x=>x.trim()).filter(Boolean);
+ const track=parts.length>1?parts.slice(1).join(" - "):cleaned;
+ const isTopic=/\s*-\s*Topic$/i.test(String(video.channelTitle||""));
  const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
+ const artist=parts.length>1?parts[0]:(isTopic?channel:"");
  const duration=Number(video.duration)||0;
- const titleVariants=[...new Set([cleanTitle,titleWithoutTags,...titleParts].filter(value=>value&&normalize(value).length>=2))];
- const wanted=normalize(cleanTitle);
+ const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- async function requestJson(url,headersArg={}){
-  let response=await fetch(url,{headers:headersArg});
-  if(response.status===429||response.status===503){
-   const retryHeader=response.headers.get("Retry-After");
-   const retrySeconds=retryHeader?Number(retryHeader):0;
-   const waitMs=Number.isFinite(retrySeconds)&&retrySeconds>0?Math.min(retrySeconds*1000,5000):1000;
-   await delay(waitMs);
-   response=await fetch(url,{headers:headersArg});
-  }
-  return response;
+ async function getJson(url,customHeaders=headers){
+  let response=await fetch(url,{headers:customHeaders});
+  if(response.status===429||response.status===503){await delay(700);response=await fetch(url,{headers:customHeaders});}
+  if(!response.ok)throw new Error("HTTP "+response.status);
+  return response.json();
  }
- function searchApple(term){
-  return new Promise((resolve,reject)=>{
-   const callbackName="musicAppleCallback_"+Math.random().toString(36).slice(2);
-   const script=document.createElement("script");
-   const url=new URL("https://itunes.apple.com/search");
-   url.searchParams.set("term",term);
-   url.searchParams.set("entity","song");
-   url.searchParams.set("country","kr");
-   url.searchParams.set("limit","25");
-   url.searchParams.set("callback",callbackName);
-   let finished=false;
-   const cleanup=()=>{
-    if(finished)return;
-    finished=true;
-    try{delete window[callbackName];}catch(_){window[callbackName]=undefined;}
-    script.remove();
-    clearTimeout(timer);
-   };
-   const timer=setTimeout(()=>{cleanup();reject(new Error("음원 정보 검색 시간 초과"));},3500);
-   window[callbackName]=data=>{cleanup();resolve(Array.isArray(data?.results)?data.results:[]);};
-   script.onerror=()=>{cleanup();reject(new Error("음원 정보 검색 연결 실패"));};
-   script.src=url.toString();
-   document.head.appendChild(script);
-  });
+ function isGood(item){
+  if(!item||(!item.syncedLyrics&&!item.ttmlLines&&!item.plainLyrics))return false;
+  const gotTitle=normalize(item.trackName||item.title||track),wantTitle=normalize(track);
+  if(!gotTitle||!wantTitle)return false;
+  const titleMatch=gotTitle===wantTitle||(gotTitle.length>=wantTitle.length+3&&gotTitle.includes(wantTitle))||(wantTitle.length>=gotTitle.length+3&&wantTitle.includes(gotTitle));
+  const gotArtist=normalize(item.artistName||item.artist||""),wantArtist=normalize(artist);
+  const artistMatch=!wantArtist||!gotArtist||gotArtist===wantArtist||gotArtist.includes(wantArtist)||wantArtist.includes(gotArtist);
+  const gotDuration=Number(item.duration)||0;
+  const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
+  return titleMatch&&artistMatch&&durationMatch;
  }
- let identity={track:cleanTitle,artist:parsedArtist,album:"",duration};
- const appleTerms=[cleanTitle].filter(Boolean);
- for(const term of appleTerms){
-  try{
-   const results=await searchApple(term);
-   const ranked=results.map(item=>{
-    const title=normalize(item.trackName);
-    const artist=normalize(item.artistName);
-    const titleMatch=titleVariants.some(candidate=>{
-     const target=normalize(candidate);
-     return target&&(title===target||title.includes(target)||target.includes(title));
-    });
-    const durationDifference=duration&&item.trackTimeMillis?Math.abs(item.trackTimeMillis/1000-duration):9999;
-    const channelMatch=channel&&artist&&(artist===normalize(channel)||normalize(channel).includes(artist)||artist.includes(normalize(channel)));
-    const score=(titleMatch?100:0)+(channelMatch?20:0)+(durationDifference<=3?60:durationDifference<=10?30:durationDifference<=30?5:-20);
-    return {item,score,titleMatch,durationDifference};
-   }).filter(entry=>entry.titleMatch).sort((a,b)=>b.score-a.score);
-   if(ranked.length){
-    const item=ranked[0].item;
-    identity={
-     track:item.trackName||cleanTitle,
-     artist:item.artistName||"",
-     album:item.collectionName||"",
-     duration:item.trackTimeMillis?Math.round(item.trackTimeMillis/1000):duration
-    };
-    break;
-   }
-  }catch(error){console.warn("Apple metadata lookup:",error?.message||error);}
- }
- // Apple catalog may not list a video; only use the YouTube channel as a last-resort artist hint.
- if(!identity.artist)identity.artist=parsedArtist||channel;
+ function lrclibItem(item){return isGood(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
+ const jobs=[];
  const exactUrl=new URL(LYRIC_API+"/get");
- exactUrl.searchParams.set("track_name",identity.track);
- if(identity.artist)exactUrl.searchParams.set("artist_name",identity.artist);
- if(identity.album)exactUrl.searchParams.set("album_name",identity.album);
- if(identity.duration)exactUrl.searchParams.set("duration",String(identity.duration));
- let selected=null,temporaryFailure=false;
+ exactUrl.searchParams.set("track_name",track);
+ if(artist)exactUrl.searchParams.set("artist_name",artist);
+ if(duration)exactUrl.searchParams.set("duration",String(duration));
+ jobs.push((async()=>lrclibItem(await getJson(exactUrl)))());
+ const searchUrl=new URL(LYRIC_API+"/search");
+ searchUrl.searchParams.set("track_name",track);
+ if(artist)searchUrl.searchParams.set("artist_name",artist);
+ jobs.push((async()=>{
+  const list=await getJson(searchUrl);
+  return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
+ })());
+ jobs.push((async()=>{
+  const url=new URL("https://api.synclrc.dev/lyrics");
+  url.searchParams.set("track",track);url.searchParams.set("artist",artist);
+  if(duration)url.searchParams.set("duration",String(duration));
+  url.searchParams.set("type","karaoke");
+  const data=await getJson(url,{});
+  const timed=data.karaoke||data.synced||data.lyrics||"";
+  const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
+  if(!lines.length)return null;
+  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:enhanced,hasWordSync:enhanced.length>0};
+  return isGood(item)?item:null;
+ })());
+ for(const provider of ["kugou","qq"])jobs.push((async()=>{
+  const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
+  url.searchParams.set("s",track);url.searchParams.set("a",artist);url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
+  const data=await getJson(url,{});
+  const rawLyrics=data.lyrics||"",lines=provider==="kugou"?parseLrc(rawLyrics):parseQrc(rawLyrics);
+  if(!lines.length)return null;
+  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:provider==="kugou"?rawLyrics:"",ttmlLines:provider==="qq"?lines:[],hasWordSync:provider==="qq"};
+  return isGood(item)?item:null;
+ })());
+ let selected=null;
  try{
-  const exactResponse=await requestJson(exactUrl,headers);
-  if(exactResponse.ok)selected=await exactResponse.json();
-  else if(exactResponse.status===429||exactResponse.status===503)temporaryFailure=true;
- }catch(error){temporaryFailure=true;console.warn("LRCLIB exact lookup:",error?.message||error);}
- // Exact metadata lookup failed or was temporarily unavailable: search by separate title/artist fields.
- if(!selected){
-  const searchUrls=[];
-  const structured=new URL(LYRIC_API+"/search");
-  structured.searchParams.set("track_name",identity.track);
-  if(identity.artist)structured.searchParams.set("artist_name",identity.artist);
-  searchUrls.push(structured);
-  const broad=new URL(LYRIC_API+"/search");
-  broad.searchParams.set("q",[identity.track,identity.artist].filter(Boolean).join(" "));
-  searchUrls.push(broad);
-  const found=[];
-  for(const url of searchUrls){
-   try{
-    const response=await requestJson(url,headers);
-    if(response.status===429||response.status===503){temporaryFailure=true;continue;}
-    if(!response.ok)continue;
-    const items=await response.json();
-    if(Array.isArray(items))found.push(...items);
-    if(found.some(item=>normalize(item.trackName)===normalize(identity.track)))break;
-   }catch(error){temporaryFailure=true;console.warn("LRCLIB search:",error?.message||error);}
-  }
-  const seen=new Set();
-  const ranked=found.filter(item=>{
-   if(!item||seen.has(item.id))return false;
-   seen.add(item.id);return true;
-  }).map(item=>{
-   const title=normalize(item.trackName);
-   const artist=normalize(item.artistName);
-   const titleMatch=title&&(title===normalize(identity.track)||title.includes(normalize(identity.track))||normalize(identity.track).includes(title));
-   const artistMatch=!identity.artist||!artist||artist===normalize(identity.artist)||artist.includes(normalize(identity.artist))||normalize(identity.artist).includes(artist);
-   const durationDifference=identity.duration&&item.duration?Math.abs(identity.duration-item.duration):9999;
-   const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?100:-100)+(artistMatch?35:-70)+(durationDifference<=2?55:durationDifference<=8?25:durationDifference<=20?0:-35);
-   return {...item,_score:score};
-  }).sort((a,b)=>b._score-a._score);
-  selected=ranked.find(item=>(item.syncedLyrics||item.plainLyrics)&&item._score>0)||null;
- }
- // Additional independent lyric catalogs. Prefer timed lyrics over a plain-text hit.
- // SyncLRC offers karaoke, line-synced and plain variants through a documented public API.
- if(!selected?.hasWordSync&&!selected?.syncedLyrics){
-  try{
-   const url=new URL("https://api.synclrc.dev/lyrics");
-   url.searchParams.set("track",identity.track);
-   url.searchParams.set("artist",identity.artist);
-   if(identity.album)url.searchParams.set("album",identity.album);
-   if(identity.duration)url.searchParams.set("duration",String(identity.duration));
-   url.searchParams.set("type","karaoke");
-   const response=await requestJson(url);
-   if(response.ok){
-    const data=await response.json();
-    const timed=data.karaoke||data.synced||data.lyrics||"";
-    if(timed){
-     const wordLines=parseEnhancedLrc(timed);
-     const lines=wordLines.length?wordLines:parseLrc(timed);
-     if(lines.length){
-      selected={...(selected||{}),syncedLyrics:timed,plainLyrics:data.plain||selected?.plainLyrics||"",hasWordSync:wordLines.length>0,lyricsfile:null,ttmlLines:wordLines};
-     }
-    }
-    if(!selected?.syncedLyrics&&data.plain)selected={...(selected||{}),plainLyrics:data.plain};
-   }else if(response.status===429||response.status===503)temporaryFailure=true;
-  }catch(error){temporaryFailure=true;console.warn("SyncLRC lookup:",error?.message||error);}
- }
- // Better Lyrics provider-specific endpoints: Kugou provides broad line-level coverage
- // and QQ provides word-timed QRC; neither requires an API key for cache misses.
- if(!lyricState.lines.length&&!selected?.syncedLyrics){
-  const providerResults=await Promise.all(["kugou","qq"].map(async provider=>{
-   try{
-    const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
-    url.searchParams.set("s",identity.track);
-    url.searchParams.set("a",identity.artist);
-    url.searchParams.set("al",identity.album||identity.track);
-    url.searchParams.set("d",String(identity.duration||Math.round(duration)||1));
-    const response=await requestJson(url);
-    if(!response.ok){if(response.status===429||response.status===503)temporaryFailure=true;return null;}
-    const data=await response.json(),raw=data.lyrics||"";
-    if(provider==="kugou"){
-     const lines=parseLrc(raw);
-     return lines.length?{syncedLyrics:raw,plainLyrics:selected?.plainLyrics||"",hasWordSync:false}:null;
-    }
-    const qrcLines=parseQrc(raw);
-    return qrcLines.length?{syncedLyrics:"",plainLyrics:selected?.plainLyrics||"",hasWordSync:true,ttmlLines:qrcLines}:null;
-   }catch(error){console.warn("Better Lyrics "+provider+" lookup:",error?.message||error);return null;}
-  }));
-  selected=providerResults.find(Boolean)||selected;
- }
- // Better Lyrics serves cached TTML with syllable-level timestamps without a key.
- if(!selected?.hasWordSync&&!selected?.syncedLyrics){
-  try{
-   const url=new URL("https://api.betterlyrics.org/getLyrics");
-   url.searchParams.set("s",identity.track);
-   url.searchParams.set("a",identity.artist);
-   url.searchParams.set("al",identity.album||identity.track);
-   url.searchParams.set("d",String(identity.duration||Math.round(duration)||1));
-   const response=await requestJson(url);
-   if(response.ok){
-    const data=await response.json();
-    const timed=parseTtml(data.ttml||"");
-    if(timed.length)selected={...(selected||{}),ttml:data.ttml,ttmlLines:timed,hasWordSync:true};
-   }else if(response.status===429||response.status===503)temporaryFailure=true;
-  }catch(error){temporaryFailure=true;console.warn("Better Lyrics lookup:",error?.message||error);}
- }
- // Independent plain-lyrics fallback. This provider does not provide line timing.
- if(!selected||(!selected.syncedLyrics&&!selected.plainLyrics)){
-  if(identity.artist&&identity.track){
-   try{
-    const fallbackUrl="https://api.lyrics.ovh/v1/"+encodeURIComponent(identity.artist)+"/"+encodeURIComponent(identity.track);
-    const fallbackResponse=await requestJson(fallbackUrl);
-    if(fallbackResponse.ok){
-     const fallbackData=await fallbackResponse.json();
-     if(typeof fallbackData?.lyrics==="string"&&fallbackData.lyrics.trim()){
-      selected={plainLyrics:fallbackData.lyrics,syncedLyrics:null,hasWordSync:false};
-     }
-    }
-   }catch(error){console.warn("Plain lyrics fallback:",error?.message||error);}
-  }
- }
+  selected=await Promise.any(jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;})));
+ }catch(_){}
+ if(requestId!==lyricLoadToken)return;
  if(!selected){
   lyricState.loading=false;
-  showLyricsMessage(temporaryFailure
-   ?"가사 서버가 일시적으로 응답하지 않아요. 잠시 후 다시 시도해 주세요."
-   :"이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");
+  showLyricsMessage("제목·가수 정보가 일치하는 가사를 찾지 못했어요. 다른 영상 버전도 확인해 주세요.");
   return;
  }
  const wordLines=selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[]);
- const hasWords=wordLines.some(item=>item.words.length>0);
+ const hasWords=wordLines.some(item=>item.words?.length);
  lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
  lyricState.plain=selected.plainLyrics||"";
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  if(!lyricState.lines.length&&!lyricState.plain){
-  lyricState.loading=false;
-  showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요");return;
+  lyricState.loading=false;showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
  }
  lyricCache.set(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
- lyricState.loading=false;
- renderLyrics();
+ lyricState.loading=false;renderLyrics();
 }
 function updateProgress(){
  if(!ytPlayer||typeof ytPlayer.getCurrentTime!=="function")return;
