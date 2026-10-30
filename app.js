@@ -1,7 +1,8 @@
 const API_BASE="https://www.googleapis.com/youtube/v3";
 const STORAGE_KEY="musiq_youtube_api_key_v1";
 const LYRIC_API="https://lrclib.net/api";
-const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false};
+const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false,loading:false};
+const LYRIC_LEAD_SECONDS=0.25;
 const lyricCache=new Map();
 const ids=["searchForm","searchInput","searchButton","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
@@ -159,6 +160,7 @@ function showLyricsMessage(message){
  el.lyricsStatus.textContent="LYRICS";
 }
 function renderLyrics(){
+ if(lyricState.loading)return;
  if(!lyricState.lines.length){
   if(lyricState.lastIndex===-2||lyricState.lastIndex===-3)return;
   el.lyricsView.replaceChildren();
@@ -172,12 +174,13 @@ function renderLyrics(){
   return;
  }
  const current=ytPlayer&&typeof ytPlayer.getCurrentTime==="function"?ytPlayer.getCurrentTime():0;
+ const lyricTime=Math.max(0,current+LYRIC_LEAD_SECONDS);
  let index=-1;
- for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=current)index=i;else break;}
+ for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}
  let wordIndex=-1;
  const activeLine=index>=0?lyricState.lines[index]:null;
  if(lyricState.wordSynced&&activeLine?.words?.length){
-  for(let i=0;i<activeLine.words.length;i++){if(activeLine.words[i].start<=current)wordIndex=i;else break;}
+  for(let i=0;i<activeLine.words.length;i++){if(activeLine.words[i].start<=lyricTime)wordIndex=i;else break;}
  }
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex)return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
@@ -199,13 +202,14 @@ function renderLyrics(){
  el.lyricsStatus.textContent=lyricState.wordSynced?"단어 단위 동기화":"시간 동기화 가사";
 }
 async function loadLyrics(video){
+ lyricState.loading=true;
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const cacheKey=video.id;
  if(lyricCache.has(cacheKey)){
   const cached=lyricCache.get(cacheKey);
   lyricState.lines=cached.lines;lyricState.plain=cached.plain;lyricState.wordSynced=cached.wordSynced;
-  renderLyrics();return;
+  lyricState.loading=false;renderLyrics();return;
  }
  const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const normalize=value=>String(value||"").toLowerCase()
@@ -422,6 +426,7 @@ async function loadLyrics(video){
   }
  }
  if(!selected){
+  lyricState.loading=false;
   showLyricsMessage(temporaryFailure
    ?"가사 서버가 일시적으로 응답하지 않아요. 잠시 후 다시 시도해 주세요."
    :"이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");
@@ -434,9 +439,11 @@ async function loadLyrics(video){
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  if(!lyricState.lines.length&&!lyricState.plain){
+  lyricState.loading=false;
   showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요");return;
  }
  lyricCache.set(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
+ lyricState.loading=false;
  renderLyrics();
 }
 function updateProgress(){
@@ -455,7 +462,7 @@ function updateProgress(){
  el.playPauseButton.setAttribute("aria-label",state===1?"일시정지":"재생");
  el.playPauseButton.disabled=duration<=0;
 }
-function onYouTubeIframeAPIReady(){ytPlayer=new YT.Player("playerFrame",{width:"200",height:"200",videoId:"",playerVars:{autoplay:0,controls:0,playsinline:1,rel:0,fs:0,iv_load_policy:3,disablekb:1},events:{onReady:()=>{ytReady=true;el.playbackState.textContent="재생 준비 완료";if(currentVideoId)ytPlayer.loadVideoById(currentVideoId);},onStateChange:event=>{if(event.data===YT.PlayerState.PLAYING){el.playbackState.textContent="재생 중";clearInterval(progressTimer);progressTimer=setInterval(updateProgress,500);}else if(event.data===YT.PlayerState.PAUSED){el.playbackState.textContent="일시정지";updateProgress();}else if(event.data===YT.PlayerState.ENDED){el.playbackState.textContent="재생 완료";updateProgress();}else if(event.data===YT.PlayerState.BUFFERING){el.playbackState.textContent="불러오는 중…";}}}});}
+function onYouTubeIframeAPIReady(){ytPlayer=new YT.Player("playerFrame",{width:"200",height:"200",videoId:"",playerVars:{autoplay:0,controls:0,playsinline:1,rel:0,fs:0,iv_load_policy:3,disablekb:1},events:{onReady:()=>{ytReady=true;el.playbackState.textContent="재생 준비 완료";if(currentVideoId)ytPlayer.loadVideoById(currentVideoId);},onStateChange:event=>{if(event.data===YT.PlayerState.PLAYING){el.playbackState.textContent="재생 중";clearInterval(progressTimer);progressTimer=setInterval(updateProgress,100);}else if(event.data===YT.PlayerState.PAUSED){el.playbackState.textContent="일시정지";updateProgress();}else if(event.data===YT.PlayerState.ENDED){el.playbackState.textContent="재생 완료";updateProgress();}else if(event.data===YT.PlayerState.BUFFERING){el.playbackState.textContent="불러오는 중…";}}}});}
 window.onYouTubeIframeAPIReady=onYouTubeIframeAPIReady;
 const ytScript=document.createElement("script");ytScript.src="https://www.youtube.com/iframe_api";ytScript.async=true;document.head.appendChild(ytScript);
 function setPlayer(video){currentVideoId=video.id;el.nowTitle.textContent=video.title;el.nowChannel.textContent=video.channelTitle;el.currentTime.textContent="0:00";el.totalTime.textContent=formatTime(video.duration);el.progressBar.value="0";el.progressBar.max=String(Math.max(1,Math.floor((video.duration||0)*10)));el.progressBar.disabled=true;el.playPauseButton.disabled=true;el.playbackState.textContent="YouTube 플레이어 연결 중…";if(ytReady&&ytPlayer)ytPlayer.loadVideoById(video.id);renderResults(lastResults);loadLyrics(video);}
