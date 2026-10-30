@@ -342,21 +342,6 @@ async function loadLyrics(video){
   selected=ranked.find(item=>(item.syncedLyrics||item.plainLyrics)&&item._score>0)||null;
  }
  // Additional independent lyric catalogs. Prefer timed lyrics over a plain-text hit.
- // Karalyr is LRCLIB-compatible and focuses on word-synced karaoke data.
- if(!selected?.syncedLyrics&&!selected?.hasWordSync){
-  try{
-   const url=new URL("https://karalyr.com/api/get");
-   url.searchParams.set("track_name",identity.track);
-   url.searchParams.set("artist_name",identity.artist);
-   if(identity.album)url.searchParams.set("album_name",identity.album);
-   if(identity.duration)url.searchParams.set("duration",String(identity.duration));
-   const response=await requestJson(url,{ "X-Karalyr-Client":"Music/1.0 (https://kanghuijun000.github.io/)" });
-   if(response.ok){
-    const data=await response.json();
-    if(data?.syncedLyrics||data?.plainLyrics)selected=data;
-   }else if(response.status===429||response.status===503)temporaryFailure=true;
-  }catch(error){temporaryFailure=true;console.warn("Karalyr lookup:",error?.message||error);}
- }
  // SyncLRC offers karaoke, line-synced and plain variants through a documented public API.
  if(!selected?.hasWordSync&&!selected?.syncedLyrics){
   try{
