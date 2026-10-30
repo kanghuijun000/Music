@@ -4,6 +4,30 @@ const LYRIC_API="https://lrclib.net/api";
 const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false,loading:false};
 const LYRIC_LEAD_SECONDS=0.25;
 const lyricCache=new Map();
+
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v1";
+const LYRIC_CACHE_LIMIT=30;
+function readStoredLyric(cacheKey){
+ try{
+  const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
+  const item=saved&&typeof saved==="object"?saved[cacheKey]:null;
+  if(!item||!Array.isArray(item.lines))return null;
+  lyricCache.set(cacheKey,item);
+  return item;
+ }catch(_){return null;}
+}
+function storeLyric(cacheKey,item){
+ lyricCache.set(cacheKey,item);
+ try{
+  const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
+  const next=saved&&typeof saved==="object"?saved:{};
+  next[cacheKey]={lines:item.lines,plain:item.plain||"",wordSynced:Boolean(item.wordSynced),savedAt:Date.now()};
+  const keys=Object.keys(next).sort((a,b)=>(Number(next[b]?.savedAt)||0)-(Number(next[a]?.savedAt)||0));
+  for(const key of keys.slice(LYRIC_CACHE_LIMIT))delete next[key];
+  localStorage.setItem(LYRIC_CACHE_STORAGE_KEY,JSON.stringify(next));
+ }catch(error){console.warn("Lyrics cache could not be saved:",error);}
+}
+
 const ids=["searchForm","searchInput","searchButton","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
 let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false,lyricLoadToken=0;
@@ -251,9 +275,9 @@ async function loadLyrics(video){
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const cacheKey=video.id;
- if(lyricCache.has(cacheKey)){
-  const cached=lyricCache.get(cacheKey);
-  lyricState.lines=cached.lines;lyricState.plain=cached.plain;lyricState.wordSynced=cached.wordSynced;
+ const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
+ if(cached){
+  lyricState.lines=cached.lines;lyricState.plain=cached.plain||"";lyricState.wordSynced=Boolean(cached.wordSynced);
   lyricState.loading=false;renderLyrics();return;
  }
  const normalize=value=>String(value||"").toLocaleLowerCase()
@@ -344,7 +368,7 @@ async function loadLyrics(video){
  if(!lyricState.lines.length&&!lyricState.plain){
   lyricState.loading=false;showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
  }
- lyricCache.set(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
+ storeLyric(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
  lyricState.loading=false;renderLyrics();
 }
 function updateProgress(){
@@ -385,3 +409,22 @@ el.playPauseButton.addEventListener("click",()=>{if(!ytPlayer)return;if(ytPlayer
 el.progressBar.addEventListener("input",()=>{if(!ytPlayer)return;seeking=true;el.currentTime.textContent=formatTime(Number(el.progressBar.value)/10);});
 el.progressBar.addEventListener("change",()=>{if(!ytPlayer||el.progressBar.disabled)return;const target=Number(el.progressBar.value)/10;ytPlayer.seekTo(target,true);seeking=false;el.currentTime.textContent=formatTime(target);updateProgress();});
 updateConnectionStatus();if(!apiKey)showMessage("먼저 검색 연결을 설정해 주세요","오른쪽 위 설정에서 YouTube Data API 키를 입력하면 음악 검색을 시작할 수 있어요.","error");
+function registerMusicServiceWorker(){
+ if(!("serviceWorker" in navigator)||!/^https?:$/.test(location.protocol))return;
+ const hadController=Boolean(navigator.serviceWorker.controller);
+ let refreshed=false;
+ if(hadController){
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+   if(refreshed)return;
+   refreshed=true;
+   location.reload();
+  });
+ }
+ window.addEventListener("load",async()=>{
+  try{
+   const registration=await navigator.serviceWorker.register("./sw.js",{scope:"./",updateViaCache:"none"});
+   registration.update().catch(()=>{});
+  }catch(error){console.warn("Service worker registration failed:",error);}
+ });
+}
+registerMusicServiceWorker();
