@@ -64,3 +64,5 @@
 .lyric-line{flex:none}
 .lyric-line.past{opacity:.72}
 .lyric-line.current{order:0}
+
+#lyricsStatus[hidden]{display:none}
