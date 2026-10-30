@@ -294,6 +294,7 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 }
 async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
+ if(aiAssistButton)aiAssistButton.hidden=true;
  lyricState.loading=true;
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
@@ -384,6 +385,14 @@ async function loadLyrics(video,usePuter=false){
   const list=await getJson(searchUrl);
   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
  })());
+ // Broaden Korean and alternate-credit searches instead of relying on one exact metadata spelling.
+ for(const query of [...new Set([[track,channel],[track,artist],[artist,track]].map(parts=>parts.filter(Boolean).join(" ")).filter(Boolean))]){
+  jobs.push((async()=>{
+   const url=new URL(LYRIC_API+"/search");url.searchParams.set("q",query);
+   const list=await getJson(url);
+   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
+  })());
+ }
  // Free-text search catches alternate artist spellings and metadata formatting differences.
  jobs.push((async()=>{
   const url=new URL(LYRIC_API+"/search");
