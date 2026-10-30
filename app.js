@@ -330,12 +330,12 @@ async function loadLyrics(video){
   if(!item||(!item.syncedLyrics&&!item.ttmlLines&&!item.plainLyrics))return false;
   const gotTitle=normalize(item.trackName||item.title||""),wantedTitles=[track,...extraTitles].map(normalize).filter(Boolean);
   if(!gotTitle||!wantedTitles.length)return false;
-  const stripExtras=value=>value.replace(/\\b(feat|ft|featuring|with)\\b.*$/,"").trim();
+  const stripExtras=value=>value.replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
   const a=stripExtras(gotTitle);
   const titleMatch=wantedTitles.some(title=>{const b=stripExtras(title);return a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));});
   const gotArtist=normalize(item.artistName||item.artist||"");
   const artistNames=[artist,...extraArtists];
-  if(/카더가든|car\\s*,?\\s*the\\s*garden|car\\s*the\\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
+  if(/카더가든|car\s*,?\s*the\s*garden|car\s*the\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
   const artistMatch=!artist||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
   const gotDuration=Number(item.duration)||0;
   const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
