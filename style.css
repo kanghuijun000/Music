@@ -58,3 +58,9 @@
 .recent-query-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .recent-remove{width:32px;height:32px;flex:none;border:0;border-radius:8px;background:transparent;color:#858c9d;font-size:19px}
 @media(max-width:560px){.recent-searches{top:calc(100% + 6px);padding:7px}.recent-query{padding:11px 8px;font-size:12px}}
+
+/* Keep only previous, current and next lyric centered */
+.lyrics-view{justify-content:center;gap:18px}
+.lyric-line{flex:none}
+.lyric-line.past{opacity:.72}
+.lyric-line.current{order:0}
