@@ -81,6 +81,11 @@ function openSettings(){el.apiKeyInput.value=apiKey;el.settingsDialog.showModal(
 function setLoading(loading){el.searchButton.disabled=loading;el.searchButton.innerHTML=loading?'<span>검색 중…</span>':'<span>검색</span><svg viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>';}
 function showMessage(title,description,kind="empty"){el.resultsList.replaceChildren();el.messageState.hidden=false;el.messageState.replaceChildren();const heading=document.createElement("h3"),paragraph=document.createElement("p"),art=document.createElement("div");heading.textContent=title;paragraph.textContent=description;art.className="empty-art";art.innerHTML=kind==="empty"?'<span class="disc"></span><span class="disc-hole"></span><span class="note">♪</span>':'<span class="note">!</span>';el.messageState.append(art,heading,paragraph);}
 function formatTime(seconds){if(!Number.isFinite(seconds)||seconds<0)return"0:00";const n=Math.floor(seconds);return Math.floor(n/60)+":"+String(n%60).padStart(2,"0");}
+function isCreditMetadata(value){
+ const text=String(value||"").replace(/^[\\s\\u200B\\uFEFF]+/,"").trim();
+ if(!text)return false;
+ return /^(?:词|曲|词曲|作词|作曲|编曲|作词作曲|作词人|作曲人|编曲人|制作人|制作|演唱|出品|监制|录音|混音|母带|lyrics?|music|written\\s+by|composed\\s+by|arranged\\s+by|produced\\s+by|songwriter|composer|arranger|producer|작사|작곡|작사·작곡|작사작곡|편곡|프로듀서|제작|노래|가수)\\s*[:：：]/i.test(text);
+}
 function parseLrc(source){
  const lines=[];
  for(const raw of String(source||"").split(/\r?\n/)){
@@ -89,7 +94,7 @@ function parseLrc(source){
   const fraction=(m[3]||"0").padEnd(3,"0");
   const time=Number(m[1])*60+Number(m[2])+Number(fraction)/1000;
   const text=m[4].trim();
-  if(text)lines.push({time,text,words:[]});
+  if(text&&!isCreditMetadata(text))lines.push({time,text,words:[]});
  }
  return lines.sort((a,b)=>a.time-b.time);
 }
@@ -119,7 +124,7 @@ function parseQrc(source){
   const tail=rest.slice(textStart);
   if(tail)words.push({text:tail,start:NaN,end:NaN});
   const cleanText=words.map(word=>word.text).join("");
-  if(!cleanText.trim())continue;
+  if(!cleanText.trim()||isCreditMetadata(cleanText))continue;
   if(/^(lyrics by|composed by|arranged by|producer|작사|작곡|편곡|제작|作词|作曲|编曲|制作人)[:：]/i.test(cleanText.trim()))continue;
   output.push({time:Number(header[1])/1000,text:cleanText,words:words.filter(word=>Number.isFinite(word.start))});
  }
@@ -143,7 +148,7 @@ function parseEnhancedLrc(source){
    if(Number.isFinite(start)&&text)words.push({start,end,text});
   });
   const text=words.map(word=>word.text).join("");
-  if(words.length)output.push({time:base,text,words});
+  if(words.length&&!isCreditMetadata(text))output.push({time:base,text,words});
  }
  return output.sort((a,b)=>a.time-b.time);
 }
@@ -219,7 +224,7 @@ function parseLyricsfile(source){
   if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=Number(s.slice(7).trim())/1000;continue;}
  }
  saveLine();
- return output.filter(item=>Number.isFinite(item.time)).sort((a,b)=>a.time-b.time);
+ return output.filter(item=>Number.isFinite(item.time)&&!isCreditMetadata(item.text)).sort((a,b)=>a.time-b.time);
 }
 function showLyricsMessage(message){
  el.lyricsView.replaceChildren();
