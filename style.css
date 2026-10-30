@@ -42,3 +42,19 @@
 .lyric-word.active{color:#fff;text-shadow:0 0 13px #b6f36a88}
 .lyric-word.upcoming{color:#aeb6a1}
 .lyric-line.current:has(.lyric-word){font-size:18px;line-height:1.8}
+
+/* Recent search dropdown */
+.search-area{position:relative;max-width:660px;margin:0 auto;z-index:5}
+.search-area .search-form{max-width:none}
+.recent-searches{position:absolute;top:calc(100% + 8px);left:0;right:0;padding:9px;background:#171a24;border:1px solid rgba(255,255,255,.12);border-radius:14px;box-shadow:0 18px 45px #0009;text-align:left;z-index:20}
+.recent-searches[hidden]{display:none}
+.recent-heading{display:flex;align-items:center;justify-content:space-between;padding:5px 9px 8px;color:#aeb4c3;font-size:11px;font-weight:700}
+.recent-clear{border:0;background:transparent;color:#858c9d;font-size:10px;padding:4px 2px}
+.recent-clear:hover,.recent-remove:hover{color:var(--accent)}
+.recent-row{display:flex;align-items:center;gap:6px;border-radius:9px}
+.recent-row:hover{background:#ffffff0a}
+.recent-query{min-width:0;flex:1;display:flex;align-items:center;gap:11px;padding:10px 9px;border:0;background:transparent;color:#e2e5ed;text-align:left;font-size:12px}
+.recent-clock{color:#858c9d;font-size:16px;line-height:1}
+.recent-query-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent-remove{width:32px;height:32px;flex:none;border:0;border-radius:8px;background:transparent;color:#858c9d;font-size:19px}
+@media(max-width:560px){.recent-searches{top:calc(100% + 6px);padding:7px}.recent-query{padding:11px 8px;font-size:12px}}
