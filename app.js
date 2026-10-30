@@ -292,8 +292,9 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
  }catch(error){console.warn("Puter AI fallback unavailable:",error?.message||error);return null;}
  finally{clearTimeout(timeout);}
 }
-async function loadLyrics(video){
+async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
+ if(!usePuter&&aiAssistButton)aiAssistButton.hidden=false;
  lyricState.loading=true;
  lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
@@ -343,6 +344,35 @@ async function loadLyrics(video){
  }
  function lrclibItem(item){return isGood(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
  const jobs=[];
+ // 1) YouTube video ID lookup: the strongest match when this exact video has community-synced lyrics.
+ jobs.push((async()=>{
+  const url=new URL("https://unison.boidu.dev/lyrics");
+  url.searchParams.set("v",video.id);
+  const response=await fetch(url);
+  if(!response.ok)throw new Error("Unison video match unavailable");
+  const body=await response.json(),data=body?.data;
+  if(!body?.success||!data?.lyrics)return null;
+  const gotDuration=Number(data.duration)||0;
+  if(duration&&gotDuration&&Math.abs(duration-gotDuration)>Math.max(22,duration*0.12))return null;
+  let lines=[];
+  if(data.format==="ttml")lines=parseTtml(data.lyrics);
+  else if(data.format==="lrc")lines=parseLrc(data.lyrics);
+  const plain=data.format==="plain"?String(data.lyrics):"";
+  const item={trackName:data.song||track,artistName:data.artist||artist,duration:gotDuration||duration,syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:plain,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
+  if(!isGood(item))return null;
+  return item;
+ })());
+ // 2) Better Lyrics syllable-synced TTML provider. Cached matches work without an API key.
+ jobs.push((async()=>{
+  const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
+  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
+  const data=await getJson(url,{});
+  const rawLyrics=data.lyrics||data.ttml||"";
+  const lines=parseTtml(rawLyrics);
+  if(!lines.length)return null;
+  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
+  return isGood(item)?item:null;
+ })());
  const exactUrl=new URL(LYRIC_API+"/get");
  exactUrl.searchParams.set("track_name",track);
  if(artist)exactUrl.searchParams.set("artist_name",artist);
@@ -388,7 +418,7 @@ async function loadLyrics(video){
   const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:provider==="kugou"?rawLyrics:"",ttmlLines:provider==="qq"?lines:[],hasWordSync:provider==="qq"};
   return isGood(item)?item:null;
  })());
- const aiJob=puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId);
+ const aiJob=usePuter?puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId):Promise.resolve(null);
  let selected=null;
  const providerJobs=jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;}));
  const aiVerifiedJob=aiJob.then(item=>{if(!item)throw new Error("No AI-verified lyric match");return item;});
@@ -449,6 +479,29 @@ el.settingsDialog.addEventListener("click",event=>{if(event.target===el.settings
 el.playPauseButton.addEventListener("click",()=>{if(!ytPlayer)return;if(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)ytPlayer.pauseVideo();else ytPlayer.playVideo();});
 el.progressBar.addEventListener("input",()=>{if(!ytPlayer)return;seeking=true;el.currentTime.textContent=formatTime(Number(el.progressBar.value)/10);});
 el.progressBar.addEventListener("change",()=>{if(!ytPlayer||el.progressBar.disabled)return;const target=Number(el.progressBar.value)/10;ytPlayer.seekTo(target,true);seeking=false;el.currentTime.textContent=formatTime(target);updateProgress();});
+const aiAssistButton=document.getElementById("aiAssistButton");
+let puterSdkPromise=null;
+function loadPuterSdk(){
+ if(window.puter?.ai?.chat)return Promise.resolve(true);
+ if(puterSdkPromise)return puterSdkPromise;
+ puterSdkPromise=new Promise(resolve=>{
+  const script=document.createElement("script");script.src="https://js.puter.com/v2/";script.async=true;
+  script.onload=()=>resolve(Boolean(window.puter?.ai?.chat));
+  script.onerror=()=>resolve(false);
+  document.head.appendChild(script);
+  setTimeout(()=>resolve(Boolean(window.puter?.ai?.chat)),7000);
+ });
+ return puterSdkPromise;
+}
+aiAssistButton?.addEventListener("click",async()=>{
+ const video=lastResults.find(item=>item.id===currentVideoId);
+ if(!video)return;
+ aiAssistButton.disabled=true;aiAssistButton.textContent="곡 정보 보정 중…";
+ const ready=await loadPuterSdk();
+ if(ready){await loadLyrics(video,true);}
+ else showToast("Puter 연결을 사용할 수 없어요. 기본 가사 검색은 계속 이용할 수 있어요.");
+ aiAssistButton.disabled=false;aiAssistButton.textContent="Puter로 곡 정보 보정 후 다시 검색";
+});
 updateConnectionStatus();if(!apiKey)showMessage("먼저 검색 연결을 설정해 주세요","오른쪽 위 설정에서 YouTube Data API 키를 입력하면 음악 검색을 시작할 수 있어요.","error");
 function registerMusicServiceWorker(){
  if(!("serviceWorker" in navigator)||!/^https?:$/.test(location.protocol))return;
