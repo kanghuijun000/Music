@@ -272,7 +272,7 @@ function renderLyrics(){
 async function puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId){
  if(!window.puter?.ai?.chat)return null;
  const controller=new AbortController();
- const timeout=setTimeout(()=>controller.abort(),7000);
+ const timeout=setTimeout(()=>controller.abort(),4600);
  try{
   const prompt="Identify this exact music track using web search. Return ONLY compact JSON with track, artists array, aliases array. Do not provide lyrics. Prefer original studio recording, not covers. Track: "+track+". Artist: "+(artist||"unknown")+". Channel: "+(channel||"unknown")+". Duration seconds: "+duration+". Return at most 2 title aliases and 3 artist spellings. If uncertain, return empty arrays.";
   const result=await window.puter.ai.chat(prompt,{model:"openai/gpt-5.4-nano",tools:[{type:"web_search"}],max_tokens:160,temperature:0,signal:controller.signal});
@@ -388,15 +388,12 @@ async function loadLyrics(video){
   const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:provider==="kugou"?rawLyrics:"",ttmlLines:provider==="qq"?lines:[],hasWordSync:provider==="qq"};
   return isGood(item)?item:null;
  })());
+ const aiJob=puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId);
  let selected=null;
- try{
-  selected=await Promise.any(jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;})));
- }catch(_){}
- if(requestId!==lyricLoadToken)return;
- if(!selected){
-  showLyricsMessage("기본 가사를 찾지 못해 AI가 곡 정보를 다시 확인하고 있어요…");
-  selected=await puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId);
- }
+ const providerJobs=jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;}));
+ const aiVerifiedJob=aiJob.then(item=>{if(!item)throw new Error("No AI-verified lyric match");return item;});
+ const searchRace=Promise.any([...providerJobs,aiVerifiedJob]).catch(()=>null);
+ selected=await Promise.race([searchRace,delay(4900).then(()=>null)]);
  if(requestId!==lyricLoadToken)return;
  if(!selected){
   lyricState.loading=false;
