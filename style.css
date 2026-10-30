@@ -37,3 +37,8 @@
 .lyric-line.plain{color:#c3c8d4;font-size:13px;font-weight:500}
 .lyrics-view:has(.plain){justify-content:flex-start;overflow-y:auto;mask-image:none;gap:10px}
 @media(max-width:560px){.lyrics-card{min-height:280px;padding:14px 10px}.lyrics-view{height:245px}.lyric-line.current{font-size:17px}}
+
+.lyric-word{display:inline;color:inherit;transition:color .12s,text-shadow .12s}
+.lyric-word.active{color:#fff;text-shadow:0 0 13px #b6f36a88}
+.lyric-word.upcoming{color:#aeb6a1}
+.lyric-line.current:has(.lyric-word){font-size:18px;line-height:1.8}
