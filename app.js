@@ -24,6 +24,28 @@ function parseLrc(source){
  }
  return lines.sort((a,b)=>a.time-b.time);
 }
+function parseEnhancedLrc(source){
+ const output=[];
+ for(const raw of String(source||"").split(/\r?\n/)){
+  const lineMatch=raw.match(/^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/);
+  if(!lineMatch)continue;
+  const base=Number(lineMatch[1])*60+Number(lineMatch[2])+Number((lineMatch[3]||"0").padEnd(3,"0"))/1000;
+  const content=lineMatch[4]||"";
+  const token=/<(\d{1,2}:\d{2}(?:\.\d{1,3})?)>/g;
+  const matches=[...content.matchAll(token)];
+  if(!matches.length)continue;
+  const words=[];
+  matches.forEach((match,index)=>{
+   const start=parseTimedTextTime(match[1]);
+   const end=matches[index+1]?parseTimedTextTime(matches[index+1][1]):NaN;
+   const text=content.slice(match.index+match[0].length,matches[index+1]?.index??content.length);
+   if(Number.isFinite(start)&&text)words.push({start,end,text});
+  });
+  const text=words.map(word=>word.text).join("");
+  if(words.length)output.push({time:base,text,words});
+ }
+ return output.sort((a,b)=>a.time-b.time);
+}
 function parseTimedTextTime(value){
  if(!value)return NaN;
  const parts=String(value).trim().split(":");
@@ -312,10 +334,10 @@ async function loadLyrics(video){
     const data=await response.json();
     const timed=data.karaoke||data.synced||data.lyrics||"";
     if(timed){
-     const lines=parseLrc(timed);
+     const wordLines=parseEnhancedLrc(timed);
+     const lines=wordLines.length?wordLines:parseLrc(timed);
      if(lines.length){
-      const enhanced=timed.includes("<")||timed.includes("{");
-      selected={...(selected||{}),syncedLyrics:timed,plainLyrics:data.plain||selected?.plainLyrics||"",hasWordSync:enhanced,lyricsfile:null};
+      selected={...(selected||{}),syncedLyrics:timed,plainLyrics:data.plain||selected?.plainLyrics||"",hasWordSync:wordLines.length>0,lyricsfile:null,ttmlLines:wordLines};
      }
     }
     if(!selected?.syncedLyrics&&data.plain)selected={...(selected||{}),plainLyrics:data.plain};
