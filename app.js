@@ -201,7 +201,7 @@ function showLyricsMessage(message){
  node.className="lyrics-placeholder";
  node.textContent=message;
  el.lyricsView.append(node);
- el.lyricsStatus.textContent="LYRICS";
+ el.lyricsStatus.textContent="";
 }
 function renderLyrics(){
  if(lyricState.loading)return;
@@ -212,7 +212,7 @@ function renderLyrics(){
    lyricState.plain.split(/\r?\n/).filter(Boolean).slice(0,100).forEach(text=>{
     const row=document.createElement("div");row.className="lyric-line plain";row.textContent=text;el.lyricsView.append(row);
    });
-   el.lyricsStatus.textContent="일반 가사 · 동기화 미지원";
+   el.lyricsStatus.textContent="";
    lyricState.lastIndex=-2;
   }else {showLyricsMessage("동기화 가능한 가사가 없거나, 가사 정보를 불러오지 못했어요.");lyricState.lastIndex=-3;}
   return;
@@ -229,7 +229,7 @@ function renderLyrics(){
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex)return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
  el.lyricsView.replaceChildren();
- const start=Math.max(0,index-2),end=Math.min(lyricState.lines.length,index+5);
+ const start=Math.max(0,index-1),end=Math.min(lyricState.lines.length,index+2);
  for(let i=start;i<end;i++){
   const item=lyricState.lines[i],row=document.createElement("div");
   row.className="lyric-line"+(i===index?" current":"")+(i<index?" past":"");
@@ -243,7 +243,7 @@ function renderLyrics(){
   }else row.textContent=item.text;
   el.lyricsView.append(row);
  }
- el.lyricsStatus.textContent=lyricState.wordSynced?"단어 단위 동기화":"시간 동기화 가사";
+ el.lyricsStatus.textContent="";
 }
 async function loadLyrics(video){
  lyricState.loading=true;
@@ -304,7 +304,7 @@ async function loadLyrics(video){
     script.remove();
     clearTimeout(timer);
    };
-   const timer=setTimeout(()=>{cleanup();reject(new Error("음원 정보 검색 시간 초과"));},7000);
+   const timer=setTimeout(()=>{cleanup();reject(new Error("음원 정보 검색 시간 초과"));},3500);
    window[callbackName]=data=>{cleanup();resolve(Array.isArray(data?.results)?data.results:[]);};
    script.onerror=()=>{cleanup();reject(new Error("음원 정보 검색 연결 실패"));};
    script.src=url.toString();
@@ -312,7 +312,7 @@ async function loadLyrics(video){
   });
  }
  let identity={track:cleanTitle,artist:parsedArtist,album:"",duration};
- const appleTerms=[cleanTitle,...titleVariants.slice(1),rawTitle].filter((value,index,array)=>value&&array.indexOf(value)===index).slice(0,3);
+ const appleTerms=[cleanTitle].filter(Boolean);
  for(const term of appleTerms){
   try{
    const results=await searchApple(term);
@@ -417,7 +417,7 @@ async function loadLyrics(video){
  // Better Lyrics provider-specific endpoints: Kugou provides broad line-level coverage
  // and QQ provides word-timed QRC; neither requires an API key for cache misses.
  if(!lyricState.lines.length&&!selected?.syncedLyrics){
-  for(const provider of ["kugou","qq"]){
+  const providerResults=await Promise.all(["kugou","qq"].map(async provider=>{
    try{
     const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
     url.searchParams.set("s",identity.track);
@@ -425,18 +425,17 @@ async function loadLyrics(video){
     url.searchParams.set("al",identity.album||identity.track);
     url.searchParams.set("d",String(identity.duration||Math.round(duration)||1));
     const response=await requestJson(url);
-    if(!response.ok){if(response.status===429||response.status===503)temporaryFailure=true;continue;}
-    const data=await response.json();
-    const raw=data.lyrics||"";
+    if(!response.ok){if(response.status===429||response.status===503)temporaryFailure=true;return null;}
+    const data=await response.json(),raw=data.lyrics||"";
     if(provider==="kugou"){
      const lines=parseLrc(raw);
-     if(lines.length){selected={...(selected||{}),syncedLyrics:raw,plainLyrics:selected?.plainLyrics||"",hasWordSync:false};break;}
-    }else{
-     const qrcLines=parseQrc(raw);
-     if(qrcLines.length){selected={...(selected||{}),syncedLyrics:"",plainLyrics:selected?.plainLyrics||"",hasWordSync:true,ttmlLines:qrcLines};break;}
+     return lines.length?{syncedLyrics:raw,plainLyrics:selected?.plainLyrics||"",hasWordSync:false}:null;
     }
-   }catch(error){temporaryFailure=true;console.warn("Better Lyrics "+provider+" lookup:",error?.message||error);}
-  }
+    const qrcLines=parseQrc(raw);
+    return qrcLines.length?{syncedLyrics:"",plainLyrics:selected?.plainLyrics||"",hasWordSync:true,ttmlLines:qrcLines}:null;
+   }catch(error){console.warn("Better Lyrics "+provider+" lookup:",error?.message||error);return null;}
+  }));
+  selected=providerResults.find(Boolean)||selected;
  }
  // Better Lyrics serves cached TTML with syllable-level timestamps without a key.
  if(!selected?.hasWordSync&&!selected?.syncedLyrics){
