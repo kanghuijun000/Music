@@ -215,8 +215,9 @@ async function loadLyrics(video){
  const rawTitle=String(video.title||"").trim();
  const titleWithoutTags=rawTitle
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*(?:\/|\|)\s*(가사|lyrics?|official|뮤직비디오|뮤비|audio|video)\b.*$/i," ")
-  .replace(/\b(official music video|official audio|lyrics video|lyric video|lyrics|lyric|가사|뮤직비디오|뮤비)\b/gi," ")
+  .replace(/\s*(?:\/|\|)\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video).*$/i," ")
+  .replace(/\b(official music video|official audio|lyrics video|lyric video|lyrics|lyric)\b/gi," ")
+  .replace(/가사|뮤직비디오|뮤비/gi," ")
   .replace(/\s+/g," ").trim();
  const titleParts=titleWithoutTags.split(/\s+[-–|]\s+/).map(value=>value.trim()).filter(Boolean);
  const parsedArtist=titleParts.length>1?titleParts[0]:"";
