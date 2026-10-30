@@ -118,58 +118,103 @@ async function loadLyrics(video){
  const duration=video.duration||0;
  const cleanTitle=String(video.title||"")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
-  .replace(/\s+/g," ").trim();
- const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\s*[-–|]\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();
+  .replace(/\\s*[-–|]\\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\\b/gi," ")
+  .replace(/\\s+/g," ").trim();
+ const normalize=value=>String(value||"").toLowerCase().replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\\s*[-–|]\\s*(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\\b/gi," ").replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
  const wanted=normalize(cleanTitle);
- const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
+ const channel=String(video.channelTitle||"").replace(/\\s*-\\s*Topic$/i,"").trim();
+ const splitTitle=cleanTitle.split(/\\s+[-–|]\\s+/).map(value=>value.trim()).filter(Boolean);
+ const trackCandidates=[cleanTitle,splitTitle[0],video.title].filter((value,index,array)=>value&&array.indexOf(value)===index);
+ const artistCandidates=[splitTitle.length>1?splitTitle.slice(1).join(" - "):"",channel].filter((value,index,array)=>value&&array.indexOf(value)===index);
  let candidates=[];
  const seen=new Set();
+ let transientErrors=[];
  const addResults=items=>{
   for(const item of (Array.isArray(items)?items:[])){
    if(item&&item.id&&!seen.has(item.id)){seen.add(item.id);candidates.push(item);}
   }
  };
+ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ async function requestWithRetry(url){
+  let response=await fetch(url,{headers});
+  if(response.status===503||response.status===429){
+   const retryAfter=Number(response.headers.get("Retry-After")||1);
+   if(Number.isFinite(retryAfter)&&retryAfter>0&&retryAfter<=3){
+    await wait(retryAfter*1000);
+    response=await fetch(url,{headers});
+   }
+  }
+  return response;
+ }
  try{
-  // 채널명이 실제 가수명이라는 보장이 없으므로, 제목 전체 검색을 먼저 수행한다.
-  const queries=[cleanTitle,video.title].filter((value,index,array)=>value&&array.indexOf(value)===index);
+  // 제목 전체와 제목/가수 분리 검색을 시도한다. 일시적인 서버 오류는 다른 검색어를 막지 않는다.
+  const queries=[...new Set([cleanTitle,splitTitle[0],video.title].filter(Boolean))];
   for(const query of queries){
    const search=new URL(LYRIC_API+"/search");
    search.searchParams.set("q",query);
-   const response=await fetch(search,{headers});
-   if(response.status===429){
-    const wait=response.headers.get("Retry-After");
-    throw new Error("가사 서버 요청이 잠시 제한됐어요."+ (wait?" "+wait+"초 후 다시 시도해 주세요.":" 잠시 후 다시 시도해 주세요."));
+   try{
+    const response=await requestWithRetry(search);
+    if(response.status===429||response.status===503){
+     transientErrors.push("HTTP "+response.status);
+     continue;
+    }
+    if(!response.ok)continue;
+    addResults(await response.json());
+    if(candidates.some(item=>normalize(item.trackName||item.name)===normalize(splitTitle[0]||cleanTitle)))break;
+   }catch(error){
+    transientErrors.push(error?.message||"네트워크 오류");
    }
-   if(!response.ok)throw new Error("가사 검색 서버 응답 "+response.status);
-   addResults(await response.json());
-   if(candidates.some(item=>normalize(item.trackName||item.name)===wanted))break;
   }
-  // 제목으로 찾은 후보 중 제목과 재생 시간이 잘 맞는 음원을 우선한다.
+  // 제목이 '곡명 - 가수명' 형태라면 실제 곡명과 가수명 조합으로도 검색한다.
+  for(const trackName of trackCandidates.slice(0,2)){
+   for(const artistName of artistCandidates.slice(0,2)){
+    const search=new URL(LYRIC_API+"/search");
+    search.searchParams.set("track_name",trackName);
+    search.searchParams.set("artist_name",artistName);
+    try{
+     const response=await requestWithRetry(search);
+     if(response.status===429||response.status===503){transientErrors.push("HTTP "+response.status);continue;}
+     if(response.ok)addResults(await response.json());
+    }catch(error){transientErrors.push(error?.message||"네트워크 오류");}
+   }
+  }
+  const wantedTitles=[normalize(cleanTitle),normalize(splitTitle[0]||"")].filter(Boolean);
   const ranked=candidates.map(item=>{
    const title=normalize(item.trackName||item.name);
-   const recordArtist=normalize(item.artistName);
-   const titleMatch=title&&wanted&&(title===wanted||title.includes(wanted)||wanted.includes(title));
+   const titleMatch=wantedTitles.some(target=>title&&(title===target||title.includes(target)||target.includes(title)));
    const durationDifference=item.duration&&duration?Math.abs(item.duration-duration):9999;
    const score=(item.syncedLyrics?100:0)+(item.plainLyrics?10:0)+(titleMatch?100:-100)+(durationDifference<=2?55:durationDifference<=8?30:durationDifference<=20?5:-30);
-   return {...item,_score:score,_durationDifference:durationDifference,_artist:recordArtist};
+   return {...item,_score:score,_durationDifference:durationDifference};
   }).sort((a,b)=>b._score-a._score);
   let selected=ranked.find(item=>(item.syncedLyrics||item.plainLyrics)&&item._score>0);
-  // 후보 검색으로 찾지 못한 경우에만 가수/길이 기반 정확 검색을 보조로 시도한다.
-  if(!selected&&channel&&duration>0){
-   const exact=new URL(LYRIC_API+"/get");
-   exact.searchParams.set("track_name",cleanTitle);
-   exact.searchParams.set("artist_name",channel);
-   exact.searchParams.set("duration",String(duration));
-   const exactResponse=await fetch(exact,{headers});
-   if(exactResponse.ok){
-    const exactItem=await exactResponse.json();
-    if(exactItem&&(exactItem.syncedLyrics||exactItem.plainLyrics))selected=exactItem;
-   }else if(exactResponse.status===429){
-    throw new Error("가사 서버 요청이 잠시 제한됐어요. 잠시 후 다시 시도해 주세요.");
+  // 검색 API에서 찾지 못했을 때 메타데이터 기반 직접 조회를 보조로 사용한다.
+  if(!selected&&duration>0){
+   for(const trackName of trackCandidates.slice(0,2)){
+    for(const artistName of artistCandidates.slice(0,2)){
+     const exact=new URL(LYRIC_API+"/get");
+     exact.searchParams.set("track_name",trackName);
+     exact.searchParams.set("artist_name",artistName);
+     exact.searchParams.set("duration",String(duration));
+     try{
+      const response=await requestWithRetry(exact);
+      if(response.status===429||response.status===503){transientErrors.push("HTTP "+response.status);continue;}
+      if(response.ok){
+       const exactItem=await response.json();
+       if(exactItem&&(exactItem.syncedLyrics||exactItem.plainLyrics)){selected=exactItem;break;}
+      }
+     }catch(error){transientErrors.push(error?.message||"네트워크 오류");}
+    }
+    if(selected)break;
    }
   }
-  if(!selected){showLyricsMessage("이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");return;}
+  if(!selected){
+   if(transientErrors.length){
+    showLyricsMessage("가사 서버가 일시적으로 바빠요. 잠시 후 다시 시도해 주세요.");
+   }else{
+    showLyricsMessage("이 곡의 가사를 무료 데이터베이스에서 찾지 못했어요");
+   }
+   return;
+  }
   const wordLines=selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[];
   const hasWords=wordLines.some(item=>item.words.length>0);
   lyricState.lines=hasWords?wordLines:parseLrc(selected.syncedLyrics||"");
