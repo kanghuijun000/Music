@@ -305,11 +305,15 @@ async function loadLyrics(video){
  }
  function isGood(item){
   if(!item||(!item.syncedLyrics&&!item.ttmlLines&&!item.plainLyrics))return false;
-  const gotTitle=normalize(item.trackName||item.title||track),wantTitle=normalize(track);
+  const gotTitle=normalize(item.trackName||item.title||""),wantTitle=normalize(track);
   if(!gotTitle||!wantTitle)return false;
-  const titleMatch=gotTitle===wantTitle||(gotTitle.length>=wantTitle.length+3&&gotTitle.includes(wantTitle))||(wantTitle.length>=gotTitle.length+3&&wantTitle.includes(gotTitle));
-  const gotArtist=normalize(item.artistName||item.artist||""),wantArtist=normalize(artist);
-  const artistMatch=!wantArtist||!gotArtist||gotArtist===wantArtist||gotArtist.includes(wantArtist)||wantArtist.includes(gotArtist);
+  const stripExtras=value=>value.replace(/\\b(feat|ft|featuring|with)\\b.*$/,"").trim();
+  const a=stripExtras(gotTitle),b=stripExtras(wantTitle);
+  const titleMatch=a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));
+  const gotArtist=normalize(item.artistName||item.artist||"");
+  const artistNames=[artist];
+  if(/카더가든|car\\s*,?\\s*the\\s*garden|car\\s*the\\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
+  const artistMatch=!artist||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
   const gotDuration=Number(item.duration)||0;
   const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
   return titleMatch&&artistMatch&&durationMatch;
@@ -327,6 +331,18 @@ async function loadLyrics(video){
  jobs.push((async()=>{
   const list=await getJson(searchUrl);
   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
+ })());
+ // Free-text search catches alternate artist spellings and metadata formatting differences.
+ jobs.push((async()=>{
+  const url=new URL(LYRIC_API+"/search");
+  url.searchParams.set("query",[track,artist||channel].filter(Boolean).join(" "));
+  const list=await getJson(url);
+  return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>{
+   const durationA=Number(a.duration)||0,durationB=Number(b.duration)||0;
+   const deltaA=duration&&durationA?Math.abs(duration-durationA):9999;
+   const deltaB=duration&&durationB?Math.abs(duration-durationB):9999;
+   return Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics))||deltaA-deltaB;
+  })[0]||null:null;
  })());
  jobs.push((async()=>{
   const url=new URL("https://api.synclrc.dev/lyrics");
