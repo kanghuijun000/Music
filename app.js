@@ -269,6 +269,29 @@ function renderLyrics(){
  }
  el.lyricsStatus.textContent="";
 }
+async function puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId){
+ if(!window.puter?.ai?.chat)return null;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),7000);
+ try{
+  const prompt="Identify this exact music track using web search. Return ONLY compact JSON with track, artists array, aliases array. Do not provide lyrics. Prefer original studio recording, not covers. Track: "+track+". Artist: "+(artist||"unknown")+". Channel: "+(channel||"unknown")+". Duration seconds: "+duration+". Return at most 2 title aliases and 3 artist spellings. If uncertain, return empty arrays.";
+  const result=await window.puter.ai.chat(prompt,{model:"openai/gpt-5.4-nano",tools:[{type:"web_search"}],max_tokens:160,temperature:0,signal:controller.signal});
+  if(requestId!==lyricLoadToken)return null;
+  const content=typeof result==="string"?result:(result?.message?.content||result?.text||"");
+  const match=String(content).match(/\{[\s\S]*\}/);
+  if(!match)return null;
+  const data=JSON.parse(match[0]);
+  const tracks=[track,...(Array.isArray(data.aliases)?data.aliases:[]),...(data.track?[data.track]:[])].filter(x=>typeof x==="string"&&x.trim()).slice(0,4);
+  const artists=[artist,...(Array.isArray(data.artists)?data.artists:[])].filter(x=>typeof x==="string"&&x.trim()).slice(0,4);
+  const candidates=[];
+  for(const name of tracks)for(const singer of (artists.length?artists:[""])){
+   const url=new URL(LYRIC_API+"/search");url.searchParams.set("track_name",name);if(singer)url.searchParams.set("artist_name",singer);
+   candidates.push((async()=>{const response=await fetch(url,{headers:{"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"},signal:controller.signal});if(!response.ok)throw new Error("Provider unavailable");const list=await response.json();if(!Array.isArray(list))return null;return list.filter(item=>item&&(item.syncedLyrics||item.plainLyrics)&&isGood(item)).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null;})());
+  }
+  try{return await Promise.any(candidates.map(job=>job.then(item=>{if(!item)throw new Error("No verified match");return item;})));}catch(_){return null;}
+ }catch(error){console.warn("Puter AI fallback unavailable:",error?.message||error);return null;}
+ finally{clearTimeout(timeout);}
+}
 async function loadLyrics(video){
  const requestId=++lyricLoadToken;
  lyricState.loading=true;
@@ -369,6 +392,11 @@ async function loadLyrics(video){
  try{
   selected=await Promise.any(jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;})));
  }catch(_){}
+ if(requestId!==lyricLoadToken)return;
+ if(!selected){
+  showLyricsMessage("기본 가사를 찾지 못해 AI가 곡 정보를 다시 확인하고 있어요…");
+  selected=await puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId);
+ }
  if(requestId!==lyricLoadToken)return;
  if(!selected){
   lyricState.loading=false;
