@@ -24,3 +24,16 @@
 .now-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 @media(max-width:850px){.player-panel .cover-art{max-width:360px}.player-panel .now-playing-info,.player-panel .playback-controls,.player-panel .youtube-player-area,.player-panel .player-note{max-width:560px;margin-left:auto;margin-right:auto}.player-panel .player-frame{margin:0 auto}}
 @media(max-width:560px){.cover-art{max-width:min(100%,340px)}.player-panel .player-frame{width:200px;height:200px}.player-frame iframe{width:200px;height:200px}}
+
+/* Live lyrics display */
+.lyrics-card{width:100%;min-height:300px;margin:0 auto 2px;padding:16px 14px 12px;border:1px solid var(--line);border-radius:15px;background:radial-gradient(ellipse at 50% 0%,#b6f36a12,transparent 60%),#0c0f16;overflow:hidden}
+.lyrics-card-head{display:flex;justify-content:space-between;align-items:center;color:#82899a;font-size:9px;font-weight:700;letter-spacing:1.6px}
+.lyrics-card-head span:last-child{color:var(--accent);letter-spacing:.7px}
+.lyrics-view{height:260px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:14px 4px;text-align:center;mask-image:linear-gradient(transparent,#000 12%,#000 88%,transparent)}
+.lyrics-placeholder{color:#858c9d;font-size:12px;line-height:1.8;text-align:center;padding:20px}
+.lyric-line{width:100%;font-size:14px;line-height:1.55;font-weight:600;color:#737c8e;transition:color .2s,transform .2s,font-size .2s;overflow-wrap:anywhere}
+.lyric-line.past{color:#525b6c;font-size:12px;font-weight:500}
+.lyric-line.current{color:var(--accent);font-size:19px;font-weight:800;transform:scale(1.02);text-shadow:0 0 22px #b6f36a25}
+.lyric-line.plain{color:#c3c8d4;font-size:13px;font-weight:500}
+.lyrics-view:has(.plain){justify-content:flex-start;overflow-y:auto;mask-image:none;gap:10px}
+@media(max-width:560px){.lyrics-card{min-height:280px;padding:14px 10px}.lyrics-view{height:245px}.lyric-line.current{font-size:17px}}
