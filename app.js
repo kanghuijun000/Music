@@ -286,7 +286,7 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
   const candidates=[];
   for(const name of tracks)for(const singer of (artists.length?artists:[""])){
    const url=new URL(LYRIC_API+"/search");url.searchParams.set("track_name",name);if(singer)url.searchParams.set("artist_name",singer);
-   candidates.push((async()=>{const response=await fetch(url,{headers:{"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"},signal:controller.signal});if(!response.ok)throw new Error("Provider unavailable");const list=await response.json();if(!Array.isArray(list))return null;return list.filter(item=>item&&(item.syncedLyrics||item.plainLyrics)&&isGood(item)).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null;})());
+   candidates.push((async()=>{const response=await fetch(url,{headers:{"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"},signal:controller.signal});if(!response.ok)throw new Error("Provider unavailable");const list=await response.json();if(!Array.isArray(list))return null;return list.filter(item=>item&&(item.syncedLyrics||item.plainLyrics)&&isGood(item,artists,tracks)).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null;})());
   }
   try{return await Promise.any(candidates.map(job=>job.then(item=>{if(!item)throw new Error("No verified match");return item;})));}catch(_){return null;}
  }catch(error){console.warn("Puter AI fallback unavailable:",error?.message||error);return null;}
@@ -326,15 +326,15 @@ async function loadLyrics(video){
   if(!response.ok)throw new Error("HTTP "+response.status);
   return response.json();
  }
- function isGood(item){
+ function isGood(item,extraArtists=[],extraTitles=[]){
   if(!item||(!item.syncedLyrics&&!item.ttmlLines&&!item.plainLyrics))return false;
-  const gotTitle=normalize(item.trackName||item.title||""),wantTitle=normalize(track);
-  if(!gotTitle||!wantTitle)return false;
+  const gotTitle=normalize(item.trackName||item.title||""),wantedTitles=[track,...extraTitles].map(normalize).filter(Boolean);
+  if(!gotTitle||!wantedTitles.length)return false;
   const stripExtras=value=>value.replace(/\\b(feat|ft|featuring|with)\\b.*$/,"").trim();
-  const a=stripExtras(gotTitle),b=stripExtras(wantTitle);
-  const titleMatch=a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));
+  const a=stripExtras(gotTitle);
+  const titleMatch=wantedTitles.some(title=>{const b=stripExtras(title);return a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));});
   const gotArtist=normalize(item.artistName||item.artist||"");
-  const artistNames=[artist];
+  const artistNames=[artist,...extraArtists];
   if(/카더가든|car\\s*,?\\s*the\\s*garden|car\\s*the\\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
   const artistMatch=!artist||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
   const gotDuration=Number(item.duration)||0;
