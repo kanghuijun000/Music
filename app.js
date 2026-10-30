@@ -358,7 +358,7 @@ async function loadLyrics(video){
  // Free-text search catches alternate artist spellings and metadata formatting differences.
  jobs.push((async()=>{
   const url=new URL(LYRIC_API+"/search");
-  url.searchParams.set("query",[track,artist||channel].filter(Boolean).join(" "));
+  url.searchParams.set("q",[track,artist,channel].filter(Boolean).join(" "));
   const list=await getJson(url);
   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>{
    const durationA=Number(a.duration)||0,durationB=Number(b.duration)||0;
