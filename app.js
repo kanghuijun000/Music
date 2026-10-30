@@ -75,7 +75,7 @@ function renderLyrics(){
    });
    el.lyricsStatus.textContent="일반 가사 · 동기화 미지원";
    lyricState.lastIndex=-2;
-  }else {showLyricsMessage("이 곡의 가사를 찾지 못했어요");lyricState.lastIndex=-3;}
+  }else {showLyricsMessage("동기화 가능한 가사가 없거나, 가사 정보를 불러오지 못했어요.");lyricState.lastIndex=-3;}
   return;
  }
  const current=ytPlayer&&typeof ytPlayer.getCurrentTime==="function"?ytPlayer.getCurrentTime():0;
