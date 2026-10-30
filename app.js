@@ -33,13 +33,15 @@ function showLyricsMessage(message){
 }
 function renderLyrics(){
  if(!lyricState.lines.length){
+  if(lyricState.lastIndex===-2||lyricState.lastIndex===-3)return;
   el.lyricsView.replaceChildren();
   if(lyricState.plain){
    lyricState.plain.split(/\r?\n/).filter(Boolean).slice(0,100).forEach(text=>{
     const row=document.createElement("div");row.className="lyric-line plain";row.textContent=text;el.lyricsView.append(row);
    });
    el.lyricsStatus.textContent="일반 가사 · 동기화 미지원";
-  }else showLyricsMessage("이 곡의 가사를 찾지 못했어요");
+   lyricState.lastIndex=-2;
+  }else {showLyricsMessage("이 곡의 가사를 찾지 못했어요");lyricState.lastIndex=-3;}
   return;
  }
  const current=ytPlayer&&typeof ytPlayer.getCurrentTime==="function"?ytPlayer.getCurrentTime():0;
@@ -55,7 +57,6 @@ function renderLyrics(){
   row.textContent=lyricState.lines[i].text;
   el.lyricsView.append(row);
  }
- if(index>=0){const active=el.lyricsView.querySelector(".current");if(active)active.scrollIntoView({block:"nearest",behavior:"smooth"});}
  el.lyricsStatus.textContent="시간 동기화 가사";
 }
 async function loadLyrics(video){
