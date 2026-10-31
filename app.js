@@ -292,18 +292,9 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
  if(aiAssistButton)aiAssistButton.hidden=true;
- const cacheKey=video.id;
- const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
- if(cached&&!usePuter){
-  lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");lyricState.wordSynced=Boolean(cached.wordSynced);
-  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;renderLyrics();return;
- }
- lyricState.loading=true;
- lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
- showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const normalize=value=>String(value||"").toLocaleLowerCase()
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
+  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd)\b/gi," ")
   .replace(/가사|뮤직비디오|뮤비|공식영상|오디오/gi," ")
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const raw=String(video.title||"").trim();
@@ -314,8 +305,19 @@ async function loadLyrics(video,usePuter=false){
  const track=parts.length>1?parts.slice(1).join(" - "):cleaned;
  const isTopic=/\s*-\s*Topic$/i.test(String(video.channelTitle||""));
  const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
- const artist=parts.length>1?parts[0]:(isTopic?channel:"");
- const duration=Number(video.duration)||0;
+ const genericChannel=/^(youtube|vevo|various artists|unknown|official)$/i.test(channel);
+ const artist=parts.length>1?parts[0]:(isTopic&&!genericChannel?channel:"");
+ const cacheKey=video.id;
+ const songCacheKey="song:"+normalize(track)+"|"+normalize(artist||(!genericChannel?channel:""));
+ const cached=(lyricCache.get(cacheKey)||readStoredLyric(cacheKey))||
+  (songCacheKey!=="song:|"?(lyricCache.get(songCacheKey)||readStoredLyric(songCacheKey)):null);
+ if(cached&&!usePuter){
+  lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");lyricState.wordSynced=Boolean(cached.wordSynced);
+  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;renderLyrics();return;
+ }
+ lyricState.loading=true;
+ lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
+ showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function getJson(url,customHeaders=headers){
@@ -344,9 +346,9 @@ async function loadLyrics(video,usePuter=false){
   const a=stripExtras(gotTitle);
   const titleMatch=wantedTitles.some(title=>{const b=stripExtras(title);return a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));});
   const gotArtist=normalize(item.artistName||item.artist||"");
-  const artistNames=[artist,...extraArtists];
+  const artistNames=[artist,...extraArtists].filter(name=>name&&!genericChannel);
   if(/카더가든|car\s*,?\s*the\s*garden|car\s*the\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
-  const artistMatch=!artist||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
+  const artistMatch=!artistNames.length||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
   const gotDuration=Number(item.duration)||0;
   const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
   return titleMatch&&artistMatch&&durationMatch&&hasReliableTimestamps(item);
@@ -370,7 +372,7 @@ async function loadLyrics(video,usePuter=false){
   }
   return true;
  }
- function lrclibItem(item){return isGood(item)&&hasReliableTimestamps(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
+ function lrclibItem(item){return isGood(item,[channel])&&hasReliableTimestamps(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
  const jobs=[];
  // 1) YouTube video ID lookup: the strongest match when this exact video has community-synced lyrics.
  jobs.push((async()=>{
@@ -387,7 +389,7 @@ async function loadLyrics(video,usePuter=false){
   else if(data.format==="lrc")lines=parseLrc(data.lyrics);
   const plain=data.format==="plain"?String(data.lyrics):"";
   const item={trackName:data.song||track,artistName:data.artist||artist,duration:gotDuration||duration,syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:plain,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
-  if(!isGood(item))return null;
+  if(!isGood(item,[channel]))return null;
   return item;
  })());
  // 2) Better Lyrics default endpoint: documented response field is `ttml`.
@@ -401,7 +403,7 @@ async function loadLyrics(video,usePuter=false){
   const lines=parseTtml(rawLyrics);
   if(!lines.length)return null;
   const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
-  return isGood(item)?item:null;
+  return isGood(item,[channel])?item:null;
  })());
  // 3) Better Lyrics provider-specific TTML endpoint.
  jobs.push((async()=>{
@@ -497,7 +499,9 @@ async function loadLyrics(video,usePuter=false){
  if(!lyricState.lines.length&&!lyricState.plain){
   lyricState.loading=false;showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
  }
- storeLyric(cacheKey,{lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords});
+ const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords};
+ storeLyric(cacheKey,cachedLyrics);
+ if(songCacheKey!=="song:|")storeLyric(songCacheKey,cachedLyrics);
  lyricState.loading=false;renderLyrics();
 }
 function updateProgress(){
