@@ -349,9 +349,28 @@ async function loadLyrics(video,usePuter=false){
   const artistMatch=!artist||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
   const gotDuration=Number(item.duration)||0;
   const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
-  return titleMatch&&artistMatch&&durationMatch;
+  return titleMatch&&artistMatch&&durationMatch&&hasReliableTimestamps(item);
  }
- function lrclibItem(item){return isGood(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
+ function hasReliableTimestamps(item){
+  let lines=Array.isArray(item?.ttmlLines)?item.ttmlLines:[];
+  if(!lines.length&&item?.syncedLyrics){
+   const raw=String(item.syncedLyrics);
+   lines=parseEnhancedLrc(raw);
+   if(!lines.length)lines=parseLrc(raw);
+  }
+  if(!lines.length&&item?.lyricsfile)lines=parseLyricsfile(item.lyricsfile);
+  // Plain-text lyrics have no timestamps, so they remain eligible as a fallback.
+  if(!lines.length)return !item?.syncedLyrics&&!item?.ttmlLines?.length&&!item?.lyricsfile;
+  const songDuration=Number(item.duration)||duration;
+  const valid=lines.filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
+  if(valid.length<2||valid.length!==lines.length)return false;
+  if(songDuration>0&&valid.some(line=>Number(line.time)>songDuration+12))return false;
+  for(let i=1;i<valid.length;i++){
+   if(Number(valid[i].time)<Number(valid[i-1].time))return false;
+  }
+  return true;
+ }
+ function lrclibItem(item){return isGood(item)&&hasReliableTimestamps(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
  const jobs=[];
  // 1) YouTube video ID lookup: the strongest match when this exact video has community-synced lyrics.
  jobs.push((async()=>{
