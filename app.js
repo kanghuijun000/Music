@@ -325,20 +325,25 @@ async function loadLyrics(video,usePuter=false){
  const headers={"X-User-Agent":"Music/1.1 (https://kanghuijun000.github.io/)"};
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const stripFeat=value=>String(value||"").replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
- function titleScore(value){
-  const got=normalize(value),wanted=normalize(track);
-  if(!got||!wanted)return 0;
-  const a=stripFeat(got),b=stripFeat(wanted);
-  if(a===b)return 100;
-  if(a.startsWith(b+" ")||b.startsWith(a+" "))return 82;
-  if(a.includes(b)||b.includes(a))return 65;
-  const aw=new Set(a.split(" ")),bw=new Set(b.split(" "));
-  const overlap=[...aw].filter(word=>bw.has(word)).length;
-  return overlap/Math.max(aw.size,bw.size)*45;
- }
- function artistScore(value){
+ function titleScore(value,extraTitles=[]){
   const got=normalize(value);
-  const names=[artist,isTopic?channel:""].filter(Boolean).map(normalize);
+  if(!got)return 0;
+  const choices=[track,...extraTitles].map(normalize).filter(Boolean);
+  let best=0;
+  for(const wanted of choices){
+   const a=stripFeat(got),b=stripFeat(wanted);
+   if(a===b){best=Math.max(best,100);continue;}
+   if(a.startsWith(b+" ")||b.startsWith(a+" ")){best=Math.max(best,82);continue;}
+   if(a.includes(b)||b.includes(a)){best=Math.max(best,65);continue;}
+   const aw=new Set(a.split(" ")),bw=new Set(b.split(" "));
+   const overlap=[...aw].filter(word=>bw.has(word)).length;
+   best=Math.max(best,overlap/Math.max(aw.size,bw.size)*45);
+  }
+  return best;
+ }
+ function artistScore(value,extraArtists=[]){
+  const got=normalize(value);
+  const names=[artist,isTopic?channel:"",...extraArtists].filter(Boolean).map(normalize);
   if(!names.length)return 45;
   if(!got)return 0;
   if(names.some(name=>got===name))return 100;
@@ -366,10 +371,10 @@ async function loadLyrics(video,usePuter=false){
   }
   return [];
  }
- function validate(item){
+ function validate(item,extraArtists=[],extraTitles=[]){
   if(!item)return null;
-  const title=titleScore(item.trackName||item.title||"");
-  const singer=artistScore(item.artistName||item.artist||"");
+  const title=titleScore(item.trackName||item.title||"",extraTitles);
+  const singer=artistScore(item.artistName||item.artist||"",extraArtists);
   const duration=durationScore(item.duration);
   if(title<55||singer< -10||duration< -20)return null;
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
@@ -487,7 +492,7 @@ async function loadLyrics(video,usePuter=false){
    item=>Boolean(validate(item)),requestId).catch(()=>null);
   const verified=validate(ai);if(verified){verified._source="AI 보조 검색";candidates.push(verified);}
  }
- candidates=candidates.map(validate).filter(Boolean);
+ candidates=candidates.map(item=>validate(item)).filter(Boolean);
  candidates.sort((a,b)=>b._score-a._score);
  // Always prefer a well-matched synchronized record; use plain text only if no timed result survived validation.
  let selected=candidates.find(item=>item._synced)||candidates.find(item=>item.plainLyrics);
