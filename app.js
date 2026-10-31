@@ -88,7 +88,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v2";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v3";
 const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
@@ -460,7 +460,8 @@ async function loadLyrics(video,usePuter=false){
   const title=titleScore(item.trackName||item.title||"",extraTitles);
   const singer=artistScore(item.artistName||item.artist||"",extraArtists);
   const duration=durationScore(item.duration);
-  if(title<55||singer< -10||duration< -20)return null;
+  const hasArtist=Boolean(artist||isTopic&&!genericChannel);
+  if(title<(hasArtist?70:90)||singer<(hasArtist?55:45)||duration< -5)return null;
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
   const songDuration=Number(item.duration)||Number(video.duration)||0;
   const validLines=lines.length>=2&&lines.every((line,index)=>index===0||Number(line.time)>=Number(lines[index-1].time))&&
