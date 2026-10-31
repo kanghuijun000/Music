@@ -252,6 +252,8 @@ function renderLyrics(){
  const lyricTime=Math.max(0,current+LYRIC_LEAD_SECONDS);
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}
+ // 가사 시작 시간이 아직 오지 않았더라도 재생 직후 첫 줄을 미리 보여준다.
+ if(index<0)index=0;
  let wordIndex=-1;
  const activeLine=index>=0?lyricState.lines[index]:null;
  if(lyricState.wordSynced&&activeLine?.words?.length){
