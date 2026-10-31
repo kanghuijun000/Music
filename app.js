@@ -18,7 +18,7 @@ function applyTrackOffset(seconds){const value=Number(seconds);lyricOffsetSecond
 const trackAnalysisDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function startTrackOffsetAnalysis(video){
  const token=++trackAnalysisToken,videoId=String(video?.id||"");if(!videoId)return;
- const cache=readTrackAnalysisCache(),cached=cache[videoId],now=Date.now();
+ const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
  if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){const match=selectTrackStart(cached.tracks,video);applyTrackOffset(match?match.timestamp:0);return;}
  if(cached?.status==="pending"&&cached.jobId&&now-(cached.savedAt||0)<20*60*1000){/* resume existing job below */}
  else if(cached?.status==="failed"&&now-(cached.savedAt||0)<10*60*1000){applyTrackOffset(0);return;}
