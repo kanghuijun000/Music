@@ -238,7 +238,7 @@ function parseEnhancedLrc(source){
 function parseTimedTextTime(value){
  if(value===null||value===undefined||value==="")return NaN;
  const input=String(value).trim();
- const offset=input.match(/^([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(h|m|s|ms)$/i);
+ const offset=input.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(h|m|s|ms)$/i);
  if(offset){const amount=Number(offset[1]),unit=offset[2].toLowerCase();return amount*(unit==="h"?3600:unit==="m"?60:unit==="ms"?.001:1);}
  const parts=input.split(":");
  let seconds=NaN;
