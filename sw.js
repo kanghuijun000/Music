@@ -1,11 +1,11 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="v35";
+const CACHE_VERSION="v36";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
  "./index.html",
  "./style.css",
- "./app.js?v=35",
+ "./app.js?v=36",
  "./manifest.json",
  "./icons/music-icon.svg",
  "./icons/icon-192.svg",
