@@ -6,7 +6,7 @@ const LYRIC_LEAD_SECONDS=0.25;
 const lyricCache=new Map();
 
 const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v1";
-const LYRIC_CACHE_LIMIT=30;
+const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
   const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
@@ -302,15 +302,15 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
  if(aiAssistButton)aiAssistButton.hidden=true;
- lyricState.loading=true;
- lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
- showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const cacheKey=video.id;
  const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
  if(cached&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");lyricState.wordSynced=Boolean(cached.wordSynced);
-  lyricState.loading=false;renderLyrics();return;
+  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;renderLyrics();return;
  }
+ lyricState.loading=true;
+ lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
+ showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
  const normalize=value=>String(value||"").toLocaleLowerCase()
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic)\b/gi," ")
