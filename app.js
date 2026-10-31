@@ -294,211 +294,218 @@ async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
  if(aiAssistButton)aiAssistButton.hidden=true;
  const normalize=value=>String(value||"").toLocaleLowerCase()
-  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd)\b/gi," ")
-  .replace(/가사|뮤직비디오|뮤비|공식영상|오디오/gi," ")
+  .normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance)\b/gi," ")
+  .replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ")
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const raw=String(video.title||"").trim();
  const cleaned=raw.replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\s*(?:\/|\|)\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video).*$/i," ")
   .replace(/\s+/g," ").trim();
- const parts=cleaned.split(/\s+[-–|]\s+/).map(x=>x.trim()).filter(Boolean);
+ const parts=cleaned.split(/\s+[-–—|]\s+/).map(x=>x.trim()).filter(Boolean);
  const track=parts.length>1?parts.slice(1).join(" - "):cleaned;
- const isTopic=/\s*-\s*Topic$/i.test(String(video.channelTitle||""));
- const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
- const genericChannel=/^(youtube|vevo|various artists|unknown|official)$/i.test(channel);
+ const channelRaw=String(video.channelTitle||"").trim();
+ const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
+ const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
+ const genericChannel=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
  const artist=parts.length>1?parts[0]:(isTopic&&!genericChannel?channel:"");
  const cacheKey=video.id;
  const songCacheKey="song:"+normalize(track)+"|"+normalize(artist||(!genericChannel?channel:""));
  const cached=(lyricCache.get(cacheKey)||readStoredLyric(cacheKey))||
   (songCacheKey!=="song:|"?(lyricCache.get(songCacheKey)||readStoredLyric(songCacheKey)):null);
  if(cached&&!usePuter){
-  lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");lyricState.wordSynced=Boolean(cached.wordSynced);
+  lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));
+  lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");
+  lyricState.wordSynced=Boolean(cached.wordSynced);
   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;renderLyrics();return;
  }
- lyricState.loading=true;
- lyricState.lines=[];lyricState.plain="";lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
- showLyricsMessage("곡 정보를 확인하고 가사를 검색하고 있어요…");
- const headers={"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"};
+ lyricState.loading=true;lyricState.lines=[];lyricState.plain="";
+ lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
+ showLyricsMessage("곡 정보를 확인하고 여러 가사 제공처를 검색하고 있어요…");
+ const headers={"X-User-Agent":"Music/1.1 (https://kanghuijun000.github.io/)"};
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- async function getJson(url,customHeaders=headers){
-  const request=async()=>{
-   const controller=new AbortController();
-   const timer=setTimeout(()=>controller.abort(),12000);
-   try{return await fetch(url,{headers:customHeaders,signal:controller.signal});}
-   finally{clearTimeout(timer);}
-  };
-  let response;
-  try{response=await request();}
-  catch(error){if(error?.name==="AbortError")throw new Error("요청 시간 초과");throw error;}
-  if(response.status===429||response.status===503){
-   await delay(1000);
-   try{response=await request();}
-   catch(error){if(error?.name==="AbortError")throw new Error("재시도 시간 초과");throw error;}
-  }
-  if(!response.ok)throw new Error("HTTP "+response.status);
-  return response.json();
+ const stripFeat=value=>String(value||"").replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
+ function titleScore(value){
+  const got=normalize(value),wanted=normalize(track);
+  if(!got||!wanted)return 0;
+  const a=stripFeat(got),b=stripFeat(wanted);
+  if(a===b)return 100;
+  if(a.startsWith(b+" ")||b.startsWith(a+" "))return 82;
+  if(a.includes(b)||b.includes(a))return 65;
+  const aw=new Set(a.split(" ")),bw=new Set(b.split(" "));
+  const overlap=[...aw].filter(word=>bw.has(word)).length;
+  return overlap/Math.max(aw.size,bw.size)*45;
  }
- function isGood(item,extraArtists=[],extraTitles=[]){
-  if(!item||(!item.syncedLyrics&&!item.ttmlLines&&!item.plainLyrics))return false;
-  const gotTitle=normalize(item.trackName||item.title||""),wantedTitles=[track,...extraTitles].map(normalize).filter(Boolean);
-  if(!gotTitle||!wantedTitles.length)return false;
-  const stripExtras=value=>value.replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
-  const a=stripExtras(gotTitle);
-  const titleMatch=wantedTitles.some(title=>{const b=stripExtras(title);return a===b||(a.length>=b.length+2&&a.startsWith(b+" "))||(b.length>=a.length+2&&b.startsWith(a+" "));});
-  const gotArtist=normalize(item.artistName||item.artist||"");
-  const artistNames=[artist,...extraArtists].filter(name=>name&&!genericChannel);
-  if(/카더가든|car\s*,?\s*the\s*garden|car\s*the\s*garden/i.test(artist+" "+channel))artistNames.push("카더가든","Car, the garden","Car the garden");
-  const artistMatch=!artistNames.length||Boolean(gotArtist&&artistNames.some(name=>{const want=normalize(name);return want&&(gotArtist===want||gotArtist.includes(want)||want.includes(gotArtist));}));
-  const gotDuration=Number(item.duration)||0;
-  const durationMatch=!duration||!gotDuration||Math.abs(duration-gotDuration)<=Math.max(18,duration*0.1);
-  return titleMatch&&artistMatch&&durationMatch&&hasReliableTimestamps(item);
+ function artistScore(value){
+  const got=normalize(value);
+  const names=[artist,isTopic?channel:""].filter(Boolean).map(normalize);
+  if(!names.length)return 45;
+  if(!got)return 0;
+  if(names.some(name=>got===name))return 100;
+  if(names.some(name=>got.includes(name)||name.includes(got)))return 75;
+  return -35;
  }
- function hasReliableTimestamps(item){
-  let lines=Array.isArray(item?.ttmlLines)?item.ttmlLines:[];
-  if(!lines.length&&item?.syncedLyrics){
-   const raw=String(item.syncedLyrics);
-   lines=parseEnhancedLrc(raw);
-   if(!lines.length)lines=parseLrc(raw);
-  }
-  if(!lines.length&&item?.lyricsfile)lines=parseLyricsfile(item.lyricsfile);
-  // Plain-text lyrics have no timestamps, so they remain eligible as a fallback.
-  if(!lines.length)return !item?.syncedLyrics&&!item?.ttmlLines?.length&&!item?.lyricsfile;
-  const songDuration=Number(item.duration)||duration;
-  const valid=lines.filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
-  if(valid.length<2||valid.length!==lines.length)return false;
-  if(songDuration>0&&valid.some(line=>Number(line.time)>songDuration+12))return false;
-  for(let i=1;i<valid.length;i++){
-   if(Number(valid[i].time)<Number(valid[i-1].time))return false;
-  }
-  return true;
+ function durationScore(value){
+  const got=Number(value)||0,want=Number(video.duration)||0;
+  if(!got||!want)return 12;
+  const diff=Math.abs(got-want);
+  if(diff<=3)return 30;
+  if(diff<=8)return 22;
+  if(diff<=18)return 10;
+  if(diff<=Math.max(30,want*.1))return -5;
+  return -45;
  }
- function lrclibItem(item){return isGood(item,[channel])&&hasReliableTimestamps(item)&&(item.syncedLyrics||item.plainLyrics)?item:null;}
- const jobs=[];
- // 1) YouTube video ID lookup: the strongest match when this exact video has community-synced lyrics.
- jobs.push((async()=>{
-  const url=new URL("https://unison.boidu.dev/lyrics");
-  url.searchParams.set("v",video.id);
-  const response=await fetch(url);
-  if(!response.ok)throw new Error("Unison video match unavailable");
-  const body=await response.json(),data=body?.data;
+ function extractLines(item){
+  if(Array.isArray(item?.ttmlLines)&&item.ttmlLines.length)return item.ttmlLines;
+  if(item?.lyricsfile){const parsed=parseLyricsfile(item.lyricsfile);if(parsed.length)return parsed;}
+  if(item?.syncedLyrics){
+   const enhanced=parseEnhancedLrc(item.syncedLyrics);
+   if(enhanced.length)return enhanced;
+   const lrc=parseLrc(item.syncedLyrics);
+   if(lrc.length)return lrc;
+  }
+  return [];
+ }
+ function validate(item){
+  if(!item)return null;
+  const title=titleScore(item.trackName||item.title||"");
+  const singer=artistScore(item.artistName||item.artist||"");
+  const duration=durationScore(item.duration);
+  if(title<55||singer< -10||duration< -20)return null;
+  const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
+  const songDuration=Number(item.duration)||Number(video.duration)||0;
+  const validLines=lines.length>=2&&lines.every((line,index)=>index===0||Number(line.time)>=Number(lines[index-1].time))&&
+   (!songDuration||lines.every(line=>Number(line.time)<=songDuration+15));
+  const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
+  if(!validLines&&!plain.length)return null;
+  const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\n")};
+  normalized._score=title+singer+duration+(validLines?45:0)+(item.hasWordSync||lines.some(line=>line.words?.length)?12:0);
+  normalized._synced=validLines;
+  normalized._source=item._source||"가사 제공처";
+  return normalized;
+ }
+ async function fetchJson(url,customHeaders=headers,timeoutMs=10000){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+   const response=await fetch(url,{headers:customHeaders,signal:controller.signal});
+   if(response.status===429){
+    const wait=Math.min(5000,Math.max(1000,Number(response.headers.get("Retry-After"))*1000||1500));
+    await delay(wait);
+    throw new Error("요청 제한(429)");
+   }
+   if(!response.ok)throw new Error("HTTP "+response.status);
+   return await response.json();
+  }finally{clearTimeout(timer);}
+ }
+ const providers=[];
+ const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);}return null;})());
+ // Video-ID lookup is the strongest way to identify lyrics attached to this exact YouTube upload.
+ addJob("Unison",async()=>{
+  const url=new URL("https://unison.boidu.dev/lyrics");url.searchParams.set("v",video.id);
+  const body=await fetchJson(url,{},9000),data=body?.data;
   if(!body?.success||!data?.lyrics)return null;
-  const gotDuration=Number(data.duration)||0;
-  if(duration&&gotDuration&&Math.abs(duration-gotDuration)>Math.max(22,duration*0.12))return null;
-  let lines=[];
-  if(data.format==="ttml")lines=parseTtml(data.lyrics);
-  else if(data.format==="lrc")lines=parseLrc(data.lyrics);
-  const plain=data.format==="plain"?String(data.lyrics):"";
-  const item={trackName:data.song||track,artistName:data.artist||artist,duration:gotDuration||duration,syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:plain,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
-  if(!isGood(item,[channel]))return null;
-  return item;
- })());
- // 2) Better Lyrics default endpoint: documented response field is `ttml`.
- jobs.push((async()=>{
+  const lines=data.format==="ttml"?parseTtml(data.lyrics):data.format==="lrc"?parseLrc(data.lyrics):[];
+  return {trackName:data.song||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
+   syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:data.format==="plain"?data.lyrics:"",ttmlLines:lines,
+   hasWordSync:lines.some(line=>line.words?.length)};
+ });
+ // Better Lyrics supports several upstream catalogues and formats.
+ addJob("Better Lyrics",async()=>{
   const url=new URL("https://api.betterlyrics.org/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-  url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
-  url.searchParams.set("v",video.id);
-  const data=await getJson(url,{});
-  const rawLyrics=data.ttml||data.lyrics||"";
-  const lines=parseTtml(rawLyrics);
-  if(!lines.length)return null;
-  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
-  return isGood(item,[channel])?item:null;
- })());
- // 3) Better Lyrics provider-specific TTML endpoint.
- jobs.push((async()=>{
+  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));url.searchParams.set("v",video.id);
+  const data=await fetchJson(url,{},11000),raw=data.ttml||data.lyrics||"";
+  return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
+   ttmlLines:parseTtml(raw),plainLyrics:data.plainLyrics||""};
+ });
+ addJob("Better Lyrics TTML",async()=>{
   const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
-  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
-  const data=await getJson(url,{});
-  const rawLyrics=data.lyrics||data.ttml||"";
-  const lines=parseTtml(rawLyrics);
-  if(!lines.length)return null;
-  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,ttmlLines:lines,hasWordSync:lines.some(line=>line.words?.length)};
-  return isGood(item)?item:null;
- })());
- const exactUrl=new URL(LYRIC_API+"/get");
- exactUrl.searchParams.set("track_name",track);
- if(artist)exactUrl.searchParams.set("artist_name",artist);
- if(duration)exactUrl.searchParams.set("duration",String(duration));
- jobs.push((async()=>lrclibItem(await getJson(exactUrl)))());
- const searchUrl=new URL(LYRIC_API+"/search");
- searchUrl.searchParams.set("track_name",track);
- if(artist)searchUrl.searchParams.set("artist_name",artist);
- jobs.push((async()=>{
-  const list=await getJson(searchUrl);
-  return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
- })());
- // Broaden Korean and alternate-credit searches instead of relying on one exact metadata spelling.
- const lyricQueries=[];
- const seenLyricQueries=new Set();
- for(const queryParts of [[track,channel],[track,artist],[artist,track],[track,artist,channel]]){
-  const query=queryParts.filter(Boolean).join(" ").trim();
-  const queryKey=normalize(query);
-  if(query&&!seenLyricQueries.has(queryKey)){seenLyricQueries.add(queryKey);lyricQueries.push(query);}
- }
- for(const query of lyricQueries){
-  jobs.push((async()=>{
-   const url=new URL(LYRIC_API+"/search");url.searchParams.set("q",query);
-   const list=await getJson(url);
-   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
-  })());
- }
- // Free-text search catches alternate artist spellings and metadata formatting differences.
- jobs.push((async()=>{
-  const url=new URL(LYRIC_API+"/search");
-  url.searchParams.set("q",[track,artist,channel].filter(Boolean).join(" "));
-  const list=await getJson(url);
-  return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>{
-   const durationA=Number(a.duration)||0,durationB=Number(b.duration)||0;
-   const deltaA=duration&&durationA?Math.abs(duration-durationA):9999;
-   const deltaB=duration&&durationB?Math.abs(duration-durationB):9999;
-   return Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics))||deltaA-deltaB;
-  })[0]||null:null;
- })());
- jobs.push((async()=>{
+  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
+  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));
+  const data=await fetchJson(url,{},11000);
+  return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
+   ttmlLines:parseTtml(data.lyrics||data.ttml||""),plainLyrics:data.plainLyrics||""};
+ });
+ addJob("SyncLRC",async()=>{
   const url=new URL("https://api.synclrc.dev/lyrics");
-  url.searchParams.set("track",track);url.searchParams.set("artist",artist);
-  if(duration)url.searchParams.set("duration",String(duration));
-  url.searchParams.set("type","karaoke");
-  const data=await getJson(url,{});
-  const timed=data.karaoke||data.synced||data.lyrics||"";
+  url.searchParams.set("track",track);url.searchParams.set("artist",artist||channel||"");
+  if(video.duration)url.searchParams.set("duration",String(video.duration));url.searchParams.set("type","karaoke");
+  const data=await fetchJson(url,{},11000),timed=data.karaoke||data.synced||data.lyrics||"";
   const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
-  if(!lines.length)return null;
-  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:enhanced,hasWordSync:enhanced.length>0};
-  return isGood(item)?item:null;
- })());
- for(const provider of ["kugou","qq"])jobs.push((async()=>{
+  return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
+   syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0};
+ });
+ for(const provider of ["kugou","qq"])addJob("Better Lyrics "+provider.toUpperCase(),async()=>{
   const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
-  url.searchParams.set("s",track);url.searchParams.set("a",artist);url.searchParams.set("al",track);url.searchParams.set("d",String(duration||1));
-  const data=await getJson(url,{});
-  const rawLyrics=data.lyrics||"",lines=provider==="kugou"?parseLrc(rawLyrics):parseQrc(rawLyrics);
-  if(!lines.length)return null;
-  const item={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||duration,syncedLyrics:provider==="kugou"?rawLyrics:"",ttmlLines:provider==="qq"?lines:[],hasWordSync:provider==="qq"};
-  return isGood(item)?item:null;
- })());
- const aiJob=usePuter?puterAIAlternateSearch(track,artist,channel,duration,normalize,isGood,requestId):Promise.resolve(null);
- let selected=null;
- const providerJobs=jobs.map(job=>job.then(item=>{if(!item)throw new Error("No verified lyric match");return item;}));
- const aiVerifiedJob=aiJob.then(item=>{if(!item)throw new Error("No AI-verified lyric match");return item;});
- const searchRace=Promise.any([...providerJobs,aiVerifiedJob]).catch(()=>null);
- selected=await Promise.race([searchRace,delay(25000).then(()=>null)]);
+  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
+  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));
+  const data=await fetchJson(url,{},11000),raw=data.lyrics||"";
+  const lines=provider==="kugou"?parseLrc(raw):parseQrc(raw);
+  return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
+   syncedLyrics:provider==="kugou"?raw:"",ttmlLines:lines,plainLyrics:data.plainLyrics||"",hasWordSync:provider==="qq"};
+ });
+ // LRCLIB asks clients to make requests sequentially and leave a short gap between them.
+ const lrclibJob=(async()=>{
+  const queries=[];
+  const addQuery=(kind,values)=>{
+   const key=kind+":"+values.map(normalize).join("|");
+   if(!queries.some(item=>item.key===key))queries.push({key,kind,values});
+  };
+  const exact=new URL(LYRIC_API+"/get");exact.searchParams.set("track_name",track);
+  if(artist)exact.searchParams.set("artist_name",artist);if(video.duration)exact.searchParams.set("duration",String(video.duration));
+  queries.push({key:"exact",url:exact});
+  addQuery("structured",[track,artist]);
+  addQuery("free",[track,artist]);
+  if(channel&&!genericChannel)addQuery("free",[track,channel]);
+  addQuery("free",[track]);
+  const found=[];
+  for(let i=0;i<queries.length;i++){
+   if(requestId!==lyricLoadToken)break;
+   if(i)await delay(300);
+   const query=queries[i];
+   try{
+    let url=query.url;
+    if(!url){
+     url=new URL(LYRIC_API+"/search");
+     if(query.kind==="structured"){url.searchParams.set("track_name",query.values[0]);if(query.values[1])url.searchParams.set("artist_name",query.values[1]);}
+     else url.searchParams.set("q",query.values.filter(Boolean).join(" "));
+    }
+    const data=await fetchJson(url,headers,9000);
+    const list=Array.isArray(data)?data:[data];
+    for(const item of list){const valid=validate(item);if(valid){valid._source="LRCLIB";found.push(valid);}}
+   }catch(error){console.debug("LRCLIB lookup:",error?.message||error);}
+  }
+  return found;
+ })();
+ const externalResults=await Promise.all(providers);
+ if(requestId!==lyricLoadToken)return;
+ const lrclibResults=await Promise.race([lrclibJob,delay(18000).then(()=>[])]);
+ if(requestId!==lyricLoadToken)return;
+ let candidates=[...externalResults.filter(Boolean),...lrclibResults];
+ if(usePuter){
+  const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
+   item=>Boolean(validate(item)),requestId).catch(()=>null);
+  const verified=validate(ai);if(verified){verified._source="AI 보조 검색";candidates.push(verified);}
+ }
+ candidates=candidates.map(validate).filter(Boolean);
+ candidates.sort((a,b)=>b._score-a._score);
+ // Always prefer a well-matched synchronized record; use plain text only if no timed result survived validation.
+ let selected=candidates.find(item=>item._synced)||candidates.find(item=>item.plainLyrics);
  if(requestId!==lyricLoadToken)return;
  if(!selected){
   if(aiAssistButton)aiAssistButton.hidden=false;
   lyricState.loading=false;
-  showLyricsMessage("가사 제공처를 모두 확인했지만 일치하는 결과를 찾지 못했어요. 다른 영상 버전이나 표기 정보가 필요할 수 있어요.");
+  showLyricsMessage("여러 가사 제공처를 확인했지만 검증을 통과한 가사를 찾지 못했어요. 다른 영상 버전이나 정확한 곡 정보가 필요할 수 있어요.");
   return;
  }
- if(aiAssistButton)aiAssistButton.hidden=true;
- const wordLines=(selected.ttmlLines?.length?selected.ttmlLines:(selected.hasWordSync?parseLyricsfile(selected.lyricsfile):[])).filter(item=>item&&!isCreditMetadata(item.text));
+ const wordLines=selected.ttmlLines||[];
  const hasWords=wordLines.some(item=>item.words?.length);
- lyricState.lines=(hasWords?wordLines:parseLrc(selected.syncedLyrics||"")).filter(item=>!isCreditMetadata(item.text));
+ lyricState.lines=(selected._synced?wordLines:[]).filter(item=>!isCreditMetadata(item.text));
  lyricState.plain=String(selected.plainLyrics||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  if(!lyricState.lines.length&&!lyricState.plain){
-  lyricState.loading=false;showLyricsMessage("가사 데이터는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
+  lyricState.loading=false;showLyricsMessage("가사는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
  }
  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords};
  storeLyric(cacheKey,cachedLyrics);
