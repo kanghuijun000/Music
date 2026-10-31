@@ -88,7 +88,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v3";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v4";
 const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
@@ -394,9 +394,9 @@ async function loadLyrics(video,usePuter=false){
  const genericChannel=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
  const artist=parts.length>1?parts[0]:(!genericChannel?channel:"");
  const cacheKey=video.id;
- const songCacheKey=artist?"song:"+normalize(track)+"|"+normalize(artist):"";
- const cached=(lyricCache.get(cacheKey)||readStoredLyric(cacheKey))||
-  (songCacheKey?(lyricCache.get(songCacheKey)||readStoredLyric(songCacheKey)):null);
+ // Synchronized timestamps belong to a specific video upload. Never reuse
+ // song-level lyric timestamps across uploads with different intros or edits.
+ const cached=lyricCache.get(cacheKey)||readStoredLyric(cacheKey);
  if(cached&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&!isCreditMetadata(item.text));
   lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>!isCreditMetadata(line)).join("\n");
@@ -599,7 +599,6 @@ async function loadLyrics(video,usePuter=false){
  }
  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords};
  storeLyric(cacheKey,cachedLyrics);
- if(songCacheKey)storeLyric(songCacheKey,cachedLyrics);
  lyricState.loading=false;renderLyrics();
 }
 function updateProgress(){
