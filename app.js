@@ -521,10 +521,11 @@ function updateProgress(){
  if(!ytPlayer||typeof ytPlayer.getCurrentTime!=="function")return;
  const playerDuration=ytPlayer.getDuration()||0;
  const current=ytPlayer.getCurrentTime()||0;
- // The IFrame API has no dedicated ad-state event; wait for the selected video duration.
- if(!contentTimelineReady&&selectedVideoDuration>0&&playerDuration>0){
-  const tolerance=Math.max(1.25,selectedVideoDuration*0.002);
-  if(Math.abs(playerDuration-selectedVideoDuration)<=tolerance)contentTimelineReady=true;
+ // The IFrame API's reported duration can differ slightly from Data API metadata.
+ // Use the actual loaded player's timeline instead of blocking lyrics on exact duration equality.
+ if(!contentTimelineReady&&ytPlayer.getPlayerState&&ytPlayer.getPlayerState()===YT.PlayerState.PLAYING&&playerDuration>0){
+  contentTimelineReady=true;
+  selectedVideoDuration=playerDuration;
  }
  if(!contentTimelineReady){
   el.progressBar.disabled=true;
