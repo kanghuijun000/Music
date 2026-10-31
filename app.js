@@ -2,7 +2,7 @@ const API_BASE="https://www.googleapis.com/youtube/v3";
 const STORAGE_KEY="musiq_youtube_api_key_v1";
 const LYRIC_API="https://lrclib.net/api";
 const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false,loading:false};
-const LYRIC_LEAD_SECONDS=0.25;
+const LYRIC_LEAD_SECONDS=0;
 const lyricCache=new Map();
 
 const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v1";
@@ -252,13 +252,8 @@ function renderLyrics(){
  const lyricTime=Math.max(0,current+LYRIC_LEAD_SECONDS);
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}
- // 가사 시작 시간이 아직 오지 않았더라도 재생 직후 첫 줄을 미리 보여준다.
- if(index<0)index=0;
- let wordIndex=-1;
- const activeLine=index>=0?lyricState.lines[index]:null;
- if(lyricState.wordSynced&&activeLine?.words?.length){
-  for(let i=0;i<activeLine.words.length;i++){if(activeLine.words[i].start<=lyricTime)wordIndex=i;else break;}
- }
+ // 전주에는 첫 가사를 미리 보여주되, 실제 타임스탬프 전에는 강조하지 않는다.
+ const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex)return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
  el.lyricsView.replaceChildren();
@@ -266,14 +261,7 @@ function renderLyrics(){
  for(let i=start;i<end;i++){
   const item=lyricState.lines[i],row=document.createElement("div");
   row.className="lyric-line"+(i===index?" current":"")+(i<index?" past":"");
-  if(i===index&&lyricState.wordSynced&&item.words?.length){
-   item.words.forEach((part,j)=>{
-    const span=document.createElement("span");
-    span.className="lyric-word"+(j===wordIndex?" active":"")+(j>wordIndex?" upcoming":"");
-    span.textContent=part.text;
-    row.append(span);
-   });
-  }else row.textContent=item.text;
+  row.textContent=item.text;
   el.lyricsView.append(row);
  }
  el.lyricsStatus.textContent="";
