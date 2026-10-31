@@ -236,12 +236,15 @@ function parseEnhancedLrc(source){
  return output.sort((a,b)=>a.time-b.time);
 }
 function parseTimedTextTime(value){
- if(!value)return NaN;
- const parts=String(value).trim().split(":");
- let seconds=0;
+ if(value===null||value===undefined||value==="")return NaN;
+ const input=String(value).trim();
+ const offset=input.match(/^([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(h|m|s|ms)$/i);
+ if(offset){const amount=Number(offset[1]),unit=offset[2].toLowerCase();return amount*(unit==="h"?3600:unit==="m"?60:unit==="ms"?.001:1);}
+ const parts=input.split(":");
+ let seconds=NaN;
  if(parts.length===3)seconds=Number(parts[0])*3600+Number(parts[1])*60+Number(parts[2]);
  else if(parts.length===2)seconds=Number(parts[0])*60+Number(parts[1]);
- else seconds=Number(parts[0]);
+ else if(parts.length===1)seconds=Number(parts[0]);
  return Number.isFinite(seconds)?seconds:NaN;
 }
 function parseTtml(source){
@@ -252,24 +255,29 @@ function parseTtml(source){
  const paragraphs=[...doc.getElementsByTagName("*")].filter(node=>node.localName==="p");
  paragraphs.forEach(p=>{
   const words=[];
-  const collect=(node)=>{
+  const ownBegin=parseTimedTextTime(p.getAttribute("begin"));
+  const parentBegin=Number.isFinite(ownBegin)?ownBegin:0;
+  const collect=(node,ancestorBegin)=>{
    node.childNodes.forEach(child=>{
     if(child.nodeType===3||child.nodeType===4)return;
     if(child.nodeType!==1)return;
-    if(child.localName==="span"&&child.hasAttribute("begin")){
-     const start=parseTimedTextTime(child.getAttribute("begin"));
-     const end=parseTimedTextTime(child.getAttribute("end"));
+    const begin=parseTimedTextTime(child.getAttribute("begin"));
+    const end=parseTimedTextTime(child.getAttribute("end"));
+    const hasBegin=Number.isFinite(begin);
+    const absoluteBegin=ancestorBegin+(hasBegin?begin:0);
+    if(child.localName==="span"&&hasBegin){
      const text=child.textContent||"";
-     if(Number.isFinite(start)&&text)words.push({start,end,text});
-    }else collect(child);
+     const absoluteEnd=Number.isFinite(end)?ancestorBegin+end:NaN;
+     if(text.trim())words.push({start:absoluteBegin,end:absoluteEnd,text});
+    }else collect(child,absoluteBegin);
    });
   };
-  collect(p);
-  const ownTime=parseTimedTextTime(p.getAttribute("begin"));
-  const time=Number.isFinite(ownTime)?ownTime:(words[0]?.start??NaN);
+  collect(p,parentBegin);
+  const time=Number.isFinite(ownBegin)?ownBegin:(words[0]?.start??NaN);
   const fullText=(p.textContent||"").replace(/\\s+/g," ").trim();
   if(Number.isFinite(time)&&words.length){
-   output.push({time,text:words.map(word=>word.text).join(""),words});
+   const ordered=words.sort((a,b)=>a.start-b.start);
+   output.push({time,text:ordered.map(word=>word.text).join(""),words:ordered});
   }else if(Number.isFinite(time)&&fullText){
    output.push({time,text:fullText,words:[]});
   }
