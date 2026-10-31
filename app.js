@@ -88,7 +88,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v4";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v5";
 const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
@@ -578,9 +578,15 @@ async function loadLyrics(video,usePuter=false){
   const verified=validate(ai);if(verified){verified._source="AI 보조 검색";candidates.push(verified);}
  }
  candidates=candidates.map(item=>validate(item)).filter(Boolean);
- candidates.sort((a,b)=>b._score-a._score);
- // Always prefer a well-matched synchronized record; use plain text only if no timed result survived validation.
- let selected=candidates.find(item=>item._synced)||candidates.find(item=>item.plainLyrics);
+ // Prefer timestamps tied to this exact YouTube video over catalog lyrics matched only by title/artist.
+ // Unison is queried with the current video ID; its result is the strongest available video-specific candidate.
+ const sourcePriority=item=>item._source==="Unison"?1000:0;
+ candidates.sort((a,b)=>(sourcePriority(b)-sourcePriority(a))||(b._score-a._score));
+ // Use exact-video synchronized lyrics first. Fall back to catalog providers only when no usable
+ // video-specific synchronized result exists; never let a higher metadata score override video identity.
+ let selected=candidates.find(item=>item._source==="Unison"&&item._synced)
+  ||candidates.find(item=>item._synced)
+  ||candidates.find(item=>item.plainLyrics);
  if(requestId!==lyricLoadToken)return;
  if(!selected){
   if(aiAssistButton)aiAssistButton.hidden=false;
