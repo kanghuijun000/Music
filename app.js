@@ -5,7 +5,7 @@ const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:fal
 const LYRIC_LEAD_SECONDS=0;
 const lyricCache=new Map();
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v1";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v2";
 const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
