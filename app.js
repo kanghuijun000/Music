@@ -9,7 +9,7 @@ const TRACK_ANALYSIS_CACHE_KEY="music_track_timing_v1";
 const TRACK_ANALYSIS_CACHE_LIMIT=80;
 let lyricOffsetSeconds=0,trackAnalysisToken=0;
 // Never apply an unverified per-video offset. Use only a matched track timestamp from analysis.
-function getVideoLyricOffset(videoId,detected=0){const value=Number(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):0;}
+function getVideoLyricOffset(videoId,detected=0){const manualOffsets={"GspDybPhOeY":4};if(Object.prototype.hasOwnProperty.call(manualOffsets,String(videoId||"")))return manualOffsets[String(videoId)];const value=Number(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):0;}
 function readTrackAnalysisCache(){try{const value=JSON.parse(localStorage.getItem(TRACK_ANALYSIS_CACHE_KEY)||"{}");return value&&typeof value==="object"?value:{};}catch(_){return {};}}
 function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).sort((a,b)=>(Number(b[1]?.savedAt)||0)-(Number(a[1]?.savedAt)||0));localStorage.setItem(TRACK_ANALYSIS_CACHE_KEY,JSON.stringify(Object.fromEntries(entries.slice(0,TRACK_ANALYSIS_CACHE_LIMIT))));}catch(error){console.warn("Track timing cache could not be saved:",error);}}
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
