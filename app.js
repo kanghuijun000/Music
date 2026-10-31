@@ -19,40 +19,72 @@ const trackAnalysisDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function startTrackOffsetAnalysis(video){
  const token=++trackAnalysisToken,videoId=String(video?.id||"");if(!videoId)return;
  const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
- if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){const match=selectTrackStart(cached.tracks,video);applyTrackOffset(match?match.timestamp:0);return;}
- if(cached?.status==="pending"&&cached.jobId&&now-(cached.savedAt||0)<20*60*1000){/* resume existing job below */}
- else if(cached?.status==="failed"&&now-(cached.savedAt||0)<10*60*1000){applyTrackOffset(0);return;}
- else{
+ const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
+ if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){
+  const match=selectTrackStart(cached.tracks,video);applyTrackOffset(match?match.timestamp:0);return;
+ }
+ if(cached?.status==="failed"&&now-(cached.savedAt||0)<15*60*1000){applyTrackOffset(0);return;}
+ if(cached?.status==="paused"&&Number(cached.retryAfter)>now){
+  applyTrackOffset(0);if(isCurrent())el.lyricsStatus.textContent="분석 요청 제한으로 잠시 대기 중이에요. 음악과 가사는 계속 재생돼요.";return;
+ }
+ if(cached?.status==="pending"&&cached.jobId&&now-(cached.savedAt||0)<24*60*60*1000){
+  if(Number(cached.retryAfter)>now){applyTrackOffset(0);if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석 결과를 기다리는 중이에요.";return;}
+ }else{
   applyTrackOffset(0);
   try{
    const response=await fetch("https://trackid.dev/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:"https://www.youtube.com/watch?v="+encodeURIComponent(videoId)})});
+   if(response.status===429){const limited=readTrackAnalysisCache();limited[videoId]={status:"failed",savedAt:Date.now(),reason:"rate_limited"};writeTrackAnalysisCache(limited);if(isCurrent())el.lyricsStatus.textContent="분석 요청이 많아 잠시 제한됐어요. 기존 가사 재생을 계속해요.";return;}
    if(!response.ok)throw new Error("분석 요청 실패 ("+response.status+")");
    const created=await response.json();if(!created.jobId)throw new Error("분석 작업 ID를 받지 못했어요.");
-   cache[videoId]={status:"pending",jobId:created.jobId,savedAt:Date.now()};writeTrackAnalysisCache(cache);
-   cached=cache[videoId];
-  }catch(error){console.warn("Track timing analysis unavailable:",error);cache[videoId]={status:"failed",savedAt:Date.now()};writeTrackAnalysisCache(cache);if(token===trackAnalysisToken&&videoId===currentVideoId)el.lyricsStatus.textContent="가사 시작 시각 자동 분석을 사용할 수 없어 기본 타이밍으로 재생해요.";return;}
+   cached={status:"pending",jobId:created.jobId,savedAt:Date.now(),polls:0};cache[videoId]=cached;writeTrackAnalysisCache(cache);
+  }catch(error){
+   console.warn("Track timing analysis unavailable:",error);
+   const failed=readTrackAnalysisCache();failed[videoId]={status:"failed",savedAt:Date.now(),reason:"request_failed"};writeTrackAnalysisCache(failed);
+   if(isCurrent())el.lyricsStatus.textContent="시작 시각 분석을 사용할 수 없어 기본 가사 타이밍으로 재생해요.";return;
+  }
  }
  if(!cached?.jobId)return;
- if(token===trackAnalysisToken&&videoId===currentVideoId)el.lyricsStatus.textContent="노래 시작 시각 분석 중…";
- const deadline=Date.now()+8*60*1000;let job;
- while(Date.now()<deadline&&token===trackAnalysisToken&&videoId===currentVideoId){
-  await trackAnalysisDelay(7000);
-  try{const response=await fetch("https://trackid.dev/api/job/"+encodeURIComponent(cached.jobId));if(!response.ok)throw new Error("상태 확인 실패 ("+response.status+")");job=await response.json();}
-  catch(error){console.warn("Track timing status check failed:",error);continue;}
+ if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석 중…";
+ // The public service documents a low per-IP request limit. Keep this job to at most
+ // eight status checks per pass; audio and lyric loading never wait for this loop.
+ const pollDelays=[45000,60000,60000,60000,60000,60000,60000,60000];
+ for(let attempt=0;attempt<pollDelays.length;attempt++){
+  if(!isCurrent())return;
+  await trackAnalysisDelay(pollDelays[attempt]);
+  if(!isCurrent())return;
+  let response,job;
+  try{
+   response=await fetch("https://trackid.dev/api/job/"+encodeURIComponent(cached.jobId));
+   if(response.status===429){
+    const paused=readTrackAnalysisCache();paused[videoId]={...cached,status:"paused",savedAt:Date.now(),retryAfter:Date.now()+15*60*1000};writeTrackAnalysisCache(paused);
+    if(isCurrent())el.lyricsStatus.textContent="분석 서비스 요청 제한으로 대기 중이에요. 기존 가사 재생은 유지돼요.";return;
+   }
+   if(response.status===404||response.status===410)throw Object.assign(new Error("분석 작업을 찾을 수 없어요."),{staleJob:true});
+   if(!response.ok)throw new Error("상태 확인 실패 ("+response.status+")");
+   job=await response.json();
+  }catch(error){
+   console.warn("Track timing status check failed:",error);
+   if(error.staleJob){
+    const reset=readTrackAnalysisCache();delete reset[videoId];writeTrackAnalysisCache(reset);
+    if(isCurrent())el.lyricsStatus.textContent="분석 작업이 만료되어 다음 재생 때 다시 분석해요.";return;
+   }
+   // Transient network/server errors do not discard the saved job ID.
+   continue;
+  }
   if(job.status==="completed"){
    const updated=readTrackAnalysisCache();updated[videoId]={status:"completed",tracks:Array.isArray(job.tracks)?job.tracks:[],savedAt:Date.now()};writeTrackAnalysisCache(updated);
-   const match=selectTrackStart(job.tracks,video);applyTrackOffset(match?match.timestamp:0);
-   if(token===trackAnalysisToken&&videoId===currentVideoId)el.lyricsStatus.textContent=match?"가사 시작 시각 보정 적용됨":"일치하는 노래 구간을 찾지 못해 기본 타이밍으로 재생해요.";
+   const match=selectTrackStart(job.tracks,video);if(isCurrent())applyTrackOffset(match?match.timestamp:0);
+   if(isCurrent())el.lyricsStatus.textContent=match?"가사 시작 시각 보정 적용됨":"일치하는 노래 구간을 찾지 못해 기존 타이밍을 유지해요.";
    return;
   }
   if(job.status==="failed"){
-   const updated=readTrackAnalysisCache();updated[videoId]={status:"failed",savedAt:Date.now()};writeTrackAnalysisCache(updated);
-   if(token===trackAnalysisToken&&videoId===currentVideoId)el.lyricsStatus.textContent="노래 시작 시각을 분석하지 못해 기본 타이밍으로 재생해요.";return;
+   const updated=readTrackAnalysisCache();updated[videoId]={status:"failed",savedAt:Date.now(),reason:"analysis_failed"};writeTrackAnalysisCache(updated);
+   if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석에 실패해 기존 가사 타이밍을 유지해요.";return;
   }
  }
- if(token===trackAnalysisToken&&videoId===currentVideoId)el.lyricsStatus.textContent="분석이 지연되고 있어요. 이번 재생은 기본 타이밍을 사용해요.";
+ const pending=readTrackAnalysisCache();pending[videoId]={...cached,status:"pending",savedAt:Date.now(),retryAfter:Date.now()+15*60*1000};writeTrackAnalysisCache(pending);
+ if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
-
 
 const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v2";
 const LYRIC_CACHE_LIMIT=150;
