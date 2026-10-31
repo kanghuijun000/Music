@@ -27,7 +27,7 @@ async function startTrackOffsetAnalysis(video){
  if(cached?.status==="paused"&&Number(cached.retryAfter)>now){
   applyTrackOffset(0);if(isCurrent())el.lyricsStatus.textContent="분석 요청 제한으로 잠시 대기 중이에요. 음악과 가사는 계속 재생돼요.";return;
  }
- if(cached?.status==="pending"&&cached.jobId&&now-(cached.savedAt||0)<24*60*60*1000){
+ if((cached?.status==="pending"||cached?.status==="paused")&&cached.jobId&&now-(cached.savedAt||0)<24*60*60*1000){
   if(Number(cached.retryAfter)>now){applyTrackOffset(0);if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석 결과를 기다리는 중이에요.";return;}
  }else{
   applyTrackOffset(0);
