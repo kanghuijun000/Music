@@ -427,7 +427,14 @@ async function loadLyrics(video,usePuter=false){
   return Array.isArray(list)?list.filter(lrclibItem).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null:null;
  })());
  // Broaden Korean and alternate-credit searches instead of relying on one exact metadata spelling.
- for(const query of [...new Set([[track,channel],[track,artist],[artist,track]].map(parts=>parts.filter(Boolean).join(" ")).filter(Boolean))]){
+ const lyricQueries=[];
+ const seenLyricQueries=new Set();
+ for(const queryParts of [[track,channel],[track,artist],[artist,track],[track,artist,channel]]){
+  const query=queryParts.filter(Boolean).join(" ").trim();
+  const queryKey=normalize(query);
+  if(query&&!seenLyricQueries.has(queryKey)){seenLyricQueries.add(queryKey);lyricQueries.push(query);}
+ }
+ for(const query of lyricQueries){
   jobs.push((async()=>{
    const url=new URL(LYRIC_API+"/search");url.searchParams.set("q",query);
    const list=await getJson(url);
