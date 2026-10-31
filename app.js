@@ -604,6 +604,7 @@ async function loadLyrics(video,usePuter=false){
 }
 function updateProgress(){
  if(!ytPlayer||typeof ytPlayer.getCurrentTime!=="function")return;
+ refreshMediaSessionFromPlayer();
  const playerDuration=ytPlayer.getDuration()||0;
  const current=ytPlayer.getCurrentTime()||0;
  // The IFrame API's reported duration can differ slightly from Data API metadata.
@@ -639,22 +640,34 @@ function updateMediaSession(state){
  if(!("mediaSession" in navigator))return;
  try{
   navigator.mediaSession.playbackState=state;
-  if(state==="playing"&&"setPositionState" in navigator&&ytPlayer){
+  if("setPositionState" in navigator&&ytPlayer){
    const duration=ytPlayer.getDuration(),position=ytPlayer.getCurrentTime();
-   if(Number.isFinite(duration)&&duration>0)navigator.mediaSession.setPositionState({duration,playbackRate:1,position:Math.min(duration,Math.max(0,position||0))});
+   if(Number.isFinite(duration)&&duration>0&&Number.isFinite(position)){
+    navigator.mediaSession.setPositionState({duration,playbackRate:state==="playing"?1:0,position:Math.min(duration,Math.max(0,position))});
+   }
   }
  }catch(error){console.debug("Media Session update unavailable:",error);}
 }
 function setupMediaSession(){
  if(!("mediaSession" in navigator))return;
- try{
-  navigator.mediaSession.setActionHandler("play",()=>{if(ytPlayer)ytPlayer.playVideo();});
-  navigator.mediaSession.setActionHandler("pause",()=>{if(ytPlayer)ytPlayer.pauseVideo();});
-  navigator.mediaSession.setActionHandler("stop",()=>{if(ytPlayer)ytPlayer.pauseVideo();});
-  navigator.mediaSession.setActionHandler("seekbackward",details=>{if(ytPlayer)ytPlayer.seekTo(Math.max(0,ytPlayer.getCurrentTime()-(details.seekOffset||10)),true);});
-  navigator.mediaSession.setActionHandler("seekforward",details=>{if(ytPlayer)ytPlayer.seekTo(Math.min(ytPlayer.getDuration(),ytPlayer.getCurrentTime()+(details.seekOffset||10)),true);});
-  navigator.mediaSession.setActionHandler("seekto",details=>{if(ytPlayer&&Number.isFinite(details.seekTime))ytPlayer.seekTo(details.seekTime,true);});
- }catch(error){console.debug("Media Session actions unavailable:",error);}
+ const actions={
+  play:()=>{if(ytPlayer)ytPlayer.playVideo();},
+  pause:()=>{if(ytPlayer)ytPlayer.pauseVideo();},
+  stop:()=>{if(ytPlayer)ytPlayer.pauseVideo();},
+  seekbackward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.max(0,ytPlayer.getCurrentTime()-(details.seekOffset||10)),true);},
+  seekforward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.min(ytPlayer.getDuration(),ytPlayer.getCurrentTime()+(details.seekOffset||10)),true);},
+  seekto:details=>{if(ytPlayer&&Number.isFinite(details.seekTime))ytPlayer.seekTo(details.seekTime,true);}
+ };
+ for(const [action,handler] of Object.entries(actions)){
+  try{navigator.mediaSession.setActionHandler(action,handler);}
+  catch(error){console.debug("Media Session action unavailable:",action,error);}
+ }
+}
+function refreshMediaSessionFromPlayer(){
+ if(!ytPlayer||typeof ytPlayer.getPlayerState!=="function")return;
+ const state=ytPlayer.getPlayerState();
+ if(state===YT.PlayerState.PLAYING)updateMediaSession("playing");
+ else if(state===YT.PlayerState.PAUSED)updateMediaSession("paused");
 }
 function updateMediaMetadata(video){
  if(!("mediaSession" in navigator)||!("MediaMetadata" in window))return;
@@ -663,6 +676,12 @@ function updateMediaMetadata(video){
  }catch(error){console.debug("Media metadata unavailable:",error);}
 }
 setupMediaSession();
+// Refresh lock-screen metadata/position when Android restores the page.
+// This does not keep a terminated PWA alive; it only synchronizes a live player.
+document.addEventListener("visibilitychange",()=>{
+ if(!document.hidden){refreshMediaSessionFromPlayer();updateProgress();}
+});
+window.addEventListener("pageshow",()=>{refreshMediaSessionFromPlayer();updateProgress();});
 function onYouTubeIframeAPIReady(){ytPlayer=new YT.Player("playerFrame",{width:"200",height:"200",videoId:"",playerVars:{autoplay:0,controls:0,playsinline:1,rel:0,fs:0,iv_load_policy:3,disablekb:1},events:{onReady:()=>{ytReady=true;el.playbackState.textContent="재생 준비 완료";if(currentVideoId)ytPlayer.loadVideoById(currentVideoId);},onStateChange:event=>{if(event.data===YT.PlayerState.PLAYING){el.playbackState.textContent="재생 중";updateMediaSession("playing");clearInterval(progressTimer);progressTimer=setInterval(updateProgress,100);}else if(event.data===YT.PlayerState.PAUSED){el.playbackState.textContent="일시정지";updateMediaSession("paused");updateProgress();}else if(event.data===YT.PlayerState.ENDED){el.playbackState.textContent="재생 완료";updateMediaSession("none");updateProgress();}else if(event.data===YT.PlayerState.BUFFERING){el.playbackState.textContent="불러오는 중…";}}}});}
 window.onYouTubeIframeAPIReady=onYouTubeIframeAPIReady;
 const ytScript=document.createElement("script");ytScript.src="https://www.youtube.com/iframe_api";ytScript.async=true;document.head.appendChild(ytScript);
