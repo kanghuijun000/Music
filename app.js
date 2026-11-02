@@ -753,12 +753,28 @@ async function loadLyrics(video,usePuter=false){
    const parsedLines=format==="ttml"?parseTtml(data.lyrics):format==="lrc"?parseLrc(data.lyrics):[];
    const sourceVideoId=String(data.videoId||"");
    const sameVideo=sourceVideoId?sourceVideoId===video.id:lookupMode==="video";
+   let normalizedOtherVideoLines=[];
+   if(!sameVideo&&sourceVideoId&&parsedLines.length>1){
+    const sourceTiming=readTrackAnalysisCache()[sourceVideoId];
+    if(sourceTiming?.status==="completed"){
+     const sourceArtist=data.artist||artist||"";
+     const referenceVideo={id:sourceVideoId,title:[data.song||track,sourceArtist].filter(Boolean).join(" - "),
+      channelTitle:sourceArtist?sourceArtist+" - Topic":"",duration:Number(data.duration)||0};
+     const sourceMatch=selectTrackStart(sourceTiming.tracks,referenceVideo);
+     if(sourceMatch){
+      const sourceOffset=getVideoLyricOffset(sourceVideoId,sourceMatch.timestamp);
+      normalizedOtherVideoLines=parsedLines.map(line=>({...line,time:Math.max(0,Number(line.time)-sourceOffset)}));
+     }
+    }
+   }
    const videoTimed=sameVideo&&parsedLines.length>1;
-   const otherVideoText=!videoTimed;
+   const otherVideoAligned=!sameVideo&&normalizedOtherVideoLines.length>1;
+   const otherVideoText=!videoTimed&&!otherVideoAligned;
+   const usableLines=videoTimed?parsedLines:otherVideoAligned?normalizedOtherVideoLines:[];
    const fallbackText=format==="plain"?data.lyrics:parsedLines.map(line=>line.text).filter(Boolean).join("\n");
    const valid=accept(provider,{trackName:data.song||data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
     syncedLyrics:videoTimed&&format==="lrc"?data.lyrics:"",plainLyrics:format==="plain"?data.lyrics:(otherVideoText?fallbackText:""),
-    ttmlLines:videoTimed?parsedLines:[],hasWordSync:videoTimed&&parsedLines.some(line=>line.words?.length),
+    ttmlLines:usableLines,hasWordSync:usableLines.some(line=>line.words?.length),
     communityConfidence:data.confidence||"",_videoBound:videoTimed,_unisonOtherVideo:otherVideoText,_unisonSourceVideoId:sourceVideoId});
    if(!valid)record(provider,"UNISON_RESULT_REJECTED","응답은 받았지만 제목·가수·가사 형식 검증에서 제외됐습니다.");
   }catch(error){if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.code!=="HTTP_404")record(provider,error?.code||"PROVIDER_ERROR",error?.message||"제공처 오류",error?.elapsed||0,error?.status||"");}
