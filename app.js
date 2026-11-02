@@ -274,7 +274,7 @@ function parseTtml(source){
   };
   collect(p,parentBegin);
   const time=Number.isFinite(ownBegin)?ownBegin:(words[0]?.start??NaN);
-  const fullText=(p.textContent||"").replace(/\\s+/g," ").trim();
+  const fullText=(p.textContent||"").replace(/\s+/g," ").trim();
   if(Number.isFinite(time)&&words.length){
    const ordered=words.sort((a,b)=>a.start-b.start);
    output.push({time,text:ordered.map(word=>word.text).join(""),words:ordered});
@@ -472,10 +472,12 @@ async function loadLyrics(video,usePuter=false){
   const duration=durationScore(item.duration);
   const hasArtist=Boolean(artist||isTopic&&!genericChannel);
   if(title<(hasArtist?70:90)||singer<(hasArtist?55:45)||duration< -5)return null;
-  const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text));
+  const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
+   .map((line,index)=>({...line,time:Number(line.time),_order:index}))
+   .sort((a,b)=>a.time-b.time||a._order-b._order);
   const songDuration=Number(item.duration)||Number(video.duration)||0;
-  const validLines=lines.length>=2&&lines.every((line,index)=>index===0||Number(line.time)>=Number(lines[index-1].time))&&
-   (!songDuration||lines.every(line=>Number(line.time)<=songDuration+15));
+  const validLines=lines.length>=2&&(!songDuration||lines.every(line=>line.time<=songDuration+30));
+  lines.forEach(line=>{delete line._order;});
   const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
   if(!validLines&&!plain.length)return null;
   const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\n")};
@@ -612,8 +614,9 @@ async function loadLyrics(video,usePuter=false){
  if(!lyricState.lines.length&&!lyricState.plain){
   lyricState.loading=false;showLyricsMessage("가사는 찾았지만 표시할 수 있는 형식이 아니에요.");return;
  }
- lyricTimingBasis=selected._source==="Unison"?"video":"catalog";
- if(lyricTimingBasis==="video")lyricOffsetSeconds=0;
+ // A video-ID lookup identifies the upload, but does not prove its lyric timestamps use the video timeline.
+ // Treat provider timestamps as song-relative and add the independently detected track-start offset.
+ lyricTimingBasis="catalog";
  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,source:selected._source};
  storeLyric(cacheKey,cachedLyrics);
  lyricState.loading=false;renderLyrics();
