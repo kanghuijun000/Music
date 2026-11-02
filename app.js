@@ -18,7 +18,7 @@ function expectedTrackIdentity(video){
  const raw=String(video.title||"").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ").trim();
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
- const generic=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
+ const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  if(parts.length>1){
   if(!generic&&trackSimilarity(channel,parts[0])>=0.6)return{title:parts.slice(1).join(" "),artist:channel};
   if(!generic&&trackSimilarity(channel,parts.slice(1).join(" "))>=0.6)return{title:parts[0],artist:channel};
@@ -428,7 +428,7 @@ async function loadLyrics(video,usePuter=false){
  const channelRaw=String(video.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
  const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
- const genericChannel=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
+ const genericChannel=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  let track=cleaned,artist="";
  if(parts.length>1){
   const first=parts[0],rest=parts.slice(1).join(" - ");
@@ -507,7 +507,7 @@ async function loadLyrics(video,usePuter=false){
   const title=titleScore(item.trackName||item.title||"",extraTitles);
   const singer=artistScore(item.artistName||item.artist||"",extraArtists);
   const duration=durationScore(item.duration);
-  const hasArtist=Boolean(artist||isTopic&&!genericChannel);
+  const hasArtist=Boolean(parts.length>1||isTopic&&!genericChannel); // A channel name alone is weak evidence; distributors and playlist channels are not necessarily the performer.
   if(title<(hasArtist?70:90)||singer<(hasArtist?55:45))return null;
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
