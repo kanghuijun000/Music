@@ -16,13 +16,13 @@ function trackText(value){return String(value||"").toLocaleLowerCase().normalize
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
 function getLyricsIdentity(video){
  const raw=String(video?.title||"").trim()
-  .replace(/\\[[^\\]]*\\]|\\([^)]*\\)/g," ")
-  .replace(/\\s*(?:\\/|\\||[-–—])\\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
-  .replace(/\\s+/g," ").trim();
- const parts=raw.split(/\\s+[-–—|]\\s+/).map(v=>v.trim()).filter(Boolean);
+  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s+/g," ").trim();
+ const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channelRaw=String(video?.channelTitle||"").trim();
- const isTopic=/\\s*-\\s*Topic$/i.test(channelRaw);
- const channel=channelRaw.replace(/\\s*-\\s*Topic$/i,"").trim();
+ const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
+ const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  let title=raw,artist="",artistKnown=false,queries=[];
  if(parts.length>1&&!generic){
@@ -248,26 +248,26 @@ function parseQrc(source){
   }
  }
  if(body===String(source)){
-  const match=body.match(/LyricContent\\s*=\\s*"([\\s\\S]*?)"(?=\\s+[A-Za-z_][\\w:.-]*\\s*=|\\s*\\/>)/i);
+  const match=body.match(/LyricContent\s*=\s*"([\s\S]*?)"(?=\s+[A-Za-z_][\w:.-]*\s*=|\s*\/>)/i);
   if(match)body=match[1];
  }
- body=body.replace(/&quot;/g,'"').replace(/&amp;/g,"&").replace(/&#10;/g,"\\n").replace(/&#13;/g,"")
+ body=body.replace(/&quot;/g,'"').replace(/&amp;/g,"&").replace(/&#10;/g,"\n").replace(/&#13;/g,"")
   .replace(/&lt;/g,"<").replace(/&gt;/g,">");
  const output=[];
- for(const raw of body.split(/\\r?\\n/)){
+ for(const raw of body.split(/\r?\n/)){
   const line=raw.trim();
-  const header=line.match(/^\\[(\\d+),(\\d+)\\]/);
+  const header=line.match(/^\[(\d+),(\d+)\]/);
   if(!header)continue;
   const rest=line.slice(header[0].length),words=[];
   let textStart=0;
-  for(const token of rest.matchAll(/\\((\\d+),(\\d+)\\)/g)){
+  for(const token of rest.matchAll(/\((\d+),(\d+)\)/g)){
    const text=rest.slice(textStart,token.index);
    if(text)words.push({text,start:Number(token[1])/1000,end:(Number(token[1])+Number(token[2]))/1000});
    textStart=token.index+token[0].length;
   }
   const tail=rest.slice(textStart);
   if(tail)words.push({text:tail,start:NaN,end:NaN});
-  const cleanText=words.map(word=>word.text).join("").replace(/\\s+/g," ").trim();
+  const cleanText=words.map(word=>word.text).join("").replace(/\s+/g," ").trim();
   if(!cleanText||isCreditMetadata(cleanText))continue;
   if(/^(lyrics by|composed by|arranged by|producer|작사|작곡|편곡|제작|作词|作曲|编曲|制作人)[:：]/i.test(cleanText))continue;
   const timedWords=words.filter(word=>Number.isFinite(word.start));
@@ -396,7 +396,7 @@ function setLyricsDiagnostics(entries,summary){
  const output=document.getElementById("lyricsDiagnosticsContent");
  if(!panel||!output)return;
  if(!entries||!entries.length){panel.hidden=true;return;}
- output.textContent=[summary||"가사 검색 진단",...entries.map(item=>"["+item.code+"] "+item.provider+(item.detail?" — "+item.detail:"")+(item.status?" (HTTP "+item.status+")":"")+(item.elapsed?" ("+item.elapsed+"ms)":""))].join("\\n");
+ output.textContent=[summary||"가사 검색 진단",...entries.map(item=>"["+item.code+"] "+item.provider+(item.detail?" — "+item.detail:"")+(item.status?" (HTTP "+item.status+")":"")+(item.elapsed?" ("+item.elapsed+"ms)":""))].join("\n");
  panel.hidden=false;
  panel.open=false;
 }
@@ -475,13 +475,13 @@ async function loadLyrics(video,usePuter=false){
  const artist=identity.artist;
  const channel=identity.channel;
  const normalize=value=>String(value||"").toLocaleLowerCase().normalize("NFKC")
-  .replace(/\\[[^\\]]*\\]|\\([^)]*\\)/g," ")
-  .replace(/\\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance)\\b/gi," ")
+  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance)\b/gi," ")
   .replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ")
-  .replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+  .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const record=(provider,code,detail="",elapsed=0,status="")=>{
-  diagnostics.push({provider,code,detail:String(detail||"").replace(/\\s+/g," ").slice(0,220),elapsed,status});
+  diagnostics.push({provider,code,detail:String(detail||"").replace(/\s+/g," ").slice(0,220),elapsed,status});
  };
  const showDiagnostics=(summary)=>{
   const panel=document.getElementById("lyricsDiagnostics");
@@ -491,7 +491,7 @@ async function loadLyrics(video,usePuter=false){
    const suffix=[d.status?"HTTP "+d.status:"",d.elapsed?d.elapsed+"ms":""].filter(Boolean).join(" · ");
    return "["+d.code+"] "+d.provider+(d.detail?" — "+d.detail:"")+(suffix?" ("+suffix+")":"");
   })];
-  output.textContent=lines.join("\\n");
+  output.textContent=lines.join("\n");
   panel.hidden=false;
   panel.open=false;
  };
@@ -504,7 +504,7 @@ async function loadLyrics(video,usePuter=false){
  const cached=lyricCache.get(video.id)||readStoredLyric(video.id);
  if(cached&&((Array.isArray(cached.lines)&&cached.lines.some(line=>line&&Number.isFinite(Number(line.time))&&String(line.text||"").trim()))||String(cached.plain||"").trim())&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
-  lyricState.plain=String(cached.plain||"").split(/\\r?\\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\\n");
+  lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
   lyricState.wordSynced=Boolean(cached.wordSynced);
   lyricTimingBasis=cached.timingBasis==="video"?"video":"catalog";
   lyricOffsetSeconds=lyricTimingBasis==="video"?0:lyricOffsetSeconds;
@@ -517,7 +517,7 @@ async function loadLyrics(video,usePuter=false){
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 여러 가사 제공처를 검색하고 있어요…");
  const headers={"X-User-Agent":"Music/1.1 (https://kanghuijun000.github.io/)"};
- const stripFeat=value=>String(value||"").replace(/\\b(feat|ft|featuring|with)\\b.*$/i,"").trim();
+ const stripFeat=value=>String(value||"").replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
  function titleScore(value,extraTitles=[]){
   const got=normalize(value);
   if(!got)return 0;
@@ -579,13 +579,13 @@ async function loadLyrics(video,usePuter=false){
   const songDuration=Number(item.duration)||Number(video.duration)||0;
   const validLines=lines.length>=2&&(!songDuration||lines.every(line=>line.time<=songDuration+90));
   lines.forEach(line=>delete line._order);
-  const plain=String(item.plainLyrics||item.plain||"").split(/\\r?\\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
+  const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
   if(!validLines&&!plain.length){
    item._rejectCode=lines.length?"PARSE_TIMESTAMPS_INVALID":"PARSE_NO_LYRICS";
    record(provider,item._rejectCode,lines.length+"개 타임스탬프 행을 읽었지만 표시 조건을 통과하지 못했습니다.");
    return null;
   }
-  const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\\n")};
+  const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\n")};
   const communityBonus=item.communityConfidence==="high"?12:item.communityConfidence==="medium"?6:0;
   const rawMatchConfidence=Number(item.matchConfidence)||0;
   const normalizedMatchConfidence=rawMatchConfidence>1?rawMatchConfidence/100:rawMatchConfidence;
@@ -793,7 +793,7 @@ async function loadLyrics(video,usePuter=false){
  const wordLines=selected.ttmlLines||[];
  const hasWords=wordLines.some(item=>item.words?.length);
  lyricState.lines=(selected._synced?wordLines:[]).filter(item=>!isCreditMetadata(item.text));
- lyricState.plain=String(selected.plainLyrics||"").split(/\\r?\\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\\n");
+ lyricState.plain=String(selected.plainLyrics||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  if(!lyricState.lines.length&&!lyricState.plain){
