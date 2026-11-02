@@ -130,7 +130,7 @@ function storeLyric(cacheKey,item){
 
 const ids=["searchForm","searchInput","searchButton","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
-let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false,lyricLoadToken=0,selectedVideoDuration=0,contentTimelineReady=false,searchRequestToken=0,searchAbortController=null;
+let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,seeking=false,lyricLoadToken=0,lyricAbortController=null,selectedVideoDuration=0,contentTimelineReady=false,searchRequestToken=0,searchAbortController=null;
 const HISTORY_KEY="music_recent_searches_v1";
 const HISTORY_LIMIT=8;
 let recentSearches=loadRecentSearches();
@@ -411,6 +411,9 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 }
 async function loadLyrics(video,usePuter=false){
  const requestId=++lyricLoadToken;
+ if(lyricAbortController){lyricAbortController.abort(new Error("다른 곡으로 전환했어요."));}
+ const requestController=new AbortController();lyricAbortController=requestController;
+ const lyricSignal=requestController.signal;
  if(aiAssistButton)aiAssistButton.hidden=true;
  const normalize=value=>String(value||"").toLocaleLowerCase()
   .normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ")
@@ -524,8 +527,10 @@ async function loadLyrics(video,usePuter=false){
   normalized._source=item._source||"가사 제공처";
   return normalized;
  }
- async function fetchJson(url,customHeaders=headers,timeoutMs=10000){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+ async function fetchJson(url,customHeaders=headers,timeoutMs=10000,externalSignal=lyricSignal){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new Error("가사 제공처 응답 시간이 초과됐어요.")),timeoutMs);
+  const abortFromParent=()=>controller.abort(externalSignal?.reason||new Error("다른 곡으로 전환했어요."));
+  if(externalSignal?.aborted)abortFromParent();else externalSignal?.addEventListener("abort",abortFromParent,{once:true});
   try{
    const response=await fetch(url,{headers:customHeaders,signal:controller.signal});
    if(response.status===429){
@@ -540,7 +545,7 @@ async function loadLyrics(video,usePuter=false){
    }
    if(!response.ok)throw new Error("HTTP "+response.status);
    return await response.json();
-  }finally{clearTimeout(timer);}
+  }finally{clearTimeout(timer);externalSignal?.removeEventListener("abort",abortFromParent);}
  }
  const providers=[],providerCandidates=[];
  const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=valid._source||name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);if(name.startsWith("Better Lyrics")&&error?.status===429)setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));}return null;})());
@@ -551,7 +556,7 @@ async function loadLyrics(video,usePuter=false){
   // If this upload has not been linked yet, Unison can fall back to song + artist.
   url.searchParams.set("song",track);
   if(artist)url.searchParams.set("artist",artist);
-  const body=await fetchJson(url,{},9000),data=body?.data;
+  const body=await fetchJson(url,{},9000,lyricSignal),data=body?.data;
   if(!body?.success||!data?.lyrics)return null;
   const lines=data.format==="ttml"?parseTtml(data.lyrics):data.format==="lrc"?parseLrc(data.lyrics):[];
   return {trackName:data.song||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
@@ -562,7 +567,7 @@ async function loadLyrics(video,usePuter=false){
   const url=new URL("https://api.synclrc.dev/lyrics");
   url.searchParams.set("track",track);url.searchParams.set("artist",artist||channel||"");
   if(video.duration)url.searchParams.set("duration",String(video.duration));url.searchParams.set("type","karaoke");
-  const data=await fetchJson(url,{},11000),timed=data.karaoke||data.synced||data.lyrics||"";
+  const data=await fetchJson(url,{},11000,lyricSignal),timed=data.karaoke||data.synced||data.lyrics||"";
   const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
    syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0};
@@ -598,7 +603,7 @@ async function loadLyrics(video,usePuter=false){
      if(query.kind==="structured"){url.searchParams.set("track_name",query.values[0]);if(query.values[1])url.searchParams.set("artist_name",query.values[1]);}
      else url.searchParams.set("q",query.values.filter(Boolean).join(" "));
     }
-    const data=await fetchJson(url,headers,9000);
+    const data=await fetchJson(url,headers,9000,lyricSignal);
     const list=Array.isArray(data)?data:[data];
     for(const item of list){const valid=validate(item);if(valid){valid._source="LRCLIB";found.push(valid);}}
    }catch(error){
@@ -639,7 +644,7 @@ async function loadLyrics(video,usePuter=false){
      url.searchParams.set("al",String(albumMatch.albumName).trim());
      url.searchParams.set("d",String(Math.round(Number(albumMatch.duration))));
      if(attempt.path==="/getLyrics")url.searchParams.set("v",video.id);
-     const data=await fetchJson(url,{},11000),parsed=attempt.parse(data);
+     const data=await fetchJson(url,{},11000,lyricSignal),parsed=attempt.parse(data);
      const candidate={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||Number(albumMatch.duration),
       ...parsed,plainLyrics:data.plainLyrics||""};
      if(validate(candidate)){candidate._source="Better Lyrics "+attempt.name;return candidate;}
