@@ -748,7 +748,7 @@ async function loadLyrics(video,usePuter=false){
   })));
  })());
  const allJobs=Promise.allSettled(jobs);
- await Promise.race([allJobs,firstCandidate.then(()=>delay(900)),delay(11000)]);
+ await Promise.race([allJobs,firstCandidate.then(()=>delay(1500)),delay(11000)]);
  if(requestId!==lyricLoadToken)return;
  if(candidates.length===0&&usePuter){
   try{
@@ -789,6 +789,7 @@ async function loadLyrics(video,usePuter=false){
   const hasRateLimit=diagnostics.some(item=>item.code==="HTTP_429");
   const hasNetwork=diagnostics.some(item=>item.code==="NETWORK_OR_CORS");
   const summary=hasRateLimit?"일부 제공처가 요청 횟수 제한(429)을 반환했습니다.":hasNetwork?"네트워크 또는 브라우저 CORS 연결 오류가 발생했습니다.":"가사를 찾지 못했습니다. 아래 오류 코드에서 제공처별 실패 단계를 확인하세요.";
+  record("전체 검색","LYRICS_NOT_FOUND",summary+" · "+(Date.now()-startedAt)+"ms 경과");
   showLyricsMessage("가사를 표시하지 못했어요. 아래 진단 정보를 확인해 주세요.");
   showDiagnostics(summary);
   return;
