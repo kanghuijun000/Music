@@ -464,7 +464,9 @@ async function loadLyrics(video,usePuter=false){
   if(diff<=8)return 22;
   if(diff<=18)return 10;
   if(diff<=Math.max(30,want*.1))return -5;
-  return -45;
+  // Video uploads may contain intros, outros or edits; duration is a ranking
+  // signal, not a hard rejection when title and artist already match.
+  return -18;
  }
  function extractLines(item){
   if(Array.isArray(item?.ttmlLines)&&item.ttmlLines.length)return item.ttmlLines;
@@ -483,7 +485,7 @@ async function loadLyrics(video,usePuter=false){
   const singer=artistScore(item.artistName||item.artist||"",extraArtists);
   const duration=durationScore(item.duration);
   const hasArtist=Boolean(artist||isTopic&&!genericChannel);
-  if(title<(hasArtist?70:90)||singer<(hasArtist?55:45)||duration< -5)return null;
+  if(title<(hasArtist?70:90)||singer<(hasArtist?55:45))return null;
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time||a._order-b._order);
@@ -617,7 +619,7 @@ async function loadLyrics(video,usePuter=false){
  const lrclibWait=candidates.some(item=>item._synced)?4500:12000;
  const lrclibResults=await Promise.race([lrclibJob,delay(lrclibWait).then(()=>{lrclibTimedOut=true;return[];})]);
  if(requestId!==lyricLoadToken)return;
- candidates=[...candidates,...lrclibResults];
+ candidates=[...providerCandidates,...lrclibResults];
  if(usePuter){
   const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
    item=>Boolean(validate(item)),requestId).catch(()=>null);
@@ -626,7 +628,7 @@ async function loadLyrics(video,usePuter=false){
  candidates=candidates.map(item=>validate(item)).filter(Boolean);
  // Prefer timestamps tied to this exact YouTube video over catalog lyrics matched only by title/artist.
  // Unison is queried with the current video ID; its result is the strongest available video-specific candidate.
- const sourcePriority=item=>item._source==="Unison"?3:0;
+ const sourcePriority=item=>item._source==="Unison"?20:0;
  candidates.sort((a,b)=>(b._score+sourcePriority(b))-(a._score+sourcePriority(a)));
  // A video-ID lookup is useful evidence, not proof of correct timestamps. Compare candidates
  // rather than blindly forcing one provider to the top.
