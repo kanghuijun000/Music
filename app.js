@@ -399,7 +399,8 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
   const candidates=[];
   for(const name of tracks)for(const singer of (artists.length?artists:[""])){
    const url=new URL(LYRIC_API+"/search");url.searchParams.set("track_name",name);if(singer)url.searchParams.set("artist_name",singer);
-   candidates.push((async()=>{const response=await fetch(url,{headers:{"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"},signal:controller.signal});if(!response.ok)throw new Error("Provider unavailable");const list=await response.json();if(!Array.isArray(list))return null;return list.filter(item=>item&&(item.syncedLyrics||item.plainLyrics)&&isGood(item,artists,tracks)).sort((a,b)=>Number(Boolean(b.syncedLyrics))-Number(Boolean(a.syncedLyrics)))[0]||null;})());
+   candidates.push((async()=>{const response=await fetch(url,{headers:{"X-User-Agent":"Music/1.0 (https://kanghuijun000.github.io/)"},signal:controller.signal});if(!response.ok)throw new Error("Provider unavailable");const list=await response.json();if(!Array.isArray(list))return null;return list.map(item=>item&&(item.syncedLyrics||item.plainLyrics)?isGood(item,artists,tracks):null)
+    .filter(Boolean).sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0]||null;})());
   }
   try{return await Promise.any(candidates.map(job=>job.then(item=>{if(!item)throw new Error("No verified match");return item;})));}catch(_){return null;}
  }catch(error){console.warn("Puter AI fallback unavailable:",error?.message||error);return null;}
@@ -646,11 +647,11 @@ async function loadLyrics(video,usePuter=false){
  candidates=[...providerCandidates,...lrclibResults];
  if(usePuter){
   const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
-   item=>Boolean(validate(item)),requestId).catch(()=>null);
-  const verified=validate(ai);if(verified){verified._source="AI 보조 검색";candidates.push(verified);}
+   (item,extraArtists,extraTitles)=>validate(item,extraArtists,extraTitles),requestId).catch(()=>null);
+  if(ai){ai._source="AI 보조 검색";candidates.push(ai);}
  }
- candidates=candidates.map(item=>validate(item)).filter(Boolean);
- // Prefer timestamps tied to this exact YouTube video over catalog lyrics matched only by title/artist.
+ // Every candidate has already passed title, artist, duration and timestamp validation.
+ // Keep alias-aware AI results instead of revalidating them against only the original title.
  // Unison is queried with the current video ID; its result is the strongest available video-specific candidate.
  const sourcePriority=item=>item._source==="Unison"?20:0;
  candidates.sort((a,b)=>(b._score+sourcePriority(b))-(a._score+sourcePriority(a)));
