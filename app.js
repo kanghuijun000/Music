@@ -15,7 +15,7 @@ function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
 function expectedTrackIdentity(video){
- const raw=String(video.title||"").replace(/\[[^\]]*\]|\([^)]*\)/g," ").trim();
+ const raw=String(video.title||"").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?)\b.*$/i," ").trim();
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
@@ -415,7 +415,7 @@ async function loadLyrics(video,usePuter=false){
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const raw=String(video.title||"").trim();
  const cleaned=raw.replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*(?:\/|\|)\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video).*$/i," ")
+  .replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?)\b.*$/i," ")
   .replace(/\s+/g," ").trim();
  const parts=cleaned.split(/\s+[-–—|]\s+/).map(x=>x.trim()).filter(Boolean);
  const channelRaw=String(video.channelTitle||"").trim();
