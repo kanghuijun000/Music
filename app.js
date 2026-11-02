@@ -172,12 +172,16 @@ function isCreditMetadata(value){
 function parseLrc(source){
  const lines=[];
  for(const raw of String(source||"").split(/\r?\n/)){
-  const m=raw.match(/^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/);
-  if(!m)continue;
-  const fraction=(m[3]||"0").padEnd(3,"0");
-  const time=Number(m[1])*60+Number(m[2])+Number(fraction)/1000;
-  const text=m[4].trim();
-  if(text&&!isCreditMetadata(text))lines.push({time,text,words:[]});
+  // LRC permits several timestamps on one lyric line, e.g. [00:12.30][00:42.10]same text.
+  const stamps=[...raw.matchAll(/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
+  if(!stamps.length)continue;
+  const text=raw.slice(stamps[stamps.length-1].index+stamps[stamps.length-1][0].length).trim();
+  if(!text||isCreditMetadata(text))continue;
+  for(const stamp of stamps){
+   const fraction=(stamp[3]||"0").padEnd(3,"0");
+   const time=Number(stamp[1])*60+Number(stamp[2])+Number(fraction)/1000;
+   if(Number.isFinite(time))lines.push({time,text,words:[]});
+  }
  }
  return lines.sort((a,b)=>a.time-b.time);
 }
@@ -334,7 +338,7 @@ function renderLyrics(){
    lyricState.plain.split(/\r?\n/).filter(Boolean).slice(0,100).forEach(text=>{
     const row=document.createElement("div");row.className="lyric-line plain";row.textContent=text;el.lyricsView.append(row);
    });
-   el.lyricsStatus.textContent="";
+   el.lyricsStatus.textContent="일반 가사 · 실시간 싱크 미지원";
    lyricState.lastIndex=-2;
   }else {showLyricsMessage("동기화 가능한 가사가 없거나, 가사 정보를 불러오지 못했어요.");lyricState.lastIndex=-3;}
   return;
