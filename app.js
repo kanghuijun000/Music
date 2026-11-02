@@ -14,7 +14,18 @@ function readTrackAnalysisCache(){try{const value=JSON.parse(localStorage.getIte
 function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).sort((a,b)=>(Number(b[1]?.savedAt)||0)-(Number(a[1]?.savedAt)||0));localStorage.setItem(TRACK_ANALYSIS_CACHE_KEY,JSON.stringify(Object.fromEntries(entries.slice(0,TRACK_ANALYSIS_CACHE_LIMIT))));}catch(error){console.warn("Track timing cache could not be saved:",error);}}
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
-function expectedTrackIdentity(video){const raw=String(video.title||"").replace(/\[[^\]]*\]|\([^)]*\)/g," ").trim();const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();const generic=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);return parts.length>1?{title:parts.slice(1).join(" "),artist:parts[0]}:{title:raw,artist:generic?"":channel};}
+function expectedTrackIdentity(video){
+ const raw=String(video.title||"").replace(/\[[^\]]*\]|\([^)]*\)/g," ").trim();
+ const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
+ const channel=String(video.channelTitle||"").replace(/\s*-\s*Topic$/i,"").trim();
+ const generic=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
+ if(parts.length>1){
+  if(!generic&&trackSimilarity(channel,parts[0])>=0.6)return{title:parts.slice(1).join(" "),artist:channel};
+  if(!generic&&trackSimilarity(channel,parts.slice(1).join(" "))>=0.6)return{title:parts[0],artist:channel};
+  return{title:parts.slice(1).join(" "),artist:parts[0]};
+ }
+ return{title:raw,artist:generic?"":channel};
+}
 function selectTrackStart(tracks,video){const expected=expectedTrackIdentity(video);const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{const title=trackSimilarity(track.title,expected.title);const artist=expected.artist?trackSimilarity(track.artist,expected.artist):(track.artist?0.65:0.4);const confidence=Number(track.confidence)||0;return{track,title,artist,confidence,score:title*0.62+artist*0.23+confidence*0.15};}).filter(item=>Number.isFinite(Number(item.track?.timestamp))&&Number(item.track.timestamp)>=0&&item.title>=0.68&&item.artist>=0.45&&item.confidence>=0.65).sort((a,b)=>b.score-a.score);return candidates[0]?.track||null;}
 function applyTrackOffset(seconds){if(lyricTimingBasis==="video")return;const value=Number(seconds);lyricOffsetSeconds=Number.isFinite(value)&&value>=0?Math.min(value,1800):0;lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;renderLyrics();}
 const trackAnalysisDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -407,12 +418,17 @@ async function loadLyrics(video,usePuter=false){
   .replace(/\s*(?:\/|\|)\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video).*$/i," ")
   .replace(/\s+/g," ").trim();
  const parts=cleaned.split(/\s+[-–—|]\s+/).map(x=>x.trim()).filter(Boolean);
- const track=parts.length>1?parts.slice(1).join(" - "):cleaned;
  const channelRaw=String(video.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
  const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
  const genericChannel=/^(youtube|vevo|various artists|unknown|official|music)$/i.test(channel);
- const artist=parts.length>1?parts[0]:(!genericChannel?channel:"");
+ let track=cleaned,artist="";
+ if(parts.length>1){
+  const first=parts[0],rest=parts.slice(1).join(" - ");
+  if(!genericChannel&&trackSimilarity(channel,first)>=0.6){track=rest;artist=channel;}
+  else if(!genericChannel&&trackSimilarity(channel,rest)>=0.6){track=first;artist=channel;}
+  else{track=rest;artist=first;}
+ }else if(!genericChannel)artist=channel;
  const cacheKey=video.id;
  // Synchronized timestamps belong to a specific video upload. Never reuse
  // song-level lyric timestamps across uploads with different intros or edits.
