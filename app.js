@@ -49,7 +49,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석 중…";
  // The public service documents a low per-IP request limit. Keep this job to at most
  // eight status checks per pass; audio and lyric loading never wait for this loop.
- const pollDelays=[45000,60000,60000,60000,60000,60000,60000,60000];
+ const pollDelays=[5000,60000,60000,60000,60000,60000,60000,60000];
  for(let attempt=0;attempt<pollDelays.length;attempt++){
   if(!isCurrent())return;
   await trackAnalysisDelay(pollDelays[attempt]);
@@ -328,6 +328,7 @@ function showLyricsMessage(message){
  node.textContent=message;
  el.lyricsView.append(node);
  el.lyricsStatus.textContent="";
+ el.lyricsStatus.hidden=true;
 }
 function renderLyrics(){
  if(lyricState.loading)return;
@@ -339,6 +340,7 @@ function renderLyrics(){
     const row=document.createElement("div");row.className="lyric-line plain";row.textContent=text;el.lyricsView.append(row);
    });
    el.lyricsStatus.textContent="일반 가사 · 실시간 싱크 미지원";
+   el.lyricsStatus.hidden=false;
    lyricState.lastIndex=-2;
   }else {showLyricsMessage("동기화 가능한 가사가 없거나, 가사 정보를 불러오지 못했어요.");lyricState.lastIndex=-3;}
   return;
