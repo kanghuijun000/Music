@@ -88,7 +88,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v10";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v11";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 function getLyricApiCooldown(){try{return Number(localStorage.getItem(LYRIC_API_COOLDOWN_KEY))||0;}catch(_){return 0;}}
@@ -526,7 +526,11 @@ async function loadLyrics(video,usePuter=false){
  const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);}return null;})());
  // Video-ID lookup is the strongest way to identify lyrics attached to this exact YouTube upload.
  addJob("Unison",async()=>{
-  const url=new URL("https://unison.boidu.dev/lyrics");url.searchParams.set("v",video.id);
+  const url=new URL("https://unison.boidu.dev/lyrics");
+  url.searchParams.set("v",video.id);
+  // If this upload has not been linked yet, Unison can fall back to song + artist.
+  url.searchParams.set("song",track);
+  if(artist)url.searchParams.set("artist",artist);
   const body=await fetchJson(url,{},9000),data=body?.data;
   if(!body?.success||!data?.lyrics)return null;
   const lines=data.format==="ttml"?parseTtml(data.lyrics):data.format==="lrc"?parseLrc(data.lyrics):[];
@@ -538,7 +542,9 @@ async function loadLyrics(video,usePuter=false){
  addJob("Better Lyrics",async()=>{
   const url=new URL("https://api.betterlyrics.org/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));url.searchParams.set("v",video.id);
+  // Do not pass the song title as an album name; it poisons the provider cache key.
+  if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
+  url.searchParams.set("v",video.id);
   const data=await fetchJson(url,{},11000),raw=data.ttml||data.lyrics||"";
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
    ttmlLines:parseTtml(raw),plainLyrics:data.plainLyrics||"",matchConfidence:Number(data.score)||0};
@@ -546,7 +552,7 @@ async function loadLyrics(video,usePuter=false){
  addJob("Better Lyrics TTML",async()=>{
   const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));
+  if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
   const data=await fetchJson(url,{},11000);
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
    ttmlLines:parseTtml(data.lyrics||data.ttml||""),plainLyrics:data.plainLyrics||""};
@@ -563,7 +569,7 @@ async function loadLyrics(video,usePuter=false){
  for(const provider of ["kugou","qq"])addJob("Better Lyrics "+provider.toUpperCase(),async()=>{
   const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-  url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));
+  if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
   const data=await fetchJson(url,{},11000),raw=data.lyrics||"";
   const lines=provider==="kugou"?parseLrc(raw):parseQrc(raw);
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
