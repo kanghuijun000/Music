@@ -88,7 +88,7 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v8";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v9";
 const LYRIC_CACHE_LIMIT=150;
 function readStoredLyric(cacheKey){
  try{
