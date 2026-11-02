@@ -100,7 +100,14 @@ function sharedLyricCacheMatches(cached,video){
 function findSharedLyricCache(video){
  for(const key of getSongLyricCacheKeys(video)){
   const cached=lyricCache.get(key)||readStoredLyric(key);
-  if(cached&&sharedLyricCacheMatches(cached,video))return cached;
+  if(cached&&cached.source!=="Unison shared text"&&sharedLyricCacheMatches(cached,video))return cached;
+ }
+ return null;
+}
+function findSharedPlainLyricCache(video){
+ for(const key of getSongLyricCacheKeys(video)){
+  const cached=lyricCache.get(key)||readStoredLyric(key);
+  if(cached&&cached.source==="Unison shared text"&&String(cached.plain||"").trim()&&sharedLyricCacheMatches(cached,video))return cached;
  }
  return null;
 }
@@ -553,7 +560,9 @@ async function loadLyrics(video,usePuter=false){
  };
  if(aiAssistButton)aiAssistButton.hidden=true;
  hideDiagnostics();
- const cached=findSharedLyricCache(video)||lyricCache.get(video.id)||readStoredLyric(video.id);
+ const videoCached=lyricCache.get(video.id)||readStoredLyric(video.id);
+ const cached=videoCached&&Array.isArray(videoCached.lines)&&videoCached.lines.length
+  ?videoCached:(findSharedLyricCache(video)||videoCached);
  if(cached&&((Array.isArray(cached.lines)&&cached.lines.some(line=>line&&Number.isFinite(Number(line.time))&&String(line.text||"").trim()))||String(cached.plain||"").trim())&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
   lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
@@ -695,21 +704,39 @@ async function loadLyrics(video,usePuter=false){
  jobs.push((async()=>{
   const provider="Unison";
   try{
-   const url=new URL("https://unison.boidu.dev/lyrics");
-   url.searchParams.set("v",video.id);
-   url.searchParams.set("song",track);
-   if(identity.artistKnown)url.searchParams.set("artist",artist);
-   const {data:body}=await fetchJson(url,{},8000,provider);
+   let body=null,lookupMode="video";
+   const videoUrl=new URL("https://unison.boidu.dev/lyrics");
+   videoUrl.searchParams.set("v",video.id);
+   try{const result=await fetchJson(videoUrl,{},8000,provider+"/영상 ID");body=result.data;}
+   catch(error){if(error?.code!=="HTTP_404")throw error;}
    if(!body?.success||!body?.data?.lyrics){
-    record(provider,"UNISON_"+(body?.code||"NOT_FOUND"),body?.error||body?.hint||"영상 ID에 연결된 가사가 없습니다.");
+    const variants=identity.queries.filter(item=>item.artist).slice(0,3);
+    for(const variant of variants){
+     try{
+      const songUrl=new URL("https://unison.boidu.dev/lyrics");
+      songUrl.searchParams.set("song",variant.title);
+      songUrl.searchParams.set("artist",variant.artist);
+      const result=await fetchJson(songUrl,{},8000,provider+"/곡·가수 검색");
+      if(result.data?.success&&result.data?.data?.lyrics){body=result.data;lookupMode="song";break;}
+     }catch(error){if(error?.code!=="HTTP_404"&&error?.code!=="CANCELLED")record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");}
+    }
+   }
+   if(!body?.success||!body?.data?.lyrics){
+    record(provider,"UNISON_NOT_FOUND","현재 영상과 곡·가수 기준 검색에서 가사를 찾지 못했습니다.");
     return;
    }
    const data=body.data;
    const format=String(data.format||"").toLowerCase();
-   const lines=format==="ttml"?parseTtml(data.lyrics):format==="lrc"?parseLrc(data.lyrics):[];
+   const parsedLines=format==="ttml"?parseTtml(data.lyrics):format==="lrc"?parseLrc(data.lyrics):[];
+   const sourceVideoId=String(data.videoId||"");
+   const sameVideo=lookupMode==="video"&&(!sourceVideoId||sourceVideoId===video.id);
+   const videoTimed=sameVideo&&parsedLines.length>1;
+   const otherVideoText=!videoTimed;
+   const fallbackText=format==="plain"?data.lyrics:parsedLines.map(line=>line.text).filter(Boolean).join("\n");
    const valid=accept(provider,{trackName:data.song||data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
-    syncedLyrics:format==="lrc"?data.lyrics:"",plainLyrics:format==="plain"?data.lyrics:"",ttmlLines:lines,
-    hasWordSync:lines.some(line=>line.words?.length),communityConfidence:data.confidence||""});
+    syncedLyrics:videoTimed&&format==="lrc"?data.lyrics:"",plainLyrics:format==="plain"?data.lyrics:(otherVideoText?fallbackText:""),
+    ttmlLines:videoTimed?parsedLines:[],hasWordSync:videoTimed&&parsedLines.some(line=>line.words?.length),
+    communityConfidence:data.confidence||"",_videoBound:videoTimed,_unisonOtherVideo:otherVideoText,_unisonSourceVideoId:sourceVideoId});
    if(!valid)record(provider,"UNISON_RESULT_REJECTED","응답은 받았지만 제목·가수·가사 형식 검증에서 제외됐습니다.");
   }catch(error){if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.code!=="HTTP_404")record(provider,error?.code||"PROVIDER_ERROR",error?.message||"제공처 오류",error?.elapsed||0,error?.status||"");}
  })());
@@ -835,6 +862,14 @@ async function loadLyrics(video,usePuter=false){
  });
  const selected=candidates.find(item=>item._synced)||candidates.find(item=>item.plainLyrics);
  if(!selected){
+  const sharedPlain=findSharedPlainLyricCache(video);
+  if(sharedPlain){
+   lyricState.loading=false;lyricState.lines=[];lyricState.plain=String(sharedPlain.plain||"");
+   lyricState.wordSynced=false;lyricTimingBasis="catalog";lyricOffsetSeconds=0;
+   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;renderLyrics();
+   el.lyricsStatus.textContent="일반 가사 · 다른 영상에서 가져옴 (싱크 정보 없음)";
+   hideDiagnostics();return;
+  }
   lyricState.loading=false;
   if(aiAssistButton)aiAssistButton.hidden=false;
   if(!diagnostics.length)record("전체 검색","NO_PROVIDER_RESPONSE","모든 제공처에서 결과를 받지 못했습니다.");
@@ -859,11 +894,23 @@ async function loadLyrics(video,usePuter=false){
   showDiagnostics("가사 검색은 성공했지만 화면에 전달할 가사가 없습니다.");
   return;
  }
- const sourceIsVideoBound=String(selected._source||"").startsWith("Unison");
+ const sourceIsVideoBound=Boolean(selected._videoBound);
+ const fromOtherUnisonVideo=Boolean(selected._unisonOtherVideo);
  lyricTimingBasis=sourceIsVideoBound?"video":"catalog";
- const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,source:selected._source,
+ const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,
+  source:fromOtherUnisonVideo?"Unison shared text":selected._source,
   trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||Number(video.duration)||0};
- storeLyricsForVideo(video,cachedLyrics,!sourceIsVideoBound);
+ if(sourceIsVideoBound){
+  storeLyric(video.id,cachedLyrics);
+  const sharedText={...cachedLyrics,lines:[],plain:lyricState.plain||lyricState.lines.map(line=>line.text).filter(Boolean).join("\n"),
+   wordSynced:false,timingBasis:"catalog",source:"Unison shared text"};
+  if(sharedText.plain.trim())for(const key of getSongLyricCacheKeys(video,sharedText))storeLyric(key,sharedText);
+ }else if(fromOtherUnisonVideo){
+  lyricState.lines=[];lyricState.wordSynced=false;lyricTimingBasis="catalog";
+  cachedLyrics.lines=[];cachedLyrics.wordSynced=false;cachedLyrics.timingBasis="catalog";
+  cachedLyrics.plain=lyricState.plain||cachedLyrics.plain;
+  if(cachedLyrics.plain.trim())for(const key of getSongLyricCacheKeys(video,cachedLyrics))storeLyric(key,cachedLyrics);
+ }else storeLyricsForVideo(video,cachedLyrics,true);
  lyricState.loading=false;
  hideDiagnostics();
  renderLyrics();
