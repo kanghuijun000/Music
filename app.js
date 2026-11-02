@@ -99,11 +99,14 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v11";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v12";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
+const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
 function getLyricApiCooldown(){try{return Number(localStorage.getItem(LYRIC_API_COOLDOWN_KEY))||0;}catch(_){return 0;}}
 function setLyricApiCooldown(until){try{localStorage.setItem(LYRIC_API_COOLDOWN_KEY,String(Math.max(Date.now(),Number(until)||0)));}catch(_){}}
+function getBetterLyricsCooldown(){try{return Number(localStorage.getItem(BETTER_LYRICS_COOLDOWN_KEY))||0;}catch(_){return 0;}}
+function setBetterLyricsCooldown(until){try{localStorage.setItem(BETTER_LYRICS_COOLDOWN_KEY,String(Math.max(Date.now(),Number(until)||0)));}catch(_){}}
 function readStoredLyric(cacheKey){
  try{
   const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
@@ -540,7 +543,7 @@ async function loadLyrics(video,usePuter=false){
   }finally{clearTimeout(timer);}
  }
  const providers=[],providerCandidates=[];
- const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);}return null;})());
+ const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);if(name.startsWith("Better Lyrics")&&error?.status===429)setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));}return null;})());
  // Video-ID lookup is the strongest way to identify lyrics attached to this exact YouTube upload.
  addJob("Unison",async()=>{
   const url=new URL("https://unison.boidu.dev/lyrics");
@@ -557,6 +560,7 @@ async function loadLyrics(video,usePuter=false){
  });
  // Better Lyrics supports several upstream catalogues and formats.
  addJob("Better Lyrics",async()=>{
+  if(getBetterLyricsCooldown()>Date.now())return null;
   const url=new URL("https://api.betterlyrics.org/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
   // Do not pass the song title as an album name; it poisons the provider cache key.
@@ -565,14 +569,6 @@ async function loadLyrics(video,usePuter=false){
   const data=await fetchJson(url,{},11000),raw=data.ttml||data.lyrics||"";
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
    ttmlLines:parseTtml(raw),plainLyrics:data.plainLyrics||"",matchConfidence:Number(data.score)||0};
- });
- addJob("Better Lyrics TTML",async()=>{
-  const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
-  url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-  if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
-  const data=await fetchJson(url,{},11000);
-  return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
-   ttmlLines:parseTtml(data.lyrics||data.ttml||""),plainLyrics:data.plainLyrics||""};
  });
  addJob("SyncLRC",async()=>{
   const url=new URL("https://api.synclrc.dev/lyrics");
@@ -584,6 +580,7 @@ async function loadLyrics(video,usePuter=false){
    syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0};
  });
  for(const provider of ["kugou","qq"])addJob("Better Lyrics "+provider.toUpperCase(),async()=>{
+  if(getBetterLyricsCooldown()>Date.now())return null;
   const url=new URL("https://api.betterlyrics.org/"+provider+"/getLyrics");
   url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
   if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
