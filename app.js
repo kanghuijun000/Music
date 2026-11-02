@@ -88,8 +88,11 @@ async function startTrackOffsetAnalysis(video){
  if(isCurrent())el.lyricsStatus.textContent="분석이 지연되고 있어요. 음악은 계속 재생되며 나중에 다시 확인할 수 있어요.";
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v9";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v10";
 const LYRIC_CACHE_LIMIT=150;
+const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
+function getLyricApiCooldown(){try{return Number(localStorage.getItem(LYRIC_API_COOLDOWN_KEY))||0;}catch(_){return 0;}}
+function setLyricApiCooldown(until){try{localStorage.setItem(LYRIC_API_COOLDOWN_KEY,String(Math.max(Date.now(),Number(until)||0)));}catch(_){}}
 function readStoredLyric(cacheKey){
  try{
   const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
@@ -502,16 +505,21 @@ async function loadLyrics(video,usePuter=false){
   try{
    const response=await fetch(url,{headers:customHeaders,signal:controller.signal});
    if(response.status===429){
-    const wait=Math.min(5000,Math.max(1000,Number(response.headers.get("Retry-After"))*1000||1500));
-    await delay(wait);
-    throw new Error("요청 제한(429)");
+    const rawRetry=response.headers.get("Retry-After");
+    const retrySeconds=Number(rawRetry);
+    const retryDate=rawRetry&&!Number.isFinite(retrySeconds)?Date.parse(rawRetry):NaN;
+    const retryAfterMs=Number.isFinite(retrySeconds)?Math.max(1000,retrySeconds*1000):Number.isFinite(retryDate)?Math.max(1000,retryDate-Date.now()):30000;
+    const error=new Error("요청 제한(429)");
+    error.status=429;
+    error.retryAfterMs=retryAfterMs;
+    throw error;
    }
    if(!response.ok)throw new Error("HTTP "+response.status);
    return await response.json();
   }finally{clearTimeout(timer);}
  }
- const providers=[];
- const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);}return null;})());
+ const providers=[],providerCandidates=[];
+ const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);}return null;})());
  // Video-ID lookup is the strongest way to identify lyrics attached to this exact YouTube upload.
  addJob("Unison",async()=>{
   const url=new URL("https://unison.boidu.dev/lyrics");url.searchParams.set("v",video.id);
@@ -559,21 +567,25 @@ async function loadLyrics(video,usePuter=false){
  });
  // LRCLIB asks clients to make requests sequentially and leave a short gap between them.
  const lrclibJob=(async()=>{
+  if(getLyricApiCooldown()>Date.now())return [];
+  let rateLimited=false;
   const queries=[];
   const addQuery=(kind,values)=>{
    const key=kind+":"+values.map(normalize).join("|");
    if(!queries.some(item=>item.key===key))queries.push({key,kind,values});
   };
-  const exact=new URL(LYRIC_API+"/get");exact.searchParams.set("track_name",track);
-  if(artist)exact.searchParams.set("artist_name",artist);if(video.duration)exact.searchParams.set("duration",String(video.duration));
-  queries.push({key:"exact",url:exact});
+  if(artist&&Number(video.duration)>=1&&Number(video.duration)<=3600){
+   const exact=new URL(LYRIC_API+"/get");exact.searchParams.set("track_name",track);
+   exact.searchParams.set("artist_name",artist);exact.searchParams.set("duration",String(video.duration));
+   queries.push({key:"exact",url:exact});
+  }
   addQuery("structured",[track,artist]);
   addQuery("free",[track,artist]);
   if(channel&&!genericChannel)addQuery("free",[track,channel]);
   addQuery("free",[track]);
   const found=[];
   for(let i=0;i<queries.length;i++){
-   if(requestId!==lyricLoadToken)break;
+   if(requestId!==lyricLoadToken||lrclibTimedOut||rateLimited)break;
    if(i)await delay(300);
    const query=queries[i];
    try{
@@ -586,15 +598,26 @@ async function loadLyrics(video,usePuter=false){
     const data=await fetchJson(url,headers,9000);
     const list=Array.isArray(data)?data:[data];
     for(const item of list){const valid=validate(item);if(valid){valid._source="LRCLIB";found.push(valid);}}
-   }catch(error){console.debug("LRCLIB lookup:",error?.message||error);}
+   }catch(error){
+    console.debug("LRCLIB lookup:",error?.message||error);
+    if(error?.status===429){
+     setLyricApiCooldown(Date.now()+(Number(error.retryAfterMs)||30000));
+     rateLimited=true;
+     break;
+    }
+   }
   }
   return found;
  })();
- const externalResults=await Promise.all(providers);
+ let lrclibTimedOut=false;
+ // Use early verified results instead of waiting for every provider to finish.
+ await Promise.race([Promise.all(providers),delay(5000)]);
  if(requestId!==lyricLoadToken)return;
- const lrclibResults=await Promise.race([lrclibJob,delay(18000).then(()=>[])]);
+ let candidates=[...providerCandidates];
+ const lrclibWait=candidates.some(item=>item._synced)?4500:12000;
+ const lrclibResults=await Promise.race([lrclibJob,delay(lrclibWait).then(()=>{lrclibTimedOut=true;return[];})]);
  if(requestId!==lyricLoadToken)return;
- let candidates=[...externalResults.filter(Boolean),...lrclibResults];
+ candidates=[...candidates,...lrclibResults];
  if(usePuter){
   const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
    item=>Boolean(validate(item)),requestId).catch(()=>null);
