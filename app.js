@@ -88,9 +88,9 @@ function sharedLyricCacheMatches(cached,video){
  const titleScore=Math.max(0,...identity.titles.map(title=>trackSimilarity(title,cached.trackName)));
  if(titleScore<0.82)return false;
  const cachedArtist=String(cached.artistName||"").trim();
- if(identity.artistKnown&&cachedArtist&&trackSimilarity(identity.artist,cachedArtist)<0.62)return false;
+ if(identity.artistKnown&&(!cachedArtist||trackSimilarity(identity.artist,cachedArtist)<0.62))return false;
  const possibleArtists=identity.queries.map(item=>item.artist).filter(Boolean);
- if(possibleArtists.length&&cachedArtist&&!possibleArtists.some(name=>trackSimilarity(name,cachedArtist)>=0.62))return false;
+ if(possibleArtists.length&&(!cachedArtist||!possibleArtists.some(name=>trackSimilarity(name,cachedArtist)>=0.62)))return false;
  if(!identity.artistKnown&&!possibleArtists.length&&cached.duration&&video.duration){
   const difference=Math.abs(Number(cached.duration)-Number(video.duration));
   if(difference>Math.max(60,Math.min(180,Number(video.duration)*0.18)))return false;
@@ -859,10 +859,10 @@ async function loadLyrics(video,usePuter=false){
   showDiagnostics("가사 검색은 성공했지만 화면에 전달할 가사가 없습니다.");
   return;
  }
- lyricTimingBasis="catalog";
+ const sourceIsVideoBound=String(selected._source||"").startsWith("Unison");
+ lyricTimingBasis=sourceIsVideoBound?"video":"catalog";
  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,source:selected._source,
   trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||Number(video.duration)||0};
- const sourceIsVideoBound=String(selected._source||"").startsWith("Unison");
  storeLyricsForVideo(video,cachedLyrics,!sourceIsVideoBound);
  lyricState.loading=false;
  hideDiagnostics();
