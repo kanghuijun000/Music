@@ -496,7 +496,9 @@ async function loadLyrics(video,usePuter=false){
   if(!validLines&&!plain.length)return null;
   const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\n")};
   const communityBonus=item.communityConfidence==="high"?12:item.communityConfidence==="medium"?6:0;
-  const matchBonus=Math.max(0,Math.min(1,Number(item.matchConfidence)||0))*15;
+  const rawMatchConfidence=Number(item.matchConfidence)||0;
+  const normalizedMatchConfidence=rawMatchConfidence>1?rawMatchConfidence/100:rawMatchConfidence;
+  const matchBonus=Math.max(0,Math.min(1,normalizedMatchConfidence))*15;
   normalized._score=title+singer+duration+(validLines?45:0)+(item.hasWordSync||lines.some(line=>line.words?.length)?12:0)+communityBonus+matchBonus;
   normalized._synced=validLines;
   normalized._source=item._source||"가사 제공처";
@@ -508,8 +510,8 @@ async function loadLyrics(video,usePuter=false){
    const response=await fetch(url,{headers:customHeaders,signal:controller.signal});
    if(response.status===429){
     const rawRetry=response.headers.get("Retry-After");
-    const retrySeconds=Number(rawRetry);
-    const retryDate=rawRetry&&!Number.isFinite(retrySeconds)?Date.parse(rawRetry):NaN;
+    const retrySeconds=rawRetry!==null&&rawRetry.trim()!==""?Number(rawRetry):NaN;
+    const retryDate=rawRetry!==null&&!Number.isFinite(retrySeconds)?Date.parse(rawRetry):NaN;
     const retryAfterMs=Number.isFinite(retrySeconds)?Math.max(1000,retrySeconds*1000):Number.isFinite(retryDate)?Math.max(1000,retryDate-Date.now()):30000;
     const error=new Error("요청 제한(429)");
     error.status=429;
