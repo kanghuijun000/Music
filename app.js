@@ -729,7 +729,7 @@ async function loadLyrics(video,usePuter=false){
    const format=String(data.format||"").toLowerCase();
    const parsedLines=format==="ttml"?parseTtml(data.lyrics):format==="lrc"?parseLrc(data.lyrics):[];
    const sourceVideoId=String(data.videoId||"");
-   const sameVideo=lookupMode==="video"&&(!sourceVideoId||sourceVideoId===video.id);
+   const sameVideo=sourceVideoId?sourceVideoId===video.id:lookupMode==="video";
    const videoTimed=sameVideo&&parsedLines.length>1;
    const otherVideoText=!videoTimed;
    const fallbackText=format==="plain"?data.lyrics:parsedLines.map(line=>line.text).filter(Boolean).join("\n");
