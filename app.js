@@ -40,7 +40,7 @@ function getLyricsIdentity(video){
   title=parts[0];
   const rest=parts.slice(1).join(" - ");
   queries=[{title,artist:rest},{title:rest,artist:title},{title,artist:""},{title:rest,artist:""}];
- }else if(!generic){
+ }else if(!generic&&isTopic){
   artist=channel;artistKnown=Boolean(channel);
  }
  const uniqueTitles=[...new Set([title,...parts,raw].map(v=>String(v||"").trim()).filter(Boolean))];
@@ -56,6 +56,58 @@ function getLyricsIdentity(video){
 function expectedTrackIdentity(video){
  const identity=getLyricsIdentity(video);
  return {title:identity.title,artist:identity.artist};
+}
+function lyricCacheNormalize(value){
+ return String(value||"").toLocaleLowerCase().normalize("NFKC")
+  .replace(/\\[[^\\]]*\\]|\\([^)]*\\)/g," ")
+  .replace(/\\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\\b/gi," ")
+  .replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ")
+  .replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+}
+function getSongLyricCacheKeys(video,metadata=null){
+ const identity=getLyricsIdentity(video),pairs=[];
+ if(identity.artistKnown)pairs.push({title:identity.title,artist:identity.artist});
+ pairs.push(...identity.queries);
+ if(metadata){
+  pairs.unshift({title:metadata.trackName||metadata.title||"",artist:metadata.artistName||metadata.artist||""});
+ }
+ const keys=[];
+ const add=(prefix,title,artist="")=>{
+  const t=lyricCacheNormalize(title),a=lyricCacheNormalize(artist);
+  if(!t)return;
+  const key=prefix==="title"?"song-title:"+t:"song:"+t+"|"+a;
+  if(!keys.includes(key))keys.push(key);
+ };
+ for(const pair of pairs)add("song",pair.title,pair.artist);
+ for(const title of [...identity.titles,metadata?.trackName||metadata?.title||""])add("title",title);
+ return keys;
+}
+function sharedLyricCacheMatches(cached,video){
+ if(!cached||!cached.trackName)return false;
+ const identity=getLyricsIdentity(video);
+ const titleScore=Math.max(0,...identity.titles.map(title=>trackSimilarity(title,cached.trackName)));
+ if(titleScore<0.82)return false;
+ const cachedArtist=String(cached.artistName||"").trim();
+ if(identity.artistKnown&&cachedArtist&&trackSimilarity(identity.artist,cachedArtist)<0.62)return false;
+ const possibleArtists=identity.queries.map(item=>item.artist).filter(Boolean);
+ if(possibleArtists.length&&cachedArtist&&!possibleArtists.some(name=>trackSimilarity(name,cachedArtist)>=0.62))return false;
+ if(!identity.artistKnown&&!possibleArtists.length&&cached.duration&&video.duration){
+  const difference=Math.abs(Number(cached.duration)-Number(video.duration));
+  if(difference>Math.max(60,Math.min(180,Number(video.duration)*0.18)))return false;
+ }
+ return true;
+}
+function findSharedLyricCache(video){
+ for(const key of getSongLyricCacheKeys(video)){
+  const cached=lyricCache.get(key)||readStoredLyric(key);
+  if(cached&&sharedLyricCacheMatches(cached,video))return cached;
+ }
+ return null;
+}
+function storeLyricsForVideo(video,item,allowCrossVideo=true){
+ storeLyric(video.id,item);
+ if(!allowCrossVideo)return;
+ for(const key of getSongLyricCacheKeys(video,item))storeLyric(key,item);
 }
 function selectTrackStart(tracks,video){const expected=expectedTrackIdentity(video);const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{const title=trackSimilarity(track.title,expected.title);const artist=expected.artist?trackSimilarity(track.artist,expected.artist):(track.artist?0.65:0.4);const confidence=Number(track.confidence)||0;return{track,title,artist,confidence,score:title*0.62+artist*0.23+confidence*0.15};}).filter(item=>Number.isFinite(Number(item.track?.timestamp))&&Number(item.track.timestamp)>=0&&item.title>=0.68&&item.artist>=0.45&&item.confidence>=0.65).sort((a,b)=>b.score-a.score);return candidates[0]?.track||null;}
 function applyTrackOffset(seconds){if(lyricTimingBasis==="video")return;const value=Number(seconds);lyricOffsetSeconds=Number.isFinite(value)&&value>=0?Math.min(value,1800):0;lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;renderLyrics();}
@@ -152,7 +204,7 @@ function storeLyric(cacheKey,item){
  try{
   const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
   const next=saved&&typeof saved==="object"?saved:{};
-  next[cacheKey]={lines:item.lines,plain:item.plain||"",wordSynced:Boolean(item.wordSynced),timingBasis:item.timingBasis||"catalog",source:item.source||"",savedAt:Date.now()};
+  next[cacheKey]={lines:item.lines,plain:item.plain||"",wordSynced:Boolean(item.wordSynced),timingBasis:item.timingBasis||"catalog",source:item.source||"",trackName:item.trackName||"",artistName:item.artistName||"",duration:Number(item.duration)||0,savedAt:Date.now()};
   const keys=Object.keys(next).sort((a,b)=>(Number(next[b]?.savedAt)||0)-(Number(next[a]?.savedAt)||0));
   for(const key of keys.slice(LYRIC_CACHE_LIMIT))delete next[key];
   localStorage.setItem(LYRIC_CACHE_STORAGE_KEY,JSON.stringify(next));
@@ -501,7 +553,7 @@ async function loadLyrics(video,usePuter=false){
  };
  if(aiAssistButton)aiAssistButton.hidden=true;
  hideDiagnostics();
- const cached=lyricCache.get(video.id)||readStoredLyric(video.id);
+ const cached=findSharedLyricCache(video)||lyricCache.get(video.id)||readStoredLyric(video.id);
  if(cached&&((Array.isArray(cached.lines)&&cached.lines.some(line=>line&&Number.isFinite(Number(line.time))&&String(line.text||"").trim()))||String(cached.plain||"").trim())&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
   lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
@@ -808,8 +860,10 @@ async function loadLyrics(video,usePuter=false){
   return;
  }
  lyricTimingBasis="catalog";
- const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,source:selected._source};
- storeLyric(video.id,cachedLyrics);
+ const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,source:selected._source,
+  trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||Number(video.duration)||0};
+ const sourceIsVideoBound=String(selected._source||"").startsWith("Unison");
+ storeLyricsForVideo(video,cachedLyrics,!sourceIsVideoBound);
  lyricState.loading=false;
  hideDiagnostics();
  renderLyrics();
