@@ -548,7 +548,9 @@ async function loadLyrics(video,usePuter=false){
   }finally{clearTimeout(timer);externalSignal?.removeEventListener("abort",abortFromParent);}
  }
  const providers=[],providerCandidates=[];
- const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=valid._source||name;providerCandidates.push(valid);return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);if(name.startsWith("Better Lyrics")&&error?.status===429)setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));}return null;})());
+ let resolveFirstProvider;
+ const firstProvider=new Promise(resolve=>{resolveFirstProvider=resolve;});
+ const addJob=(name,job)=>providers.push((async()=>{try{const item=await job();const valid=validate(item);if(valid){valid._source=valid._source||name;providerCandidates.push(valid);resolveFirstProvider();return valid;}}catch(error){console.debug(name+" lyrics lookup:",error?.message||error);if(name.startsWith("Better Lyrics")&&error?.status===429)setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));}return null;})());
  // Video-ID lookup is the strongest way to identify lyrics attached to this exact YouTube upload.
  addJob("Unison",async()=>{
   const url=new URL("https://unison.boidu.dev/lyrics");
@@ -617,8 +619,9 @@ async function loadLyrics(video,usePuter=false){
   }
   return found;
  })();
- // Use early verified results instead of waiting for every provider to finish.
- await Promise.race([Promise.all(providers),delay(5000)]);
+ // Show the first verified provider quickly, with a short grace period to collect a better match.
+ // If neither provider returns a match, retain the full 5-second discovery window.
+ await Promise.race([firstProvider.then(()=>delay(900)),Promise.all(providers),delay(5000)]);
  if(requestId!==lyricLoadToken)return;
  let candidates=[...providerCandidates];
  const lrclibWait=candidates.some(item=>item._synced)?4500:12000;
