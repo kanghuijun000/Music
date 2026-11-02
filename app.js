@@ -566,6 +566,7 @@ async function loadLyrics(video,usePuter=false){
    syncedLyrics:provider==="kugou"?raw:"",ttmlLines:lines,plainLyrics:data.plainLyrics||"",hasWordSync:provider==="qq"};
  });
  // LRCLIB asks clients to make requests sequentially and leave a short gap between them.
+ let lrclibTimedOut=false;
  const lrclibJob=(async()=>{
   if(getLyricApiCooldown()>Date.now())return [];
   let rateLimited=false;
@@ -609,7 +610,6 @@ async function loadLyrics(video,usePuter=false){
   }
   return found;
  })();
- let lrclibTimedOut=false;
  // Use early verified results instead of waiting for every provider to finish.
  await Promise.race([Promise.all(providers),delay(5000)]);
  if(requestId!==lyricLoadToken)return;
