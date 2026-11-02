@@ -59,10 +59,10 @@ function expectedTrackIdentity(video){
 }
 function lyricCacheNormalize(value){
  return String(value||"").toLocaleLowerCase().normalize("NFKC")
-  .replace(/\\[[^\\]]*\\]|\\([^)]*\\)/g," ")
-  .replace(/\\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\\b/gi," ")
+  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ")
   .replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ")
-  .replace(/[^\\p{L}\\p{N}]+/gu," ").trim();
+  .replace(/[^\p{L}\p{N}]+/gu," ").trim();
 }
 function getSongLyricCacheKeys(video,metadata=null){
  const identity=getLyricsIdentity(video),pairs=[];
