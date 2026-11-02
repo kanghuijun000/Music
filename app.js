@@ -268,10 +268,13 @@ function parseTtml(source){
     const begin=parseTimedTextTime(child.getAttribute("begin"));
     const end=parseTimedTextTime(child.getAttribute("end"));
     const hasBegin=Number.isFinite(begin);
-    const absoluteBegin=ancestorBegin+(hasBegin?begin:0);
+    // Some TTML feeds repeat media-absolute timestamps on both <p> and <span>;
+    // others use span offsets relative to the parent. Avoid adding an absolute
+    // timestamp twice, while still supporting relative child offsets.
+    const absoluteBegin=ancestorBegin+(hasBegin&&begin<ancestorBegin?begin:hasBegin?begin-ancestorBegin:0);
     if(child.localName==="span"&&hasBegin){
      const text=child.textContent||"";
-     const absoluteEnd=Number.isFinite(end)?ancestorBegin+end:NaN;
+     const absoluteEnd=Number.isFinite(end)?ancestorBegin+(end<ancestorBegin?end:end-ancestorBegin):NaN;
      if(text.trim())words.push({start:absoluteBegin,end:absoluteEnd,text});
     }else collect(child,absoluteBegin);
    });
@@ -487,7 +490,9 @@ async function loadLyrics(video,usePuter=false){
   const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
   if(!validLines&&!plain.length)return null;
   const normalized={...item,ttmlLines:validLines?lines:[],plainLyrics:plain.join("\n")};
-  normalized._score=title+singer+duration+(validLines?45:0)+(item.hasWordSync||lines.some(line=>line.words?.length)?12:0);
+  const communityBonus=item.communityConfidence==="high"?12:item.communityConfidence==="medium"?6:0;
+  const matchBonus=Math.max(0,Math.min(1,Number(item.matchConfidence)||0))*15;
+  normalized._score=title+singer+duration+(validLines?45:0)+(item.hasWordSync||lines.some(line=>line.words?.length)?12:0)+communityBonus+matchBonus;
   normalized._synced=validLines;
   normalized._source=item._source||"가사 제공처";
   return normalized;
@@ -515,7 +520,7 @@ async function loadLyrics(video,usePuter=false){
   const lines=data.format==="ttml"?parseTtml(data.lyrics):data.format==="lrc"?parseLrc(data.lyrics):[];
   return {trackName:data.song||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
    syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:data.format==="plain"?data.lyrics:"",ttmlLines:lines,
-   hasWordSync:lines.some(line=>line.words?.length)};
+   hasWordSync:lines.some(line=>line.words?.length),communityConfidence:data.confidence||""};
  });
  // Better Lyrics supports several upstream catalogues and formats.
  addJob("Better Lyrics",async()=>{
@@ -524,7 +529,7 @@ async function loadLyrics(video,usePuter=false){
   url.searchParams.set("al",track);url.searchParams.set("d",String(video.duration||1));url.searchParams.set("v",video.id);
   const data=await fetchJson(url,{},11000),raw=data.ttml||data.lyrics||"";
   return {trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,
-   ttmlLines:parseTtml(raw),plainLyrics:data.plainLyrics||""};
+   ttmlLines:parseTtml(raw),plainLyrics:data.plainLyrics||"",matchConfidence:Number(data.score)||0};
  });
  addJob("Better Lyrics TTML",async()=>{
   const url=new URL("https://api.betterlyrics.org/ttml/getLyrics");
