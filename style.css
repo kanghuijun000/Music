@@ -88,3 +88,9 @@ button:disabled{cursor:not-allowed}
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* Lyrics provider diagnostics: visible only when lyric lookup fails */
+.lyrics-diagnostics{margin:10px 0 0;padding:10px 11px;border:1px solid #b6f36a35;border-radius:10px;background:#11151b;color:#cbd2df;font-size:10px;line-height:1.65}
+.lyrics-diagnostics[hidden]{display:none}
+.lyrics-diagnostics summary{color:var(--accent);font-weight:700;cursor:pointer;letter-spacing:.2px}
+.lyrics-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin:9px 0 0;color:#c0c7d5;font:10px/1.7 ui-monospace,monospace}
