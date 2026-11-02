@@ -704,6 +704,7 @@ async function loadLyrics(video,usePuter=false){
     }
     const {data}=await fetchJson(url,headers,6500,provider);
     const list=Array.isArray(data)?data:[data];
+    if(!list.length)record(provider,"LRCLIB_NO_RESULTS","검색 요청은 성공했지만 일치하는 곡이 없습니다.");
     let accepted=0;
     for(const item of list){
      if(!item)continue;
@@ -729,6 +730,8 @@ async function loadLyrics(video,usePuter=false){
     const url=new URL("https://api.betterlyrics.org"+endpoint.path);
     url.searchParams.set("s",variant.title);
     url.searchParams.set("a",variant.artist||artist||"");
+    // Provider-specific endpoints accept no API key, but retain the album parameter for a stable cache key.
+    url.searchParams.set("al","");
     if(video.duration)url.searchParams.set("d",String(Math.round(Number(video.duration))));
     const {data,headers:responseHeaders}=await fetchJson(url,{},8000,provider+"/"+endpoint.name);
     if(!data?.lyrics){record(provider+"/"+endpoint.name,"PROVIDER_EMPTY","HTTP 응답은 성공했지만 lyrics 필드가 비어 있습니다.");return;}
@@ -762,7 +765,7 @@ async function loadLyrics(video,usePuter=false){
  if(!candidates.some(item=>item._source.startsWith("Better Lyrics"))&&albumMatch&&!lyricSignal.aborted){
   try{
    const url=new URL("https://api.betterlyrics.org/getLyrics");
-   url.searchParams.set("s",track);url.searchParams.set("a",artist||"");
+   url.searchParams.set("s",albumMatch.trackName||track);url.searchParams.set("a",albumMatch.artistName||artist||identity.queries[0]?.artist||"");
    url.searchParams.set("al",String(albumMatch.albumName).trim());
    url.searchParams.set("d",String(Math.round(Number(albumMatch.duration))));
    url.searchParams.set("v",video.id);
