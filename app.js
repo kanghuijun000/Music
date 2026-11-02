@@ -558,31 +558,6 @@ async function loadLyrics(video,usePuter=false){
    syncedLyrics:data.format==="lrc"?data.lyrics:"",plainLyrics:data.format==="plain"?data.lyrics:"",ttmlLines:lines,
    hasWordSync:lines.some(line=>line.words?.length),communityConfidence:data.confidence||""};
  });
- // Better Lyrics fallbacks are sequential to avoid spending three requests per song.
- addJob("Better Lyrics",async()=>{
-  if(getBetterLyricsCooldown()>Date.now())return null;
-  const attempts=[
-   {name:"TTML",path:"/getLyrics",parse:data=>({ttmlLines:parseTtml(data.ttml||data.lyrics||""),syncedLyrics:"",hasWordSync:false,matchConfidence:Number(data.score)||0})},
-   {name:"Kugou",path:"/kugou/getLyrics",parse:data=>({ttmlLines:parseLrc(data.lyrics||""),syncedLyrics:data.lyrics||"",hasWordSync:false})},
-   {name:"QQ",path:"/qq/getLyrics",parse:data=>({ttmlLines:parseQrc(data.lyrics||""),syncedLyrics:"",hasWordSync:true})}
-  ];
-  for(const attempt of attempts){
-   if(getBetterLyricsCooldown()>Date.now())break;
-   try{
-    const url=new URL("https://api.betterlyrics.org"+attempt.path);
-    url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
-    if(video.duration)url.searchParams.set("d",String(Math.round(video.duration)));
-    if(attempt.path==="/getLyrics")url.searchParams.set("v",video.id);
-    const data=await fetchJson(url,{},11000),parsed=attempt.parse(data);
-    const candidate={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||video.duration,...parsed,plainLyrics:data.plainLyrics||""};
-    if(validate(candidate)){candidate._source="Better Lyrics "+attempt.name;return candidate;}
-   }catch(error){
-    console.debug("Better Lyrics "+attempt.name+" lookup:",error?.message||error);
-    if(error?.status===429){setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));break;}
-   }
-  }
-  return null;
- });
  addJob("SyncLRC",async()=>{
   const url=new URL("https://api.synclrc.dev/lyrics");
   url.searchParams.set("track",track);url.searchParams.set("artist",artist||channel||"");
@@ -645,6 +620,40 @@ async function loadLyrics(video,usePuter=false){
  const lrclibResults=await Promise.race([lrclibJob,delay(lrclibWait).then(()=>{lrclibTimedOut=true;return[];})]);
  if(requestId!==lyricLoadToken)return;
  candidates=[...providerCandidates,...lrclibResults];
+ // Better Lyrics cache keys include album and exact track duration. Use a verified
+ // LRCLIB match for those fields instead of guessing an album or using video length.
+ const albumMatch=[...lrclibResults].filter(item=>String(item.albumName||"").trim()&&Number(item.duration)>0)
+  .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0];
+ if(albumMatch&&getBetterLyricsCooldown()<=Date.now()){
+  const betterLookup=(async()=>{
+   const attempts=[
+    {name:"TTML",path:"/getLyrics",parse:data=>({ttmlLines:parseTtml(data.ttml||data.lyrics||""),syncedLyrics:"",hasWordSync:false,matchConfidence:Number(data.score)||0})},
+    {name:"Kugou",path:"/kugou/getLyrics",parse:data=>({ttmlLines:parseLrc(data.lyrics||""),syncedLyrics:data.lyrics||"",hasWordSync:false})},
+    {name:"QQ",path:"/qq/getLyrics",parse:data=>({ttmlLines:parseQrc(data.lyrics||""),syncedLyrics:"",hasWordSync:true})}
+   ];
+   for(const attempt of attempts){
+    if(getBetterLyricsCooldown()>Date.now())break;
+    try{
+     const url=new URL("https://api.betterlyrics.org"+attempt.path);
+     url.searchParams.set("s",track);url.searchParams.set("a",artist||channel||"");
+     url.searchParams.set("al",String(albumMatch.albumName).trim());
+     url.searchParams.set("d",String(Math.round(Number(albumMatch.duration))));
+     if(attempt.path==="/getLyrics")url.searchParams.set("v",video.id);
+     const data=await fetchJson(url,{},11000),parsed=attempt.parse(data);
+     const candidate={trackName:data.track||track,artistName:data.artist||artist,duration:Number(data.duration)||Number(albumMatch.duration),
+      ...parsed,plainLyrics:data.plainLyrics||""};
+     if(validate(candidate)){candidate._source="Better Lyrics "+attempt.name;return candidate;}
+    }catch(error){
+     console.debug("Better Lyrics "+attempt.name+" lookup:",error?.message||error);
+     if(error?.status===429){setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));break;}
+    }
+   }
+   return null;
+  })();
+  const betterCandidate=await Promise.race([betterLookup,delay(4500).then(()=>null)]);
+  if(requestId!==lyricLoadToken)return;
+  if(betterCandidate)candidates.push(betterCandidate);
+ }
  if(usePuter){
   const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
    (item,extraArtists,extraTitles)=>validate(item,extraArtists,extraTitles),requestId).catch(()=>null);
