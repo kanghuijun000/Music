@@ -5,7 +5,7 @@ const APP_SHELL=[
  "./",
  "./index.html",
  "./style.css",
- "./app.js?v=66",
+ "./app.js?v=67",
  "./manifest.json",
  "./icons/music-icon.svg",
  "./icons/icon-192.svg",
