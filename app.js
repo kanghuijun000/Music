@@ -86,6 +86,10 @@ function getSongLyricCacheKeys(video,metadata=null){
   const key=prefix==="title"?"song-title:"+t:"song:"+t+"|"+a;
   if(!keys.includes(key))keys.push(key);
  };
+ if(metadata?.acoustidId){
+  const acoustid=String(metadata.acoustidId).trim().toLowerCase();
+  if(acoustid&&!keys.includes("song-acoustid:"+acoustid))keys.unshift("song-acoustid:"+acoustid);
+ }
  for(const pair of pairs)add("song",pair.title,pair.artist);
  for(const title of [...identity.titles,metadata?.trackName||metadata?.title||""])add("title",title);
  return keys;
@@ -105,28 +109,85 @@ function sharedLyricCacheMatches(cached,video){
  }
  return true;
 }
+function readAllStoredLyricEntries(){
+ const entries=new Map(lyricCache);
+ try{
+  const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
+  if(saved&&typeof saved==="object")for(const [key,item] of Object.entries(saved))if(item&&typeof item==="object")entries.set(key,item);
+ }catch(_){}
+ return [...entries.entries()];
+}
+function hasUsableCachedLyrics(item){
+ return Boolean(item&&(String(item.plain||"").trim()||(Array.isArray(item.lines)&&item.lines.some(line=>line&&String(line.text||"").trim()))));
+}
+function prepareSharedCacheForVideo(item,sourceKey,targetVideoId){
+ if(!item)return null;
+ if(item.timingBasis!=="video"||sourceKey===targetVideoId)return item;
+ const plain=String(item.plain||"").trim()||((item.lines||[]).map(line=>String(line?.text||"").trim()).filter(Boolean).join("\n"));
+ if(!plain)return null;
+ return {...item,lines:[],plain,wordSynced:false,timingBasis:"catalog",source:"Shared song text"};
+}
 function findSharedLyricCache(video){
+ const entries=readAllStoredLyricEntries(),identity=getLyricsIdentity(video);
  for(const key of getSongLyricCacheKeys(video)){
-  const cached=lyricCache.get(key)||readStoredLyric(key);
-  if(cached&&cached.source!=="Unison shared text"&&sharedLyricCacheMatches(cached,video))return cached;
+  const cached=entries.find(entry=>entry[0]===key)?.[1];
+  if(cached&&cached.source!=="Unison shared text"&&hasUsableCachedLyrics(cached)&&sharedLyricCacheMatches(cached,video)){
+   const prepared=prepareSharedCacheForVideo(cached,key,video.id);if(prepared)return prepared;
+  }
  }
- return null;
+ let best=null,bestScore=0;
+ for(const [key,cached] of entries){
+  if(cached?.source==="Unison shared text"||!hasUsableCachedLyrics(cached)||!sharedLyricCacheMatches(cached,video))continue;
+  const score=trackSimilarity(cached.trackName,identity.title)*0.65+trackSimilarity(cached.artistName,identity.artist)*0.35;
+  if(score>bestScore){bestScore=score;best=prepareSharedCacheForVideo(cached,key,video.id);}
+ }
+ return best;
 }
 function findSharedPlainLyricCache(video){
+ const entries=readAllStoredLyricEntries(),identity=getLyricsIdentity(video);
  for(const key of getSongLyricCacheKeys(video)){
-  const cached=lyricCache.get(key)||readStoredLyric(key);
+  const cached=entries.find(entry=>entry[0]===key)?.[1];
   if(cached&&cached.source==="Unison shared text"&&String(cached.plain||"").trim()&&sharedLyricCacheMatches(cached,video))return cached;
  }
- return null;
+ let best=null,bestScore=0;
+ for(const [key,cached] of entries){
+  if(cached?.source!=="Unison shared text"||!String(cached.plain||"").trim()||!sharedLyricCacheMatches(cached,video))continue;
+  const score=trackSimilarity(cached.trackName,identity.title)*0.65+trackSimilarity(cached.artistName,identity.artist)*0.35;
+  if(score>bestScore){bestScore=score;best=cached;}
+ }
+ return best;
 }
 function findIdentifiedLyricCache(video,identifiedTrack){
- const metadata={trackName:identifiedTrack?.title||"",artistName:identifiedTrack?.artist||""};
+ const metadata={trackName:identifiedTrack?.title||"",artistName:identifiedTrack?.artist||"",acoustidId:identifiedTrack?.acoustidId||""};
+ const entries=readAllStoredLyricEntries();
  for(const key of getSongLyricCacheKeys(video,metadata)){
-  const cached=lyricCache.get(key)||readStoredLyric(key);
-  if(!cached||!cached.trackName||!String(cached.artistName||"").trim())continue;
-  if(trackSimilarity(cached.trackName,metadata.trackName)>=0.82&&trackSimilarity(cached.artistName,metadata.artistName)>=0.62)return cached;
+  const cached=entries.find(entry=>entry[0]===key)?.[1];
+  if(!hasUsableCachedLyrics(cached))continue;
+  if(key.startsWith("song-acoustid:")||(trackSimilarity(cached.trackName,metadata.trackName)>=0.82&&trackSimilarity(cached.artistName,metadata.artistName)>=0.62)){
+   const prepared=prepareSharedCacheForVideo(cached,key,video.id);if(prepared)return prepared;
+  }
  }
- return null;
+ let best=null,bestScore=0;
+ for(const [key,cached] of entries){
+  if(!hasUsableCachedLyrics(cached)||!cached.trackName||!cached.artistName)continue;
+  const titleScore=trackSimilarity(cached.trackName,metadata.trackName),artistScore=trackSimilarity(cached.artistName,metadata.artistName);
+  if(titleScore<0.78||artistScore<0.58)continue;
+  const score=titleScore*0.6+artistScore*0.4;
+  if(score>bestScore){bestScore=score;best=prepareSharedCacheForVideo(cached,key,video.id);}
+ }
+ return best;
+}
+function storeIdentifiedLyricsForSong(video,identifiedTrack){
+ if(!identifiedTrack||!hasUsableCachedLyrics({lines:lyricState.lines,plain:lyricState.plain}))return false;
+ const videoBound=lyricTimingBasis==="video";
+ const plain=String(lyricState.plain||"").trim()||(videoBound?(lyricState.lines||[]).map(line=>String(line.text||"").trim()).filter(Boolean).join("\n"):"");
+ const item={lines:videoBound?[]:(lyricState.lines||[]).map(line=>({...line})),plain,
+  wordSynced:videoBound?false:Boolean(lyricState.wordSynced),timingBasis:"catalog",source:"Identified song shared text",
+  trackName:identifiedTrack.title,artistName:identifiedTrack.artist,duration:Number(identifiedTrack.duration)||0,
+  acoustidId:identifiedTrack.acoustidId||"",videoMetadata:{id:video.id,title:video.title,channelTitle:video.channelTitle,duration:Number(video.duration)||0}};
+ if(!hasUsableCachedLyrics(item))return false;
+ for(const key of getSongLyricCacheKeys(video,item))storeLyric(key,item);
+ return true;
 }
 function storeLyricsForVideo(video,item,allowCrossVideo=true){
  storeLyric(video.id,item);
@@ -190,21 +251,22 @@ function selectIdentifiedTrack(tracks,video){
   const title=String(track?.title||"").trim(),artist=String(track?.artist||"").trim();
   const confidence=Number(track?.confidence),duration=Number(track?.duration),timestamp=Number(track?.timestamp);
   return {track,title,artist,confidence,duration,timestamp,key:trackText(title)+"|"+trackText(artist)};
- }).filter(item=>item.title&&item.artist&&!item.track?.isUnknown&&Number.isFinite(item.confidence)&&item.confidence>=0.82&&
+ }).filter(item=>item.title&&item.artist&&!item.track?.isUnknown&&Number.isFinite(item.confidence)&&item.confidence>=0.80&&
   Number.isFinite(item.duration)&&item.duration>=45&&Number.isFinite(item.timestamp)&&item.timestamp>=0&&
   (!videoDuration||item.timestamp<videoDuration)&&
-  (!videoDuration||(item.duration>=videoDuration*0.45&&item.duration<=videoDuration*1.3)));
+  (!videoDuration||(item.duration>=videoDuration*0.35&&item.duration<=videoDuration*1.5)));
  if(!candidates.length)return null;
- const unique=new Map();
+ const unique=[];
  for(const item of candidates){
-  const prior=unique.get(item.key);
-  if(!prior||item.confidence>prior.confidence)unique.set(item.key,item);
+  const prior=unique.find(existing=>trackSimilarity(existing.title,item.title)>=0.82&&trackSimilarity(existing.artist,item.artist)>=0.62);
+  if(!prior)unique.push(item);
+  else if(item.confidence>prior.confidence)Object.assign(prior,item);
  }
- const ranked=[...unique.values()].sort((a,b)=>b.confidence-a.confidence);
+ const ranked=unique.sort((a,b)=>b.confidence-a.confidence);
  const best=ranked[0];
- // Do not guess when two different songs have similarly strong fingerprints.
+ // Only reject close scores when they identify genuinely different songs.
  if(ranked.length>1&&ranked[1].confidence>=best.confidence-0.10)return null;
- return {title:best.title,artist:best.artist,duration:best.duration,confidence:best.confidence,timestamp:best.timestamp};
+ return {title:best.title,artist:best.artist,duration:best.duration,confidence:best.confidence,timestamp:best.timestamp,acoustidId:String(best.track?.acoustidId||"")};
 }
 async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent){
  try{await initialLyricsPromise;}catch(_){}
@@ -228,6 +290,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  // Video-bound lyrics are normalized by applyTrackOffset before being reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
  if(hasLyrics&&sameTrack){
+  storeIdentifiedLyricsForSong(video,identified);
   setLyricsStatus("음원 확인 · "+identified.artist+" — "+identified.title);
   return true;
  }
@@ -242,6 +305,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   renderLyrics();
   setLyricsStatus("음원 식별 결과로 가사를 찾지 못해 기존 가사를 유지해요.");
  }else if(found){
+  storeIdentifiedLyricsForSong(video,identified);
   setLyricsStatus("음원 식별로 곡 정보 보정됨");
  }
  return true;
@@ -1074,6 +1138,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,
   source:fromOtherUnisonVideo?"Unison shared text":selected._source,
   trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||Number(video.duration)||0,
+  acoustidId:identifiedTrack?.acoustidId||currentIdentifiedTrack?.acoustidId||"",
   videoMetadata:{id:video.id,title:video.title,channelTitle:video.channelTitle,duration:Number(video.duration)||0}};
  if(sourceIsVideoBound){
   storeLyric(video.id,cachedLyrics);
