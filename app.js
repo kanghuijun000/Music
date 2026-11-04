@@ -23,7 +23,11 @@ function getLyricsIdentity(video,identifiedTrack=null){
     titles:[title],queries:[{key:trackText(title)+"|"+trackText(artist),title,artist}],identified:true};
   }
  }
- const raw=String(video?.title||"").trim()
+ const originalTitle=String(video?.title||"").trim();
+ const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g),...originalTitle.matchAll(/\[([^\]]*)\]/g)]
+  .map(match=>String(match[1]||"").trim())
+  .filter(value=>value&&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value));
+ const raw=originalTitle
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
   .replace(/\s+/g," ").trim();
@@ -51,8 +55,10 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }else if(!generic&&isTopic){
   artist=channel;artistKnown=Boolean(channel);
  }
- const uniqueTitles=[...new Set([title,...parts,raw].map(v=>String(v||"").trim()).filter(Boolean))];
- if(!queries.length)queries=[{title,artist:artistKnown?artist:""},{title,artist:""}];
+ const uniqueTitles=[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
+ if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
+ if(artistKnown)for(const alias of parentheticalAliases)queries.push({title:alias,artist});
+ queries.push({title,artist:""});
  const uniqueQueries=[];
  for(const q of queries){
   if(!q.title)continue;
@@ -1035,7 +1041,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if(!data||typeof data!=="object")throw Object.assign(new Error("HTTP 200 응답이 JSON 형식이 아닙니다."),{code:"INVALID_JSON",status:response.status,body:text.slice(0,180)});
    return {data,headers:{provider:response.headers.get("X-Provider"),cache:response.headers.get("X-Cache-Status"),rateLimit:response.headers.get("X-RateLimit-Type"),remaining:response.headers.get("X-RateLimit-Remaining")},elapsed:Date.now()-began};
   }catch(error){
-   if(error?.code!=="CANCELLED")record(provider,error?.code||"REQUEST_FAILED",error?.message||"요청 실패",Date.now()-began,error?.status||"");
+   // Provider-level handlers record failures once; avoid duplicate diagnostic rows here.
    if(error?.status===429&&provider.startsWith("Better Lyrics"))setBetterLyricsCooldown(Date.now()+(Number(error.retryAfterMs)||30000));
    if(error?.status===429&&provider==="LRCLIB")setLyricApiCooldown(Date.now()+(Number(error.retryAfterMs)||30000));
    throw error;
@@ -1104,7 +1110,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  })());
  jobs.push((async()=>{
   const provider="SyncLRC";
-  const variants=identity.queries.slice(0,identity.artistKnown?1:2);
+  const variants=identity.queries.slice(0,identity.artistKnown?3:2);
   await Promise.all(variants.map(async variant=>{
    try{
     const url=new URL("https://api.synclrc.dev/lyrics");
