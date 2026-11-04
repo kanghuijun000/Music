@@ -12,7 +12,11 @@ const APP_SHELL=[
  "./icons/icon-512.svg"
 ];
 
-self.addEventListener("message",event=>{\n if(event.data?.type==="SKIP_WAITING")self.skipWaiting();\n});\n\nself.addEventListener("install",event=>{
+self.addEventListener("message",event=>{
+ if(event.data?.type==="SKIP_WAITING")self.skipWaiting();
+});
+
+self.addEventListener("install",event=>{
  event.waitUntil((async()=>{
   const cache=await caches.open(CACHE_NAME);
   await Promise.all(APP_SHELL.map(async path=>{
