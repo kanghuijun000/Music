@@ -461,6 +461,20 @@ function storeLyric(cacheKey,item){
  }catch(error){console.warn("Lyrics cache could not be saved:",error);}
 }
 
+function videoLyricCacheMatches(cached,video){
+ if(!cached||!cached.trackName||!cached.artistName)return false;
+ // A video-ID-specific Unison result is tied directly to this exact video.
+ if(cached.source==="Unison"&&cached.videoMetadata?.id===video.id)return true;
+ const identity=getLyricsIdentity(video);
+ const titleScore=Math.max(0,...identity.titles.map(title=>trackSimilarity(title,cached.trackName)));
+ if(titleScore<0.92)return false;
+ const artistNames=[identity.artistKnown?identity.artist:"",...identity.queries.map(item=>item.artist)].filter(Boolean);
+ if(!artistNames.length||!artistNames.some(name=>trackSimilarity(name,cached.artistName)>=0.82))return false;
+ const cachedDuration=Number(cached.duration)||0,videoDuration=Number(video.duration)||0;
+ if(cachedDuration&&videoDuration&&Math.abs(cachedDuration-videoDuration)>Math.max(15,videoDuration*0.12))return false;
+ return true;
+}
+
 const ids=["searchForm","searchInput","searchButton","coverImage","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus","lyricsDiagnostics","lyricsDiagnosticsContent"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
 let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,progressTimer=null,lyricTimer=null,seeking=false,lyricLoadToken=0,lyricAbortController=null,selectedVideoDuration=0,contentTimelineReady=false,searchRequestToken=0,searchAbortController=null;
@@ -928,8 +942,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  if(aiAssistButton)aiAssistButton.hidden=true;
  hideDiagnostics();
  const videoCached=identifiedTrack?null:(lyricCache.get(video.id)||readStoredLyric(video.id));
+ const validVideoCache=videoCached&&videoLyricCacheMatches(videoCached,video)?videoCached:null;
  const cached=identifiedTrack?findIdentifiedLyricCache(video,identifiedTrack):
-  (videoCached&&Array.isArray(videoCached.lines)&&videoCached.lines.length?videoCached:(findSharedLyricCache(video)||videoCached));
+  (validVideoCache||findSharedLyricCache(video));
  if(cached&&((Array.isArray(cached.lines)&&cached.lines.some(line=>line&&Number.isFinite(Number(line.time))&&String(line.text||"").trim()))||String(cached.plain||"").trim())&&!usePuter){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
   lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
