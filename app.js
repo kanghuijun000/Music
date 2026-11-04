@@ -227,7 +227,10 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  // Apply the fingerprint timestamp even when the existing lyrics already match.
  // Video-bound lyrics are normalized by applyTrackOffset before being reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
- if(hasLyrics&&sameTrack)return true;
+ if(hasLyrics&&sameTrack){
+  setLyricsStatus("음원 확인 · "+identified.artist+" — "+identified.title);
+  return true;
+ }
  showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");
  await loadLyrics(video,false,identified);
  if(!isCurrent()||currentVideoId!==video.id)return;
