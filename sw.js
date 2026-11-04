@@ -1,18 +1,18 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="v74";
+const CACHE_VERSION="v75";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
  "./index.html",
  "./style.css",
- "./app.js?v=74",
+ "./app.js?v=75",
  "./manifest.json",
  "./icons/music-icon.svg",
  "./icons/icon-192.svg",
  "./icons/icon-512.svg"
 ];
 
-self.addEventListener("install",event=>{
+self.addEventListener("message",event=>{\n if(event.data?.type==="SKIP_WAITING")self.skipWaiting();\n});\n\nself.addEventListener("install",event=>{
  event.waitUntil((async()=>{
   const cache=await caches.open(CACHE_NAME);
   await Promise.all(APP_SHELL.map(async path=>{
@@ -35,7 +35,7 @@ self.addEventListener("fetch",event=>{
  if(request.method!=="GET")return;
  const url=new URL(request.url);
  if(url.origin!==self.location.origin)return;
- if(request.mode==="navigate"){
+ if(request.mode==="navigate"||url.pathname.endsWith("/index.html")){
   event.respondWith((async()=>{
    try{
     const fresh=await fetch(request,{cache:"no-store"});
