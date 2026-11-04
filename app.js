@@ -214,8 +214,10 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   track:currentLyricsTrack?{...currentLyricsTrack}:null,
   statusText:el.lyricsStatus.textContent,statusHidden:el.lyricsStatus.hidden
  }:null;
+ const durationClose=!previous?.track?.duration||!identified.duration||
+  Math.abs(Number(previous.track.duration)-Number(identified.duration))<=Math.max(15,Number(identified.duration)*0.12);
  const sameTrack=previous?.track&&trackSimilarity(previous.track.title,identified.title)>=0.82&&
-  trackSimilarity(previous.track.artist,identified.artist)>=0.62;
+  trackSimilarity(previous.track.artist,identified.artist)>=0.62&&durationClose;
  if(hasLyrics&&sameTrack)return;
  currentIdentifiedTrack=identified;
  // The fingerprint result includes the song's start time inside this video.
@@ -241,8 +243,10 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
  const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
  const finishWithTracks=async tracks=>{
+  try{await initialLyricsPromise;}catch(_){}
+  if(!isCurrent())return;
   const match=selectTrackStart(tracks,video);
-  if(isCurrent())applyTrackOffset(match?getVideoLyricOffset(videoId,match.timestamp):null);
+  applyTrackOffset(match?getVideoLyricOffset(videoId,match.timestamp):null);
   await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
  };
  if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){
@@ -699,7 +703,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
   lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
   lyricState.wordSynced=Boolean(cached.wordSynced);
-  currentLyricsTrack={title:cached.trackName||"",artist:cached.artistName||""};
+  currentLyricsTrack={title:cached.trackName||"",artist:cached.artistName||"",duration:Number(cached.duration)||0};
   lyricTimingBasis=cached.timingBasis==="video"?"video":"catalog";
   lyricOffsetSeconds=lyricTimingBasis==="video"?0:lyricOffsetSeconds;
   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;
@@ -1014,7 +1018,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const sharedPlain=findSharedPlainLyricCache(video);
   if(sharedPlain){
    lyricState.loading=false;lyricState.lines=[];lyricState.plain=String(sharedPlain.plain||"");
-   currentLyricsTrack={title:sharedPlain.trackName||"",artist:sharedPlain.artistName||""};
+   currentLyricsTrack={title:sharedPlain.trackName||"",artist:sharedPlain.artistName||"",duration:Number(sharedPlain.duration)||0};
    lyricState.wordSynced=false;lyricTimingBasis="catalog";lyricOffsetSeconds=0;
    lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;renderLyrics();
    el.lyricsStatus.textContent="일반 가사 · 다른 영상에서 가져옴 (싱크 정보 없음)";
@@ -1044,7 +1048,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   showDiagnostics("가사 검색은 성공했지만 화면에 전달할 가사가 없습니다.");
   return;
  }
- currentLyricsTrack={title:selected.trackName||selected.title||track,artist:selected.artistName||selected.artist||artist};
+ currentLyricsTrack={title:selected.trackName||selected.title||track,artist:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||0};
  const sourceIsVideoBound=Boolean(selected._videoBound);
  const fromOtherUnisonVideo=Boolean(selected._unisonOtherVideo);
  lyricTimingBasis=sourceIsVideoBound?"video":"catalog";
