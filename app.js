@@ -159,6 +159,11 @@ function applyTrackOffset(seconds){
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;renderLyrics();
 }
 const trackAnalysisDelay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function setLyricsStatus(message){
+ if(!el?.lyricsStatus)return;
+ el.lyricsStatus.textContent=String(message||"");
+ el.lyricsStatus.hidden=!message;
+}
 const TRACK_ANALYSIS_REQUESTS_KEY="music_track_analysis_requests_v1";
 const TRACK_ANALYSIS_REQUEST_WINDOW=15*60*1000;
 const TRACK_ANALYSIS_MAX_REQUESTS=7;
@@ -232,11 +237,9 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;
   lyricTimingBasis=previous.timingBasis;lyricOffsetSeconds=previous.offset;currentLyricsTrack=previous.track;
   renderLyrics();
-  el.lyricsStatus.textContent="음원 식별 결과로 가사를 찾지 못해 기존 가사를 유지해요.";
-  el.lyricsStatus.hidden=false;
+  setLyricsStatus("음원 식별 결과로 가사를 찾지 못해 기존 가사를 유지해요.");
  }else if(found){
-  el.lyricsStatus.textContent="음원 식별로 곡 정보 보정됨";
-  el.lyricsStatus.hidden=false;
+  setLyricsStatus("음원 식별로 곡 정보 보정됨");
  }
  return true;
 }
@@ -252,6 +255,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
   if(!identifiedHandled){
    const match=selectTrackStart(tracks,video);
    applyTrackOffset(match?getVideoLyricOffset(videoId,match.timestamp):null);
+   if(match)setLyricsStatus("가사 시작 시각 보정 적용됨");
   }
  };
  if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){
@@ -259,23 +263,23 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  }
  if(cached?.status==="failed"&&now-(cached.savedAt||0)<15*60*1000){applyTrackOffset(null);return;}
  if(cached?.status==="paused"&&Number(cached.retryAfter)>now){
-  applyTrackOffset(null);if(isCurrent())el.lyricsStatus.textContent="음원 분석 요청 제한으로 잠시 대기 중이에요. 기본 가사 검색은 계속돼요.";return;
+  applyTrackOffset(null);if(isCurrent())setLyricsStatus("음원 분석 요청 제한으로 잠시 대기 중이에요. 기본 가사 검색은 계속돼요.");return;
  }
  if((cached?.status==="pending"||cached?.status==="paused")&&cached.jobId&&now-(cached.savedAt||0)<24*60*60*1000){
-  if(Number(cached.retryAfter)>now){applyTrackOffset(null);if(isCurrent())el.lyricsStatus.textContent="노래 시작 시각 분석 결과를 기다리는 중이에요.";return;}
+  if(Number(cached.retryAfter)>now){applyTrackOffset(null);if(isCurrent())setLyricsStatus("노래 시작 시각 분석 결과를 기다리는 중이에요.");return;}
  }else{
   applyTrackOffset(null);
   const reservation=reserveTrackAnalysisRequest();
   if(!reservation.allowed){
    const paused=readTrackAnalysisCache();paused[videoId]={status:"paused",savedAt:Date.now(),retryAfter:reservation.retryAt,reason:"local_rate_limit"};writeTrackAnalysisCache(paused);
-   if(isCurrent())el.lyricsStatus.textContent="음원 분석 요청 간격을 조절하고 있어요. 기존 가사 재생은 유지돼요.";
+   if(isCurrent())setLyricsStatus("음원 분석 요청 간격을 조절하고 있어요. 기존 가사 재생은 유지돼요.");
    return;
   }
   try{
    const response=await fetch("https://trackid.dev/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:"https://www.youtube.com/watch?v="+encodeURIComponent(videoId)})});
    if(response.status===429){
     const limited=readTrackAnalysisCache();limited[videoId]={status:"paused",savedAt:Date.now(),retryAfter:Date.now()+15*60*1000,reason:"rate_limited"};writeTrackAnalysisCache(limited);
-    if(isCurrent())el.lyricsStatus.textContent="음원 분석 서비스가 요청을 제한했어요. 기본 가사 검색은 계속돼요.";return;
+    if(isCurrent())setLyricsStatus("음원 분석 서비스가 요청을 제한했어요. 기본 가사 검색은 계속돼요.");return;
    }
    if(!response.ok)throw new Error("분석 요청 실패 (HTTP "+response.status+")");
    const created=await response.json();if(!created.jobId)throw new Error("분석 작업 ID를 받지 못했어요.");
@@ -283,11 +287,11 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
   }catch(error){
    console.warn("Track identification unavailable:",error);
    const failed=readTrackAnalysisCache();failed[videoId]={status:"failed",savedAt:Date.now(),reason:"request_failed"};writeTrackAnalysisCache(failed);
-   if(isCurrent())el.lyricsStatus.textContent="음원 식별을 사용할 수 없어 기본 가사 검색을 유지해요.";return;
+   if(isCurrent())setLyricsStatus("음원 식별을 사용할 수 없어 기본 가사 검색을 유지해요.");return;
   }
  }
  if(!cached?.jobId)return;
- if(isCurrent())el.lyricsStatus.textContent="영상의 실제 음원을 식별 중…";
+ if(isCurrent())setLyricsStatus("영상의 실제 음원을 식별 중…");
  const pollDelays=[5000,60000,60000,60000,60000,60000,60000,60000];
  for(let attempt=0;attempt<pollDelays.length;attempt++){
   if(!isCurrent())return;
@@ -298,7 +302,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
    response=await fetch("https://trackid.dev/api/job/"+encodeURIComponent(cached.jobId));
    if(response.status===429){
     const paused=readTrackAnalysisCache();paused[videoId]={...cached,status:"paused",savedAt:Date.now(),retryAfter:Date.now()+15*60*1000,reason:"rate_limited"};writeTrackAnalysisCache(paused);
-    if(isCurrent())el.lyricsStatus.textContent="음원 분석 서비스가 요청을 제한했어요. 기존 가사 재생은 유지돼요.";return;
+    if(isCurrent())setLyricsStatus("음원 분석 서비스가 요청을 제한했어요. 기존 가사 재생은 유지돼요.");return;
    }
    if(response.status===404||response.status===410)throw Object.assign(new Error("분석 작업을 찾을 수 없어요."),{staleJob:true});
    if(!response.ok)throw new Error("상태 확인 실패 (HTTP "+response.status+")");
@@ -307,7 +311,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
    console.warn("Track identification status check failed:",error);
    if(error.staleJob){
     const reset=readTrackAnalysisCache();delete reset[videoId];writeTrackAnalysisCache(reset);
-    if(isCurrent())el.lyricsStatus.textContent="음원 분석 작업이 만료되어 다음 재생 때 다시 시도해요.";return;
+    if(isCurrent())setLyricsStatus("음원 분석 작업이 만료되어 다음 재생 때 다시 시도해요.");return;
    }
    continue;
   }
@@ -316,17 +320,17 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
    const updated=readTrackAnalysisCache();updated[videoId]={status:"completed",tracks,savedAt:Date.now()};writeTrackAnalysisCache(updated);
    await finishWithTracks(tracks);
    if(isCurrent()&&!selectIdentifiedTrack(tracks,video)&&!lyricState.lines.length&&!lyricState.plain){
-    el.lyricsStatus.textContent="확실한 음원 일치를 찾지 못했어요. 기본 가사 검색 결과를 유지해요.";
+    setLyricsStatus("확실한 음원 일치를 찾지 못했어요. 기본 가사 검색 결과를 유지해요.");
    }
    return;
   }
   if(job.status==="failed"){
    const updated=readTrackAnalysisCache();updated[videoId]={status:"failed",savedAt:Date.now(),reason:"analysis_failed"};writeTrackAnalysisCache(updated);
-   if(isCurrent())el.lyricsStatus.textContent="음원 식별에 실패해 기본 가사 검색 결과를 유지해요.";return;
+   if(isCurrent())setLyricsStatus("음원 식별에 실패해 기본 가사 검색 결과를 유지해요.");return;
   }
  }
  const pending=readTrackAnalysisCache();pending[videoId]={...cached,status:"pending",savedAt:Date.now(),retryAfter:Date.now()+2*60*1000};writeTrackAnalysisCache(pending);
- if(isCurrent())el.lyricsStatus.textContent="음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.";
+ if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
 const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v12";
