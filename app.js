@@ -218,10 +218,11 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   Math.abs(Number(previous.track.duration)-Number(identified.duration))<=Math.max(15,Number(identified.duration)*0.12);
  const sameTrack=previous?.track&&trackSimilarity(previous.track.title,identified.title)>=0.82&&
   trackSimilarity(previous.track.artist,identified.artist)>=0.62&&durationClose;
- if(hasLyrics&&sameTrack)return;
  currentIdentifiedTrack=identified;
- // The fingerprint result includes the song's start time inside this video.
- lyricOffsetSeconds=getVideoLyricOffset(video.id,identified.timestamp);
+ // Apply the fingerprint timestamp even when the existing lyrics already match.
+ // Video-bound lyrics are normalized by applyTrackOffset before being reused.
+ applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
+ if(hasLyrics&&sameTrack)return;
  showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");
  await loadLyrics(video,false,identified);
  if(!isCurrent()||currentVideoId!==video.id)return;
