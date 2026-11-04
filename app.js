@@ -497,7 +497,7 @@ function clearAlbumArtwork(){
  const frame=el.coverImage.closest(".cover-art");
  if(frame){frame.classList.remove("has-cover");frame.dataset.artworkState="default";}
 }
-function applyAlbumArtwork(url,title,token){
+function applyAlbumArtwork(url,title,token,key){
  const image=el.coverImage;if(!image||token!==artworkRequestToken)return;
  image.onload=()=>{
   if(token!==artworkRequestToken)return;
@@ -507,6 +507,7 @@ function applyAlbumArtwork(url,title,token){
  image.onerror=()=>{
   if(token!==artworkRequestToken)return;
   image.onload=null;image.onerror=null;image.removeAttribute("src");
+  if(key){const cache=readAlbumArtworkCache();delete cache[key];writeAlbumArtworkCache(cache);if(activeArtworkKey===key)activeArtworkKey="";}
   const frame=image.closest(".cover-art");
   if(frame){frame.classList.remove("has-cover");frame.dataset.artworkState="default";}
  };
@@ -524,7 +525,7 @@ async function loadAlbumArtwork(video,preferredTrack=null){
  const token=++artworkRequestToken;activeArtworkKey=key;
  const cache=readAlbumArtworkCache(),cached=cache[key],now=Date.now();
  if(cached&&now-Number(cached.savedAt||0)<(cached.url?ALBUM_ART_POSITIVE_TTL:ALBUM_ART_NEGATIVE_TTL)){
-  if(cached.url){const url=normalizeAlbumArtworkUrl(cached.url);if(url){applyAlbumArtwork(url,identity.title,token);return true;}}
+  if(cached.url){const url=normalizeAlbumArtworkUrl(cached.url);if(url){applyAlbumArtwork(url,identity.title,token,key);return true;}}
   return false;
  }
  const controller=new AbortController();artworkRequestController=controller;
@@ -554,7 +555,7 @@ async function loadAlbumArtwork(video,preferredTrack=null){
   cache[key]={url:artworkUrl||"",album:best?.collectionName||"",trackName:best?.trackName||"",artistName:best?.artistName||"",savedAt:now};
   writeAlbumArtworkCache(cache);
   if(!artworkUrl)return false;
-  applyAlbumArtwork(artworkUrl,identity.title,token);
+  applyAlbumArtwork(artworkUrl,identity.title,token,key);
   return true;
  }catch(error){
   if(!controller.signal.aborted)console.warn("Album artwork lookup failed:",error?.message||error);
