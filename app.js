@@ -1508,20 +1508,22 @@ aiAssistButton?.addEventListener("click",async()=>{
 updateConnectionStatus();if(!apiKey)showMessage("먼저 검색 연결을 설정해 주세요","오른쪽 위 설정에서 YouTube Data API 키를 입력하면 음악 검색을 시작할 수 있어요.","error");
 function registerMusicServiceWorker(){
  if(!("serviceWorker" in navigator)||!/^https?:$/.test(location.protocol))return;
- const hadController=Boolean(navigator.serviceWorker.controller);
- let refreshed=false;
- if(hadController){
-  navigator.serviceWorker.addEventListener("controllerchange",()=>{
-   if(refreshed)return;
-   refreshed=true;
-   location.reload();
-  });
- }
- window.addEventListener("load",async()=>{
+ let refreshing=false;
+ navigator.serviceWorker.addEventListener("controllerchange",()=>{
+  if(refreshing)return;
+  refreshing=true;
+  location.reload();
+ });
+ const updateWorker=async()=>{
   try{
    const registration=await navigator.serviceWorker.register("./sw.js",{scope:"./",updateViaCache:"none"});
-   registration.update().catch(()=>{});
-  }catch(error){console.warn("Service worker registration failed:",error);}
- });
+   await registration.update();
+   if(registration.waiting)registration.waiting.postMessage({type:"SKIP_WAITING"});
+  }catch(error){console.warn("Service worker update check failed:",error);}
+ };
+ window.addEventListener("load",updateWorker,{once:true});
+ window.addEventListener("pageshow",()=>{if(document.visibilityState==="visible")updateWorker();});
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")updateWorker();});
+ window.addEventListener("focus",updateWorker);
 }
-registerMusicServiceWorker();
+
