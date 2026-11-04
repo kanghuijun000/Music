@@ -1170,7 +1170,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  jobs.push((async()=>{
   const provider="Better Lyrics";
   if(getBetterLyricsCooldown()>Date.now()){record(provider,"COOLDOWN_ACTIVE","이전 429 응답으로 요청 제한 대기 중입니다.");return;}
-  const variants=identity.queries.slice(0,identity.artistKnown?1:2);
+  const variants=identity.queries.slice(0,identity.artistKnown?3:2);
   const endpoints=[{name:"Kugou",path:"/kugou/getLyrics",parse:data=>parseLrc(data.lyrics||"")},{name:"QQ",path:"/qq/getLyrics",parse:data=>parseQrc(data.lyrics||"")}];
   await Promise.all(endpoints.flatMap(endpoint=>variants.map(async variant=>{
    try{
