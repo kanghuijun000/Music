@@ -94,3 +94,44 @@ button:disabled{cursor:not-allowed}
 .lyrics-diagnostics[hidden]{display:none}
 .lyrics-diagnostics summary{color:var(--accent);font-weight:700;cursor:pointer;letter-spacing:.2px}
 .lyrics-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;margin:9px 0 0;color:#c0c7d5;font:10px/1.7 ui-monospace,monospace}
+
+
+/* Apple Music-inspired refinement: artwork-led player, restrained red accent */
+:root{--accent:#fa2d55;--accent2:#ff7189;--bg:#09090c;--panel:#121216;--line:rgba(255,255,255,.09);--muted:#96969f;--text:#f7f7f9}
+body{background:radial-gradient(ellipse at 50% -22%,rgba(250,45,85,.12),transparent 42%),var(--bg)}
+.brand-mark{background:linear-gradient(145deg,#ff536f,#e91e48);color:#fff;border-radius:9px}
+.hero{padding-top:56px;padding-bottom:42px}
+h1 em{color:var(--accent)}
+.eyebrow{color:#ff6b83}.eyebrow span{background:var(--accent);box-shadow:0 0 12px #fa2d5580}
+.search-form:focus-within{border-color:#fa2d5580}
+.search-form button,.primary-button{background:var(--accent);color:#fff}
+.search-form button:hover,.primary-button:hover{background:var(--accent2)}
+.quick-searches button:hover,.icon-button:hover{border-color:#fa2d5570;color:#ff7189}
+.track.active{background:#fa2d550d;border-color:#fa2d5560}.track-badge{color:#ff7189}
+.track.active .play-track{background:var(--accent);border-color:var(--accent);color:#fff}
+.connection.ready i{background:var(--accent);box-shadow:0 0 12px #fa2d5588}
+.live-dot{background:var(--accent);box-shadow:0 0 12px #fa2d5577}
+.progress-row input{accent-color:var(--accent)}.control-buttons button{background:var(--accent);color:#fff}
+.lyric-line.current{color:#fff;text-shadow:0 0 22px #fa2d5570}
+.lyric-word.active{color:#ff7189;text-shadow:0 0 13px #fa2d5588}.lyric-word.upcoming{color:#f0b5c0}
+.cover-art{position:relative;width:100%;max-width:360px;aspect-ratio:1;margin:0 auto 2px;border-radius:16px;overflow:hidden;isolation:isolate;background:linear-gradient(145deg,#24242b,#111116 70%);box-shadow:0 18px 42px #0007}
+.cover-image{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;display:block}
+.cover-art:after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.28),rgba(0,0,0,.12) 35%,rgba(0,0,0,.7))}
+.cover-art .lyrics-card{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:space-between;width:100%;min-height:0;margin:0;padding:17px 15px 10px;border:0;border-radius:0;background:transparent;overflow:hidden}
+.cover-art .lyrics-card-head{flex:none;color:#ffffffc9;text-shadow:0 1px 6px #000}
+.cover-art .lyrics-card-head span:last-child{color:#fff;letter-spacing:.4px}
+.cover-art .lyrics-view{flex:1;width:100%;height:auto;min-height:0;padding:10px 4px 12px;gap:13px;justify-content:center;mask-image:linear-gradient(transparent,#000 14%,#000 86%,transparent)}
+.cover-art .lyric-line{color:#ffffffa8;text-shadow:0 1px 5px #0008}
+.cover-art .lyric-line.past{color:#ffffffa0}
+.cover-art .lyric-line.current{color:#fff;font-size:19px;font-weight:800;text-shadow:0 2px 14px #000,0 0 22px #fa2d5570}
+.cover-art .lyric-line.plain{color:#fff}
+.cover-art .lyrics-view:has(.plain){justify-content:flex-start;overflow-y:auto;mask-image:linear-gradient(transparent,#000 5%,#000 95%,transparent)}
+.cover-art .lyrics-placeholder{color:#fff;text-shadow:0 1px 8px #000}
+.cover-art .lyrics-diagnostics{position:absolute;left:12px;right:12px;bottom:8px;z-index:3;max-height:42%;overflow:auto}
+.player-panel .player-heading{margin-bottom:14px}.player-panel .now-playing-info{padding-top:15px}
+.now-title{font-size:16px;letter-spacing:-.25px}.now-channel{color:#a6a6b0}
+.youtube-player-area{border-color:#ffffff12}.youtube-player-label{color:#777782}
+.settings-icon{background:#fa2d5518;color:#ff7189}.api-key-input:focus{border-color:#fa2d5580}
+.key-help a{color:#ff7189}.lyrics-diagnostics summary{color:#ff7189}
+@media(max-width:850px){.hero{padding-top:43px;padding-bottom:32px}.cover-art,.player-panel .cover-art{max-width:min(100%,390px)}}
+@media(max-width:560px){.hero{padding-top:38px}.cover-art{max-width:min(100%,340px)}.cover-art .lyric-line.current{font-size:17px}.cover-art .lyrics-card{padding:14px 12px 8px}}
