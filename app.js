@@ -1017,8 +1017,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const titleThreshold=80;
   if(title<titleThreshold){item._rejectCode="MATCH_TITLE_MISMATCH";record(provider,item._rejectCode,"제목 일치도 부족 ("+Math.round(title)+")");return null;}
   const itemArtist=String(item.artistName||item.artist||"").trim();
-  const verifiedArtistContext=identity.artistKnown||extraArtists.length>0||
-   (!identity.generic&&identity.channel&&itemArtist&&trackSimilarity(identity.channel,itemArtist)>=0.72);
+  // A YouTube channel name is not proof of the performing artist.
+  // Without a known artist, only an exact same-video Unison result may pass.
+  const verifiedArtistContext=identity.artistKnown||extraArtists.length>0;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
   if(!verifiedArtistContext&&!exactVideoSource){
    item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"영상 정보만으로 가수를 확인할 수 없어 후보를 제외했습니다.");return null;
