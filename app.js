@@ -1247,7 +1247,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }));
  })());
  const allJobs=Promise.allSettled(jobs);
- const jobsCompleted=await Promise.race([allJobs.then(()=>true),delay(13000).then(()=>false)]);
+ let searchDeadlineTimer;
+ const deadline=new Promise(resolve=>{searchDeadlineTimer=setTimeout(()=>resolve(false),13000);});
+ const jobsCompleted=await Promise.race([allJobs.then(()=>true),deadline]);
+ clearTimeout(searchDeadlineTimer);
  if(!jobsCompleted){
   record("전체 검색","SEARCH_DEADLINE","13초 제한에 도달해 남은 제공처 요청을 취소합니다.");
   requestController.abort(Object.assign(new Error("가사 검색 제한 시간 초과"),{code:"CANCELLED"}));
