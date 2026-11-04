@@ -1,5 +1,5 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="v65";
+const CACHE_VERSION="v66";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
