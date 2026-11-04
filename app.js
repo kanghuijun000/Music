@@ -140,7 +140,7 @@ function promoteVideoLyricsToSongCache(sourceOffset){
  const offset=Math.max(0,Math.min(1800,Number(sourceOffset)||0));
  const normalizedLines=cached.lines.map(line=>({...line,time:Math.max(0,Number(line.time)-offset)}));
  const normalized={...cached,lines:normalizedLines,timingBasis:"catalog",source:"Unison aligned"};
- lyricTimingBasis="catalog";lyricOffsetSeconds=offset;
+ lyricTimingBasis="catalog";lyricOffsetSeconds=0;
  lyricState.lines=normalizedLines;lyricState.plain=String(cached.plain||"");
  lyricState.wordSynced=Boolean(cached.wordSynced);lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
  storeLyricsForVideo(cached.videoMetadata,normalized,true);
@@ -203,9 +203,9 @@ function selectIdentifiedTrack(tracks,video){
 }
 async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent){
  try{await initialLyricsPromise;}catch(_){}
- if(!isCurrent()||currentVideoId!==video.id)return;
+ if(!isCurrent()||currentVideoId!==video.id)return false;
  const identified=selectIdentifiedTrack(tracks,video);
- if(!identified)return;
+ if(!identified)return false;
  const hasLyrics=Boolean(lyricState.lines.length||String(lyricState.plain||"").trim());
  const previous=hasLyrics?{
   lines:lyricState.lines.map(line=>({...line})),plain:lyricState.plain,wordSynced:lyricState.wordSynced,
@@ -222,7 +222,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  // Apply the fingerprint timestamp even when the existing lyrics already match.
  // Video-bound lyrics are normalized by applyTrackOffset before being reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
- if(hasLyrics&&sameTrack)return;
+ if(hasLyrics&&sameTrack)return true;
  showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");
  await loadLyrics(video,false,identified);
  if(!isCurrent()||currentVideoId!==video.id)return;
@@ -238,6 +238,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   el.lyricsStatus.textContent="음원 식별로 곡 정보 보정됨";
   el.lyricsStatus.hidden=false;
  }
+ return true;
 }
 async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resolve()){
  const token=++trackAnalysisToken,videoId=String(video?.id||"");if(!videoId)return;
@@ -246,9 +247,12 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  const finishWithTracks=async tracks=>{
   try{await initialLyricsPromise;}catch(_){}
   if(!isCurrent())return;
-  const match=selectTrackStart(tracks,video);
-  applyTrackOffset(match?getVideoLyricOffset(videoId,match.timestamp):null);
-  await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
+  const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
+  if(!isCurrent())return;
+  if(!identifiedHandled){
+   const match=selectTrackStart(tracks,video);
+   applyTrackOffset(match?getVideoLyricOffset(videoId,match.timestamp):null);
+  }
  };
  if(cached?.status==="completed"&&Array.isArray(cached.tracks)&&now-(cached.savedAt||0)<30*24*60*60*1000){
   await finishWithTracks(cached.tracks);return;
