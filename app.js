@@ -40,8 +40,8 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Preserve a parenthesized alternate spelling of the leading artist name.
  // Example: "너드커넥션(Nerd Connection) - 좋은 밤 좋은 꿈".
  // Feature/producer annotations are deliberately excluded.
- const artistAliasMatch=originalTitle.match(/^\\s*([^\\-–—|]+?)\\s*\\(([^)]{2,})\\)\\s*[-–—|]/);
- const artistAlias=artistAliasMatch&&!/\\b(feat|ft|featuring|prod|producer)\\b/i.test(artistAliasMatch[2])&&
+ const artistAliasMatch=originalTitle.match(/^\s*([^\-–—|]+?)\s*\(([^)]{2,})\)\s*[-–—|]/);
+ const artistAlias=artistAliasMatch&&!/\b(feat|ft|featuring|prod|producer)\b/i.test(artistAliasMatch[2])&&
   !/(가사|lyrics|official|audio|video|live|performance)/i.test(artistAliasMatch[2])?artistAliasMatch[2].trim():"";
  // Parentheses and brackets commonly contain features, producers, show names,
  // and video labels. They are metadata, not independent song-title candidates.
