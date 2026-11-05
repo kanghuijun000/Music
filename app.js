@@ -930,11 +930,49 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const panel=document.getElementById("lyricsDiagnostics");
   const output=document.getElementById("lyricsDiagnosticsContent");
   if(!panel||!output)return;
-  const lines=[summary||"가사 검색이 완료되지 않았습니다.",...diagnostics.map(d=>{
+  output.replaceChildren();
+  const intro=document.createElement("div");
+  intro.className="diagnostic-summary";
+  intro.textContent=summary||"가사 검색이 완료되지 않았습니다.";
+  output.append(intro);
+  diagnostics.forEach(d=>{
+   const row=document.createElement("div");
+   row.className="diagnostic-row";
+   const codeButton=document.createElement("button");
+   codeButton.type="button";
+   codeButton.className="diagnostic-code";
+   codeButton.textContent="["+d.code+"]";
+   codeButton.title="클릭해서 오류 코드 복사";
+   codeButton.setAttribute("aria-label",d.code+" 오류 코드 복사");
+   codeButton.dataset.copyDiagnosticCode=d.code;
+   const detail=document.createElement("span");
    const suffix=[d.status?"HTTP "+d.status:"",d.elapsed?d.elapsed+"ms":""].filter(Boolean).join(" · ");
-   return "["+d.code+"] "+d.provider+(d.count>1?" ×"+d.count:"")+(d.detail?" — "+d.detail:"")+(suffix?" ("+suffix+")":"");
-  })];
-  output.textContent=lines.join("\n");
+   detail.textContent=d.provider+(d.count>1?" ×"+d.count:"")+(d.detail?" — "+d.detail:"")+(suffix?" ("+suffix+")":"");
+   row.append(codeButton,detail);
+   output.append(row);
+  });
+  output.onclick=async event=>{
+   const button=event.target.closest("button[data-copy-diagnostic-code]");
+   if(!button||!output.contains(button))return;
+   const code=button.dataset.copyDiagnosticCode;
+   try{
+    if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(code);
+    else{
+     const field=document.createElement("textarea");
+     field.value=code;field.setAttribute("readonly","");
+     field.style.position="fixed";field.style.opacity="0";
+     document.body.append(field);field.select();
+     const copied=document.execCommand("copy");field.remove();
+     if(!copied)throw new Error("copy failed");
+    }
+    button.textContent="복사됨";
+    button.classList.add("copied");
+    button.setAttribute("aria-label",code+" 복사 완료");
+   }catch(_){
+    button.textContent="복사 실패";
+    button.setAttribute("aria-label",code+" 복사 실패");
+   }
+  };
   panel.hidden=false;
   panel.open=false;
  };
