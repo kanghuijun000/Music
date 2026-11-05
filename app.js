@@ -50,11 +50,17 @@ function getLyricsIdentity(video,identifiedTrack=null){
   const first=parts[0],rest=parts.slice(1).join(" - ");
   if(trackSimilarity(channel,first)>=0.6){title=rest;artist=channel;artistKnown=true;}
   else if(trackSimilarity(channel,rest)>=0.6){title=first;artist=channel;artistKnown=true;}
-  else if(isTopic){title=first;artist=channel;artistKnown=true;}
+  else if(isTopic){
+   // A Topic channel identifies the artist, while the video title commonly uses
+   // "Artist - Song" order. The song is the second part, not the artist name.
+   title=rest;artist=channel;artistKnown=true;
+  }
   else{
-   // Keep both title/artist arrangements when the channel cannot identify the singer.
-   title=first;
-   queries=[{title:first,artist:rest},{title:rest,artist:first},{title:first,artist:""},{title:rest,artist:""}];
+   // For the common "Artist - Song" video-title format, keep the second part
+   // as the primary song title. Keep artist unconfirmed until provider metadata
+   // independently supports it; also retain alternate queries as fallbacks.
+   title=rest;artist=first;
+   queries=[{title:rest,artist:first},{title:rest,artist:""},{title:first,artist:rest},{title:first,artist:""}];
   }
  }else if(parts.length>1){
   title=parts[0];
