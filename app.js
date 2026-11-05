@@ -1010,8 +1010,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   let best=0;
   for(const wanted of choices){
    const a=stripFeat(got),b=stripFeat(wanted);
-   if(a===b){best=Math.max(best,100);continue;}
-   if(a.startsWith(b+" ")||b.startsWith(a+" ")){best=Math.max(best,82);continue;}
+   const compactA=a.replace(/\s+/g,""),compactB=b.replace(/\s+/g,"");
+   if(a===b||compactA===compactB){best=Math.max(best,100);continue;}
+   if(a.startsWith(b+" ")||b.startsWith(a+" ")||compactA.startsWith(compactB)||compactB.startsWith(compactA)){best=Math.max(best,82);continue;}
    if(a.includes(b)||b.includes(a)){best=Math.max(best,65);continue;}
    const aw=new Set(a.split(" ")),bw=new Set(b.split(" "));
    const overlap=[...aw].filter(word=>bw.has(word)).length;
@@ -1240,6 +1241,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      }
      if(candidates.some(item=>item._source===provider))break;
      if(!results.length)record(provider,"SYNCLRC_NO_RESULTS","검색어에 해당하는 곡이 없습니다.");
+     else if(!matches.length)record(provider,"SYNCLRC_NO_MATCH","검색 결과는 있었지만 제목·가수·재생 시간 조건에 맞는 후보가 없습니다.");
     }catch(error){
      if(error?.code==="CANCELLED")break;
      if(error?.status!==404&&error?.status!==429)record(provider+"/곡 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");
