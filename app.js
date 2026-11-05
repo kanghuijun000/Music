@@ -1055,12 +1055,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // Candidate artist metadata can support a match when the video identity is unknown,
   // but only together with a close duration and a strong title match.
   const closeDuration=duration>=22;
-  const strongArtistMatch=Boolean(itemArtist)&&identity.artistKnown&&singer>=75;
-  // If the video does not establish the artist, require an exact title and a close
-  // duration. A prefix/partial-title match is not enough to select copyrighted lyrics.
+  // Require an exact normalized title even when the artist is known.
+  // Similar prefixes are a common source of unrelated lyric matches.
   const providerIdentityEvidence=!identity.artistKnown&&Boolean(itemArtist)&&closeDuration&&title>=99;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
-  const titleThreshold=identity.artistKnown?((strongArtistMatch&&closeDuration)?78:90):99;
+  const titleThreshold=99;
   if(title<titleThreshold){item._rejectCode="MATCH_TITLE_MISMATCH";record(provider,item._rejectCode,"제목 일치도 부족 ("+Math.round(title)+", 기준 "+titleThreshold+")");return null;}
   const verifiedArtistContext=identity.artistKnown||providerIdentityEvidence;
   if(!verifiedArtistContext&&!exactVideoSource){
