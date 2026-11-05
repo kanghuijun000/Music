@@ -1419,7 +1419,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  }
  const topCandidate=distinctCandidates[0]||null;
  const runnerUp=distinctCandidates[1]||null;
+ // Compare candidates only within the same synchronization class.
+ // A synced result is intentionally ranked far above plain text; a plain result
+ // must not make an otherwise valid synced result look ambiguous.
  const ambiguous=Boolean(topCandidate&&runnerUp&&
+  Boolean(topCandidate._synced)===Boolean(runnerUp._synced)&&
   (topCandidate._score||0)-(runnerUp._score||0)<14&&
   (trackSimilarity(topCandidate.trackName||topCandidate.title,runnerUp.trackName||runnerUp.title)<0.94||
    trackSimilarity(topCandidate.artistName||topCandidate.artist,runnerUp.artistName||runnerUp.artist)<0.90));
