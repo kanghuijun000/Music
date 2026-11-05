@@ -919,7 +919,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const record=(provider,code,detail="",elapsed=0,status="")=>{
-  diagnostics.push({provider,code,detail:String(detail||"").replace(/\s+/g," ").slice(0,220),elapsed,status});
+  const cleanDetail=String(detail||"").replace(/\s+/g," ").slice(0,220);
+  const existing=diagnostics.find(item=>item.provider===provider&&item.code===code&&item.detail===cleanDetail&&item.status===status);
+  if(existing){existing.count=(existing.count||1)+1;existing.elapsed=Math.max(existing.elapsed||0,elapsed||0);return;}
+  diagnostics.push({provider,code,detail:cleanDetail,elapsed,status,count:1});
  };
  const showDiagnostics=(summary)=>{
   const panel=document.getElementById("lyricsDiagnostics");
@@ -927,7 +930,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(!panel||!output)return;
   const lines=[summary||"가사 검색이 완료되지 않았습니다.",...diagnostics.map(d=>{
    const suffix=[d.status?"HTTP "+d.status:"",d.elapsed?d.elapsed+"ms":""].filter(Boolean).join(" · ");
-   return "["+d.code+"] "+d.provider+(d.detail?" — "+d.detail:"")+(suffix?" ("+suffix+")":"");
+   return "["+d.code+"] "+d.provider+(d.count>1?" ×"+d.count:"")+(d.detail?" — "+d.detail:"")+(suffix?" ("+suffix+")":"");
   })];
   output.textContent=lines.join("\n");
   panel.hidden=false;
