@@ -1124,7 +1124,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      url.searchParams.set("type","karaoke");
      const {data}=await fetchJson(url,{},8000,provider);
      const lyrics=data.lyrics&&typeof data.lyrics==="object"?data.lyrics:{};
-     const timed=data.karaoke||data.synced||lyrics.karaoke||lyrics.synced||data.lyrics||"";
+     const timed=data.karaoke||data.synced||lyrics.karaoke||lyrics.synced||(typeof data.lyrics==="string"?data.lyrics:"");
      const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
      accepted=Boolean(accept(provider,{trackName:data.track||data.title||variant.title,
       artistName:data.artist||variant.artist,duration:Number(data.duration)||video.duration,
@@ -1140,9 +1140,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     const searchUrl=new URL("https://api.synclrc.dev/search");
     searchUrl.searchParams.set("q",[variant.title,variant.artist].filter(Boolean).join(" "));
     const {data}=await fetchJson(searchUrl,{},8000,provider+"/검색");
+    const payload=data?.data||data;
     const list=Array.isArray(data)?data:Array.isArray(data?.results)?data.results:
-     Array.isArray(data?.data)?data.data:Array.isArray(data?.tracks)?data.tracks:
-     [data?.result||data?.data||data].filter(Boolean);
+     Array.isArray(data?.tracks)?data.tracks:Array.isArray(payload?.results)?payload.results:
+     Array.isArray(payload?.tracks)?payload.tracks:Array.isArray(payload)?payload:
+     [data?.result||payload].filter(Boolean);
     if(list.length)hadSearchResults=true;
     for(const candidate of list){
      if(lyricSignal.aborted||accepted)break;
