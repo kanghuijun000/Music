@@ -1175,8 +1175,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    for(const query of queries){
     if(lyricSignal.aborted)break;
     try{
+     const searchTerm=normalize(query);
+     if(!searchTerm)continue;
      const url=new URL("https://api.synclrc.dev/search");
-     url.searchParams.set("q",query);
+     url.searchParams.set("q",searchTerm);
      url.searchParams.set("limit","10");
      const {data}=await fetchJson(url,{},8000,provider+"/곡 검색");
      const results=Array.isArray(data?.results)?data.results:[];
