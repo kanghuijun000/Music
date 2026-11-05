@@ -142,3 +142,11 @@ h1 em{color:var(--accent)}
 .cover-art:not(.has-cover) .cover-image{visibility:hidden}
 .cover-art[data-artwork-state="default"]{background:linear-gradient(145deg,#24242b,#111116 70%)}
 @media(prefers-reduced-motion:reduce){.cover-image{transition:none}}
+
+.lyrics-diagnostics-content{display:flex;flex-direction:column;gap:7px;margin-top:9px;max-height:260px;overflow:auto}
+.diagnostic-summary{color:#c0c7d5;line-height:1.7}
+.diagnostic-row{display:flex;align-items:flex-start;gap:7px;min-width:0;color:#c0c7d5;font:10px/1.7 ui-monospace,monospace}
+.diagnostic-code{flex:none;padding:1px 5px;border:1px solid #b6f36a44;border-radius:5px;background:#b6f36a0d;color:var(--accent);font:700 10px/1.6 ui-monospace,monospace;cursor:pointer}
+.diagnostic-code:hover{background:#b6f36a20;border-color:var(--accent)}
+.diagnostic-code.copied{color:#d5ff9e;border-color:#b6f36a99}
+.diagnostic-row>span{min-width:0;overflow-wrap:anywhere}
