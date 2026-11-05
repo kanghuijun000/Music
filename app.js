@@ -455,10 +455,10 @@ function videoLyricCacheMatches(cached,video){
  // A video-ID-specific Unison result is tied directly to this exact video.
  if(cached.source==="Unison"&&cached.videoMetadata?.id===video.id)return true;
  const identity=getLyricsIdentity(video);
- const titleScore=Math.max(0,...identity.titles.map(title=>trackSimilarity(title,cached.trackName)));
- if(titleScore<0.92)return false;
- const artistNames=[identity.artistKnown?identity.artist:"",...identity.queries.map(item=>item.artist)].filter(Boolean);
- if(!artistNames.length||!artistNames.some(name=>trackSimilarity(name,cached.artistName)>=0.82))return false;
+ // Reuse a cached song only when the cleaned primary title and known artist agree.
+ // Alternative title fragments from a video title are not reliable cache identities.
+ if(trackSimilarity(identity.title,cached.trackName)<0.92)return false;
+ if(!identity.artistKnown||trackSimilarity(identity.artist,cached.artistName)<0.90)return false;
  const cachedDuration=Number(cached.duration)||0,videoDuration=Number(video.duration)||0;
  if(cachedDuration&&videoDuration&&Math.abs(cachedDuration-videoDuration)>Math.max(15,videoDuration*0.12))return false;
  return true;
@@ -999,7 +999,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  function titleScore(value,extraTitles=[]){
   const got=normalize(value);
   if(!got)return 0;
-  const choices=[...identity.titles,...extraTitles].map(normalize).filter(Boolean);
+  // Without a confirmed artist, only the primary cleaned video title is admissible.
+  // Do not treat title fragments, guessed aliases, or producer/feature metadata as song identity.
+  const choices=(identity.artistKnown?[identity.title,...extraTitles]:[identity.title]).map(normalize).filter(Boolean);
   let best=0;
   for(const wanted of choices){
    const a=stripFeat(got),b=stripFeat(wanted);
@@ -1053,16 +1055,18 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // Candidate artist metadata can support a match when the video identity is unknown,
   // but only together with a close duration and a strong title match.
   const closeDuration=duration>=22;
-  const strongArtistMatch=Boolean(itemArtist)&&(identity.artistKnown||extraArtists.length>0)&&singer>=75;
-  const providerIdentityEvidence=Boolean(itemArtist)&&closeDuration&&title>=78;
+  const strongArtistMatch=Boolean(itemArtist)&&identity.artistKnown&&singer>=75;
+  // If the video does not establish the artist, require an exact title and a close
+  // duration. A prefix/partial-title match is not enough to select copyrighted lyrics.
+  const providerIdentityEvidence=!identity.artistKnown&&Boolean(itemArtist)&&closeDuration&&title>=99;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
-  const titleThreshold=(strongArtistMatch&&closeDuration)||providerIdentityEvidence?78:90;
+  const titleThreshold=identity.artistKnown?((strongArtistMatch&&closeDuration)?78:90):99;
   if(title<titleThreshold){item._rejectCode="MATCH_TITLE_MISMATCH";record(provider,item._rejectCode,"제목 일치도 부족 ("+Math.round(title)+", 기준 "+titleThreshold+")");return null;}
-  const verifiedArtistContext=identity.artistKnown||extraArtists.length>0||providerIdentityEvidence;
+  const verifiedArtistContext=identity.artistKnown||providerIdentityEvidence;
   if(!verifiedArtistContext&&!exactVideoSource){
-   item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"곡의 가수 정보와 길이를 함께 확인할 수 없어 후보를 제외했습니다.");return null;
+   item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"가수 정보가 확인되지 않아 제목과 영상 길이가 정확히 일치하는 후보만 허용합니다.");return null;
   }
-  if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<65)){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
+  if(identity.artistKnown&&(!itemArtist||singer<65)){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
