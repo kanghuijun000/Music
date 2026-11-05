@@ -16,16 +16,17 @@ function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
 function getLyricsIdentity(video,identifiedTrack=null){
+ const cleanVideoTitle=value=>String(value||"")
+  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
+  .replace(/\s*(?:ㅣ|\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s+/g," ").trim();
  if(identifiedTrack){
   const title=String(identifiedTrack.title||identifiedTrack.trackName||"").trim();
   const artist=String(identifiedTrack.artist||identifiedTrack.artistName||"").trim();
   if(title&&artist){
-   const originalTitle=String(video?.title||"").trim();
-   const aliases=[...originalTitle.matchAll(/\(([^()]*)\)/g),...originalTitle.matchAll(/\[([^\]]*)\]/g)]
-    .map(match=>String(match[1]||"").trim())
-    .filter(value=>value&&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value)&&trackText(value)!==trackText(title));
-   const titles=[...new Set([title,...aliases])];
-   const queries=[{title,artist},...aliases.map(alias=>({title:alias,artist})),{title,artist:""}];
+   const videoTitle=cleanVideoTitle(video?.title);
+   const titles=[...new Set([title,...(videoTitle&&trackSimilarity(videoTitle,title)>=0.55?[videoTitle]:[])])];
+   const queries=[{title,artist},{title,artist:""}];
    const uniqueQueries=[];
    for(const query of queries){
     const key=trackText(query.title)+"|"+trackText(query.artist);
@@ -36,13 +37,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
   }
  }
  const originalTitle=String(video?.title||"").trim();
- const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g),...originalTitle.matchAll(/\[([^\]]*)\]/g)]
-  .map(match=>String(match[1]||"").trim())
-  .filter(value=>value&&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value));
- const raw=originalTitle
-  .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*(?:\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
-  .replace(/\s+/g," ").trim();
+ // Parentheses and brackets commonly contain features, producers, show names,
+ // and video labels. They are metadata, not independent song-title candidates.
+ const raw=cleanVideoTitle(originalTitle);
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channelRaw=String(video?.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
@@ -55,8 +52,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
   else if(trackSimilarity(channel,rest)>=0.6){title=first;artist=channel;artistKnown=true;}
   else if(isTopic){title=first;artist=channel;artistKnown=true;}
   else{
-   // Distributor/unknown channels cannot establish which side is the singer.
-   // Keep both title-artist arrangements instead of silently reversing them.
+   // Keep both title/artist arrangements when the channel cannot identify the singer.
    title=first;
    queries=[{title:first,artist:rest},{title:rest,artist:first},{title:first,artist:""},{title:rest,artist:""}];
   }
@@ -67,13 +63,8 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }else if(!generic&&isTopic){
   artist=channel;artistKnown=Boolean(channel);
  }
- const uniqueTitles=[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
+ const uniqueTitles=[...new Set([title,...parts,raw].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
- if(artistKnown){
-  for(const alias of parentheticalAliases)queries.push({title:alias,artist});
- }else{
-  for(const alias of parentheticalAliases)queries.push({title:alias,artist:""});
- }
  queries.push({title,artist:""});
  const uniqueQueries=[];
  for(const q of queries){
