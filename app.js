@@ -414,7 +414,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v14";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v15";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1110,22 +1110,79 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  })());
  jobs.push((async()=>{
   const provider="SyncLRC";
-  const variants=identity.queries.slice(0,identity.artistKnown?3:2);
-  await Promise.all(variants.map(async variant=>{
+  const variants=identity.queries.slice(0,4);
+  let accepted=false,hadSearchResults=false;
+  for(const variant of variants){
+   if(lyricSignal.aborted||accepted)break;
+   if(!variant.title)continue;
+   if(variant.artist){
+    try{
+     const url=new URL("https://api.synclrc.dev/lyrics");
+     url.searchParams.set("track",variant.title);
+     url.searchParams.set("artist",variant.artist);
+     if(video.duration)url.searchParams.set("duration",String(video.duration));
+     url.searchParams.set("type","karaoke");
+     const {data}=await fetchJson(url,{},8000,provider);
+     const lyrics=data.lyrics&&typeof data.lyrics==="object"?data.lyrics:{};
+     const timed=data.karaoke||data.synced||lyrics.karaoke||lyrics.synced||data.lyrics||"";
+     const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
+     accepted=Boolean(accept(provider,{trackName:data.track||data.title||variant.title,
+      artistName:data.artist||variant.artist,duration:Number(data.duration)||video.duration,
+      syncedLyrics:typeof timed==="string"?timed:"",plainLyrics:data.plain||lyrics.plain||"",
+      ttmlLines:lines,hasWordSync:enhanced.length>0},[variant.artist],[variant.title]));
+    }catch(error){
+     if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.status!==404)
+      record(provider,error?.code||"PROVIDER_ERROR",error?.message||"제공처 오류",error?.elapsed||0,error?.status||"");
+    }
+   }
+   if(accepted||lyricSignal.aborted)break;
    try{
-    const url=new URL("https://api.synclrc.dev/lyrics");
-    url.searchParams.set("track",variant.title);
-    if(variant.artist)url.searchParams.set("artist",variant.artist);
-    if(video.duration)url.searchParams.set("duration",String(video.duration));
-    url.searchParams.set("type","karaoke");
-    const {data}=await fetchJson(url,{},8000,provider);
-    const timed=data.karaoke||data.synced||data.lyrics||"";
-    const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
-    const valid=accept(provider,{trackName:data.track||variant.title,artistName:data.artist||variant.artist||artist,
-     duration:Number(data.duration)||video.duration,syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0});
-    if(!valid)record(provider,"SYNCLRC_NO_MATCH","검색 응답에 검증 가능한 가사가 없습니다.");
-   }catch(error){if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.code!=="HTTP_404")record(provider,error?.code||"PROVIDER_ERROR",error?.message||"제공처 오류",error?.elapsed||0,error?.status||"");}
-  }));
+    const searchUrl=new URL("https://api.synclrc.dev/search");
+    searchUrl.searchParams.set("q",[variant.title,variant.artist].filter(Boolean).join(" "));
+    const {data}=await fetchJson(searchUrl,{},8000,provider+"/검색");
+    const list=Array.isArray(data)?data:Array.isArray(data?.results)?data.results:
+     Array.isArray(data?.data)?data.data:Array.isArray(data?.tracks)?data.tracks:
+     [data?.result||data?.data||data].filter(Boolean);
+    if(list.length)hadSearchResults=true;
+    for(const candidate of list){
+     if(lyricSignal.aborted||accepted)break;
+     if(!candidate||typeof candidate!=="object")continue;
+     const nested=candidate.lyrics&&typeof candidate.lyrics==="object"?candidate.lyrics:{};
+     let timed=candidate.karaoke||candidate.synced||candidate.syncedLyrics||
+      nested.karaoke||nested.synced||"";
+     let plain=candidate.plain||candidate.plainLyrics||nested.plain||"";
+     const id=String(candidate.id||candidate.lyricsId||"");
+     if(!timed&&!plain&&/^[a-f0-9]{32}$/i.test(id)){
+      try{
+       const lyricUrl=new URL("https://api.synclrc.dev/lyrics/"+encodeURIComponent(id));
+       lyricUrl.searchParams.set("type","karaoke");
+       const result=await fetchJson(lyricUrl,{},8000,provider+"/가사 조회");
+       const lyricData=result.data||{};
+       const lyricNested=lyricData.lyrics&&typeof lyricData.lyrics==="object"?lyricData.lyrics:{};
+       timed=lyricData.karaoke||lyricData.synced||lyricNested.karaoke||lyricNested.synced||
+        (typeof lyricData.lyrics==="string"?lyricData.lyrics:"");
+       plain=lyricData.plain||lyricNested.plain||"";
+       Object.assign(candidate,{track:lyricData.track||candidate.track,artist:lyricData.artist||candidate.artist,
+        duration:lyricData.duration||candidate.duration});
+      }catch(error){
+       if(error?.code!=="CANCELLED"&&error?.status!==404)
+        record(provider+"/가사 조회",error?.code||"PROVIDER_ERROR",error?.message||"가사 조회 실패",error?.elapsed||0,error?.status||"");
+      }
+     }
+     const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
+     accepted=Boolean(accept(provider,{trackName:candidate.track||candidate.title||candidate.name||variant.title,
+      artistName:candidate.artist||candidate.artistName||variant.artist,
+      duration:Number(candidate.duration)||video.duration,
+      syncedLyrics:typeof timed==="string"?timed:"",plainLyrics:plain,ttmlLines:lines,
+      hasWordSync:enhanced.length>0},variant.artist?[variant.artist]:[],[variant.title]));
+    }
+   }catch(error){
+    if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.status!==404)
+     record(provider+"/검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");
+   }
+  }
+  if(!accepted)record(provider,hadSearchResults?"SYNCLRC_NO_MATCH":"SYNCLRC_NO_RESULTS",
+   hadSearchResults?"검색 결과는 있었지만 제목·가수·가사 검증을 통과하지 못했습니다.":"검색 결과가 없습니다.");
  })());
  jobs.push((async()=>{
   const provider="LRCLIB";
