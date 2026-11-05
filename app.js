@@ -1406,9 +1406,14 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  });
  const distinctCandidates=[];
  for(const candidate of rankedCandidates){
-  const same=distinctCandidates.find(existing=>
-   trackSimilarity(existing.trackName||existing.title,candidate.trackName||candidate.title)>=0.94&&
-   trackSimilarity(existing.artistName||existing.artist,candidate.artistName||candidate.artist)>=0.90);
+  const same=distinctCandidates.find(existing=>{
+   const leftDuration=Number(existing.duration)||0,rightDuration=Number(candidate.duration)||0;
+   const durationAgrees=!leftDuration||!rightDuration||
+    Math.abs(leftDuration-rightDuration)<=Math.max(8,Math.max(leftDuration,rightDuration)*0.04);
+   return durationAgrees&&
+    trackSimilarity(existing.trackName||existing.title,candidate.trackName||candidate.title)>=0.94&&
+    trackSimilarity(existing.artistName||existing.artist,candidate.artistName||candidate.artist)>=0.90;
+  });
   if(!same)distinctCandidates.push(candidate);
   else if((candidate._score||0)>(same._score||0))Object.assign(same,candidate);
  }
