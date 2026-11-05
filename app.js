@@ -915,6 +915,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const normalize=value=>String(value||"").toLocaleLowerCase().normalize("NFKC")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\b(official|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance)\b/gi," ")
+  .replace(/(?:ㅣ|\|)\s*(?:가사|lyrics?).*$/i," ")
+  .replace(/(?:\/|·|-)\s*(?:가사|lyrics?).*$/i," ")
   .replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ")
   .replace(/[^\p{L}\p{N}]+/gu," ").trim();
  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
