@@ -993,7 +993,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 여러 가사 제공처를 검색하고 있어요…");
  const headers={"X-User-Agent":"Music/1.1 (https://kanghuijun000.github.io/)"};
- const stripFeat=value=>String(value||"").replace(/\b(feat|ft|featuring|with)\b.*$/i,"").trim();
+ const stripFeat=value=>String(value||"")
+  .replace(/\b(feat|ft|featuring|with)\b.*$/i,"")
+  .replace(/\b(?:prod(?:uced)?\.?\s*(?:by)?|producer)\b.*$/i,"").trim();
  function titleScore(value,extraTitles=[]){
   const got=normalize(value);
   if(!got)return 0;
@@ -1257,7 +1259,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    const fallbackVariant=variants.find(variant=>!variant.artist)||variants[0];
    if(fallbackVariant)queries.push({kind:"free",variant:fallbackVariant});
   }else{
-   for(const variant of variants.slice(0,3))queries.push({kind:"free",variant});
+   // LRCLIB supports title-only structured search; avoid broad album/artist keyword hits.
+   for(const variant of variants.slice(0,3))queries.push({kind:"structured",variant});
   }
   const seen=new Set();
   for(const query of queries){
