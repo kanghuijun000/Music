@@ -96,7 +96,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
   :[...new Set([title,...parts,raw,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
  const baseQueries=queries.slice();
- const aliasQueries=parentheticalAliases.flatMap(alias=>artistKnown
+ const aliasQueries=titleAliases.flatMap(alias=>artistKnown
   ?[{title:alias,artist},{title:alias,artist:""}]
   :[{title:alias,artist:""}]);
  // Keep primary-title lookups first, then alternate title aliases, then broad fallbacks.
