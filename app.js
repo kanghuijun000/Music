@@ -91,9 +91,10 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const titleAliases=artistAliases.length&&leadingParentheticalArtist
   ?parentheticalAliases.filter(value=>value!==String(leadingParentheticalArtist[2]||"").trim())
   :parentheticalAliases;
- const uniqueTitles=artistAliases.length&&leadingParentheticalArtist
-  ?[title]
-  :[...new Set([title,...parts,raw,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
+ // Only real song-title candidates belong in global validation.
+ // The opposite side of an ambiguous "A - B" title is queried separately;
+ // treating both sides as titles can accept lyrics for the artist name itself.
+ const uniqueTitles=[...new Set([title,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
  const baseQueries=queries.slice();
  const aliasQueries=titleAliases.flatMap(alias=>artistKnown
@@ -1173,7 +1174,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    try{const result=await fetchJson(videoUrl,{},8000,provider+"/영상 ID");body=result.data;}
    catch(error){if(error?.code!=="HTTP_404")throw error;}
    if(!body?.success||!body?.data?.lyrics){
-    const variants=identity.queries.filter(item=>item.artist).slice(0,3);
+    const variants=identity.queries.filter(item=>item.artist).slice(0,5);
     for(const variant of variants){
      try{
       const songUrl=new URL("https://unison.boidu.dev/lyrics");
@@ -1242,7 +1243,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
   // Search fallback also runs for known artists, with a strict artist match in that case.
   if(!candidates.some(item=>item._source===provider)){
-   const queries=[...new Set(identity.queries.map(item=>item.title).filter(Boolean))].slice(0,4);
+   const queries=[...new Set(identity.queries.map(item=>item.title).filter(Boolean))].slice(0,6);
    for(const query of queries){
     if(lyricSignal.aborted)break;
     try{
@@ -1289,7 +1290,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    exact.searchParams.set("track_name",track);exact.searchParams.set("artist_name",artist);exact.searchParams.set("duration",String(video.duration));
    queries.push({url:exact,label:"정확 일치 조회"});
   }
-  const variants=identity.queries.slice(0,identity.artistKnown?3:4);
+  const variants=identity.queries.slice(0,identity.artistKnown?5:6);
   if(identity.artistKnown){
    if(variants[0])queries.push({kind:"structured",variant:variants[0]});
    const aliasVariant=variants.find((variant,index)=>index>0&&variant.artist);
@@ -1331,10 +1332,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  jobs.push((async()=>{
   const provider="Better Lyrics";
   if(getBetterLyricsCooldown()>Date.now()){record(provider,"COOLDOWN_ACTIVE","이전 429 응답으로 요청 제한 대기 중입니다.");return;}
-  const variants=identity.queries.slice(0,4);
+  const variants=identity.queries.slice(0,6);
   // Try the default TTML endpoint too; it can have cached syllable-synced lyrics
   // even when LRCLIB has no entry. Empty album is explicit, not a guessed album.
-  const ttmlVariants=identity.queries.filter(item=>item.artist||identity.artistKnown).slice(0,2);
+  const ttmlVariants=identity.queries.filter(item=>item.artist||identity.artistKnown).slice(0,3);
   for(const variant of ttmlVariants){
    if(lyricSignal.aborted)break;
    try{
