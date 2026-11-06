@@ -44,7 +44,6 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g)]
   .map(match=>String(match[1]||"").trim())
   .filter(value=>value
-   &&!(leadingParentheticalArtist&&value===String(leadingParentheticalArtist[2]||"").trim())
    &&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value)
    &&!/^(?:prod\.?|produced by|feat\.?|ft\.?|featuring)\b/i.test(value)
    &&!/쇼미더머니|\b(?:episode|ep\.?|official video)\b/i.test(value));
@@ -89,9 +88,12 @@ function getLyricsIdentity(video,identifiedTrack=null){
    ];
   }
  }
- const uniqueTitles=leadingParentheticalArtist&&artistKnown
+ const titleAliases=artistAliases.length&&leadingParentheticalArtist
+  ?parentheticalAliases.filter(value=>value!==String(leadingParentheticalArtist[2]||"").trim())
+  :parentheticalAliases;
+ const uniqueTitles=artistAliases.length&&leadingParentheticalArtist
   ?[title]
-  :[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
+  :[...new Set([title,...parts,raw,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
  const baseQueries=queries.slice();
  const aliasQueries=parentheticalAliases.flatMap(alias=>artistKnown
