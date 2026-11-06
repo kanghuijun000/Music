@@ -1168,7 +1168,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    const format=String(data.format||"").toLowerCase();
    const parsedLines=format==="ttml"?parseTtml(data.lyrics):format==="lrc"?parseLrc(data.lyrics):[];
    const sourceVideoId=String(data.videoId||"");
-   const sameVideo=Boolean(sourceVideoId)&&sourceVideoId===video.id;
+   const sameVideo=sourceVideoId?sourceVideoId===video.id:lookupMode==="video";
    let normalizedOtherVideoLines=[];
    if(!sameVideo&&sourceVideoId&&parsedLines.length>1){
     const sourceTiming=readTrackAnalysisCache()[sourceVideoId];
