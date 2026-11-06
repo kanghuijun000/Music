@@ -1224,7 +1224,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const provider="SyncLRC";
   // Try the exact endpoint first when the video metadata identifies the artist.
   if(identity.artistKnown){
-   const variants=identity.queries.filter(item=>item.artist).slice(0,3);
+   const variants=identity.queries.filter(item=>item.artist).slice(0,5);
    await Promise.all(variants.map(async variant=>{
     try{
      const url=new URL("https://api.synclrc.dev/lyrics");
