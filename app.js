@@ -76,7 +76,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
   const candidateArtist=String(leadingParentheticalArtist[1]||"").trim();
   const parentheticalName=String(leadingParentheticalArtist[2]||"").trim();
   const songTitle=String(leadingParentheticalArtist[3]||"").trim();
-  if(candidateArtist&&parentheticalName&&songTitle&&trackSimilarity(candidateArtist,parentheticalName)>=0.5){
+  if(candidateArtist&&parentheticalName&&songTitle){
    title=songTitle;
    artist="";
    artistKnown=false;
