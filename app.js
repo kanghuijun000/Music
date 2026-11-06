@@ -37,24 +37,24 @@ function getLyricsIdentity(video,identifiedTrack=null){
   }
  }
  const originalTitle=String(video?.title||"").trim();
- // A parenthesized title alias can be essential for alternate-language song names,
- // e.g. "It's love (사랑인걸) - Mose". Keep it only as an alias, not as the primary title.
+ // Artist (alternate name) - Song is a common Korean lyric-video title format.
+ // Keep the parenthetical text as an artist alias, never as a possible song title.
+ const identityTitleSource=originalTitle.replace(/\s*\[[^\]]*\]\s*$/,"").trim();
+ const leadingParentheticalArtist=identityTitleSource.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
  const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g)]
   .map(match=>String(match[1]||"").trim())
   .filter(value=>value
+   &&!(leadingParentheticalArtist&&value===String(leadingParentheticalArtist[2]||"").trim())
    &&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value)
    &&!/^(?:prod\.?|produced by|feat\.?|ft\.?|featuring)\b/i.test(value)
    &&!/쇼미더머니|\b(?:episode|ep\.?|official video)\b/i.test(value));
  const raw=cleanVideoTitle(originalTitle);
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
- // Parenthetical artist alias before the dash: Artist(English Name) - Song Title.
- const identityTitleSource=originalTitle.replace(/\s*\[[^\]]*\]\s*$/,"").trim();
- const leadingParentheticalArtist=identityTitleSource.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
  const channelRaw=String(video?.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
  const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
- let title=raw,artist="",artistKnown=false,queries=[];
+ let title=raw,artist="",artistKnown=false,queries=[],artistAliases=[];
  if(parts.length>1&&!generic){
   const first=parts[0],rest=parts.slice(1).join(" - ");
   if(trackSimilarity(channel,first)>=0.6){title=rest;artist=channel;artistKnown=true;}
@@ -78,12 +78,20 @@ function getLyricsIdentity(video,identifiedTrack=null){
   const songTitle=String(leadingParentheticalArtist[3]||"").trim();
   if(candidateArtist&&parentheticalName&&songTitle){
    title=songTitle;
-   artist="";
-   artistKnown=false;
-   queries=[{title:songTitle,artist:""}];
+   artist=candidateArtist;
+   artistAliases=[parentheticalName];
+   artistKnown=true;
+   // Search the song under both Korean and alternate-language artist names.
+   queries=[
+    {title:songTitle,artist:candidateArtist},
+    {title:songTitle,artist:parentheticalName},
+    {title:songTitle,artist:""}
+   ];
   }
  }
- const uniqueTitles=[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
+ const uniqueTitles=leadingParentheticalArtist&&artistKnown
+  ?[title]
+  :[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
  const baseQueries=queries.slice();
  const aliasQueries=parentheticalAliases.flatMap(alias=>artistKnown
@@ -99,7 +107,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
   const key=trackText(q.title)+"|"+trackText(q.artist);
   if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:q.title,artist:q.artist||""});
  }
- return {raw,title,artist,artistKnown,isTopic,channel,generic,titles:uniqueTitles,queries:uniqueQueries.slice(0,10)};
+ return {raw,title,artist,artistAliases,artistKnown,isTopic,channel,generic,titles:uniqueTitles,queries:uniqueQueries.slice(0,10)};
 }
 function expectedTrackIdentity(video){
  const identity=getLyricsIdentity(video);
@@ -1041,7 +1049,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  function artistScore(value,extraArtists=[]){
   if(!identity.artistKnown&&!extraArtists.length)return 55;
   const got=normalize(value);
-  const names=[identity.artist,...(identity.isTopic?[channel]:[]),...extraArtists].filter(Boolean).map(normalize);
+  const names=[identity.artist,...(identity.artistAliases||[]),...(identity.isTopic?[channel]:[]),...extraArtists].filter(Boolean).map(normalize);
   if(!got)return 50;
   if(names.some(name=>got===name))return 100;
   if(names.some(name=>got.includes(name)||name.includes(got)))return 75;
