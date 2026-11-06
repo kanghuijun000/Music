@@ -425,7 +425,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v16";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v17";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1188,6 +1188,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  })());
  jobs.push((async()=>{
   const provider="SyncLRC";
+  // Try the exact endpoint first when the video metadata identifies the artist.
   if(identity.artistKnown){
    const variants=identity.queries.filter(item=>item.artist).slice(0,3);
    await Promise.all(variants.map(async variant=>{
@@ -1202,13 +1203,13 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
      const valid=accept(provider,{trackName:data.track||variant.title,artistName:data.artist||variant.artist,
       duration:Number(data.duration)||video.duration,syncedLyrics:timed,plainLyrics:data.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0},[variant.artist],[variant.title]);
-     if(!valid)record(provider,"SYNCLRC_NO_MATCH","검색 응답에 검증 가능한 가사가 없습니다.");
+     if(!valid)record(provider,"SYNCLRC_NO_MATCH","직접 조회 응답에 검증 가능한 가사가 없습니다.");
     }catch(error){if(error?.code!=="CANCELLED"&&error?.status!==429&&error?.code!=="HTTP_404")record(provider,error?.code||"PROVIDER_ERROR",error?.message||"제공처 오류",error?.elapsed||0,error?.status||"");}
    }));
-  }else{
-   // The direct endpoint requires BOTH track and artist. Discover candidates first.
-   // Only accept exact-title results with a close duration, then validate their own artist metadata.
-   const queries=[...new Set(identity.queries.map(item=>item.title).filter(Boolean))].slice(0,2);
+  }
+  // Search fallback also runs for known artists, with a strict artist match in that case.
+  if(!candidates.some(item=>item._source===provider)){
+   const queries=[...new Set(identity.queries.map(item=>item.title).filter(Boolean))].slice(0,4);
    for(const query of queries){
     if(lyricSignal.aborted)break;
     try{
@@ -1221,9 +1222,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      const results=Array.isArray(data?.results)?data.results:[];
      const matches=results.filter(item=>{
       const title=titleScore(item.track||"",[query]);
+      const candidateArtist=String(item.artist||"").trim();
+      const artistMatches=identity.artistKnown?artistScore(candidateArtist,[identity.artist])>=75:Boolean(candidateArtist);
       const duration=Number(item.duration)||0,want=Number(video.duration)||0;
-      const closeDuration=!duration||!want||Math.abs(duration-want)<=Math.max(8,want*0.04);
-      return title>=78&&Boolean(String(item.artist||"").trim())&&closeDuration;
+      const closeDuration=!duration||!want||Math.abs(duration-want)<=Math.max(20,want*0.12);
+      return title>=78&&artistMatches&&closeDuration;
      }).sort((a,b)=>durationScore(b.duration)-durationScore(a.duration));
      for(const item of matches.slice(0,3)){
       const lyrics=item.lyrics||{};
@@ -1231,7 +1234,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
       const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
       const valid=accept(provider,{trackName:item.track,artistName:item.artist,duration:Number(item.duration)||video.duration,
        syncedLyrics:timed,plainLyrics:lyrics.plain||"",ttmlLines:lines,hasWordSync:enhanced.length>0},
-       [item.artist],[query]);
+       identity.artistKnown?[identity.artist]:[item.artist],[query]);
       if(valid)break;
      }
      if(candidates.some(item=>item._source===provider))break;
