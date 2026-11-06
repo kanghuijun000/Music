@@ -76,7 +76,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
   ?[{title:alias,artist},{title:alias,artist:""}]
   :[{title:alias,artist:""}]);
  // Keep primary-title lookups first, then alternate title aliases, then broad fallbacks.
- queries=[...baseQueries.slice(0,2),...aliasQueries,...baseQueries.slice(2),{title,artist:""}];
+ const artistGuesses=baseQueries.filter(item=>item.artist);
+ const titleOnlyQueries=baseQueries.filter(item=>!item.artist);
+ queries=[...artistGuesses,...titleOnlyQueries,...aliasQueries,{title,artist:""}];
  const uniqueQueries=[];
  for(const q of queries){
   if(!q.title)continue;
@@ -1305,7 +1307,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  jobs.push((async()=>{
   const provider="Better Lyrics";
   if(getBetterLyricsCooldown()>Date.now()){record(provider,"COOLDOWN_ACTIVE","이전 429 응답으로 요청 제한 대기 중입니다.");return;}
-  const variants=identity.queries.slice(0,identity.artistKnown?4:3);
+  const variants=identity.queries.slice(0,4);
   // Try the default TTML endpoint too; it can have cached syllable-synced lyrics
   // even when LRCLIB has no entry. Empty album is explicit, not a guessed album.
   const ttmlVariants=identity.queries.filter(item=>item.artist||identity.artistKnown).slice(0,2);
