@@ -39,9 +39,12 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const originalTitle=String(video?.title||"").trim();
  // A parenthesized title alias can be essential for alternate-language song names,
  // e.g. "It's love (사랑인걸) - Mose". Keep it only as an alias, not as the primary title.
- const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g),...originalTitle.matchAll(/\[([^\]]*)\]/g)]
+ const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g)]
   .map(match=>String(match[1]||"").trim())
-  .filter(value=>value&&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value));
+  .filter(value=>value
+   &&!/^(official|lyrics?|가사|audio|video|뮤직비디오|뮤비|live|performance|remaster(?:ed)?|4k|hd)$/i.test(value)
+   &&!/^(?:prod\.?|produced by|feat\.?|ft\.?|featuring)\b/i.test(value)
+   &&!/쇼미더머니|\b(?:episode|ep\.?|official video)\b/i.test(value));
  const raw=cleanVideoTitle(originalTitle);
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channelRaw=String(video?.channelTitle||"").trim();
@@ -68,15 +71,19 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }
  const uniqueTitles=[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
- if(artistKnown)for(const alias of parentheticalAliases)queries.push({title:alias,artist});
- queries.push({title,artist:""});
+ const baseQueries=queries.slice();
+ const aliasQueries=parentheticalAliases.flatMap(alias=>artistKnown
+  ?[{title:alias,artist},{title:alias,artist:""}]
+  :[{title:alias,artist:""}]);
+ // Keep primary-title lookups first, then alternate title aliases, then broad fallbacks.
+ queries=[...baseQueries.slice(0,2),...aliasQueries,...baseQueries.slice(2),{title,artist:""}];
  const uniqueQueries=[];
  for(const q of queries){
   if(!q.title)continue;
   const key=trackText(q.title)+"|"+trackText(q.artist);
   if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:q.title,artist:q.artist||""});
  }
- return {raw,title,artist,artistKnown,isTopic,channel,generic,titles:uniqueTitles,queries:uniqueQueries.slice(0,6)};
+ return {raw,title,artist,artistKnown,isTopic,channel,generic,titles:uniqueTitles,queries:uniqueQueries.slice(0,10)};
 }
 function expectedTrackIdentity(video){
  const identity=getLyricsIdentity(video);
