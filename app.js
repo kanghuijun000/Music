@@ -48,7 +48,8 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const raw=cleanVideoTitle(originalTitle);
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  // Parenthetical artist alias before the dash: Artist(English Name) - Song Title.
- const leadingParentheticalArtist=originalTitle.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
+ const identityTitleSource=originalTitle.replace(/\s*\[[^\]]*\]\s*$/,"").trim();
+ const leadingParentheticalArtist=identityTitleSource.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
  const channelRaw=String(video?.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
  const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
@@ -79,7 +80,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
    title=songTitle;
    artist="";
    artistKnown=false;
-   queries=[{title:songTitle,artist:""},{title:songTitle,artist:parentheticalName},{title:songTitle,artist:candidateArtist}];
+   queries=[{title:songTitle,artist:""}];
   }
  }
  const uniqueTitles=[...new Set([title,...parts,raw,...parentheticalAliases].map(v=>String(v||"").trim()).filter(Boolean))];
