@@ -57,7 +57,11 @@ def request_json(url: str) -> tuple[object | None, dict, float, str | None]:
                 return None, {"http": response.status}, elapsed, "invalid_json"
             return data, {"http": response.status}, elapsed, None
     except urllib.error.HTTPError as exc:
-        return None, {"http": exc.code}, round((time.monotonic() - started) * 1000), f"http_{exc.code}"
+        try:
+            detail = exc.read(500).decode("utf-8", errors="replace").strip()
+        except Exception:
+            detail = ""
+        return {"_http_error_detail": detail}, {"http": exc.code}, round((time.monotonic() - started) * 1000), f"http_{exc.code}"
     except Exception as exc:
         return None, {}, round((time.monotonic() - started) * 1000), type(exc).__name__
 
@@ -108,12 +112,17 @@ def provider_check(provider: str, fixture: dict) -> dict:
         "elapsed_ms": elapsed, "status": "FAIL", "reason": error or ""
     }
     if error:
+        if isinstance(data, dict) and data.get("_http_error_detail"):
+            result["response_detail"] = str(data["_http_error_detail"])[:240]
         return result
 
     candidates = data if isinstance(data, list) else (
-        data.get("results", []) if isinstance(data, dict) and isinstance(data.get("results"), list)
+        data.get("results", data.get("data", [])) if isinstance(data, dict)
+        and isinstance(data.get("results", data.get("data", [])), list)
         else [data] if isinstance(data, dict) else []
     )
+    result["candidate_count"] = len(candidates)
+    result["response_keys"] = sorted(list(data.keys()))[:20] if isinstance(data, dict) else []
     selected = None
     for item in candidates[:10]:
         if not isinstance(item, dict):
@@ -149,7 +158,16 @@ def provider_check(provider: str, fixture: dict) -> dict:
         selected = payload
 
     if not selected:
+        result["status"] = "WARN"
         result["reason"] = "no_strict_title_artist_candidate"
+        result["sample_metadata"] = [
+            {
+                "title": str(x.get("trackName") or x.get("track") or x.get("song") or x.get("title") or "")[:90],
+                "artist": str(x.get("artistName") or x.get("artist") or "")[:70],
+                "duration": x.get("duration")
+            }
+            for x in candidates[:3] if isinstance(x, dict)
+        ]
         return result
 
     # Provider-specific timed lyric fields; never print or persist lyric contents.
@@ -195,6 +213,7 @@ def main() -> int:
         "note": "Server-side API check only. Browser CORS and playback synchronization require a real browser/device.",
         "summary": {
             "passed": sum(x["status"] == "PASS" for x in results),
+            "warnings": sum(x["status"] == "WARN" for x in results),
             "failed": sum(x["status"] == "FAIL" for x in results),
             "browser_cors": "NOT_TESTED",
             "real_playback_sync": "NOT_TESTED"
@@ -207,7 +226,7 @@ def main() -> int:
     for item in results:
         label = item.get("provider") or item.get("name")
         fixture = f' [{item["fixture"]}]' if item.get("fixture") else ""
-        print(f'{item["status"]:4} {item["category"]:8} {label}{fixture} {item.get("reason", "")}')
+        print(f'{item["status"]:4} {item["category"]:8} {label}{fixture} {item.get("reason", "")} {item.get("response_detail", "")}')
     print(json.dumps(report["summary"], ensure_ascii=False))
     return 1 if report["summary"]["failed"] else 0
 
