@@ -2026,6 +2026,30 @@ el.auditCopyButton?.addEventListener("click",async()=>{
  }catch(_){auditSetStatus("복사에 실패했습니다. 브라우저 클립보드 권한을 확인해 주세요.");}
 });
 
+if(new URLSearchParams(location.search).get("qa")==="1"){
+ window.__musicQa={
+  setVideo(video){setPlayer(video);},
+  snapshot(){
+   let playerState=null,playerTime=0;
+   try{if(ytPlayer){playerState=ytPlayer.getPlayerState();playerTime=Number(ytPlayer.getCurrentTime())||0;}}catch(_){}
+   const renderedIndex=Number(lyricState.lastIndex);
+   return {
+    playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,
+    videoId:currentVideoId,
+    lines:(lyricState.lines||[]).map(line=>({time:Number(line.time),text:String(line.text||"")})),
+    plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
+    lyricsLoading:Boolean(lyricState.loading),
+    timingBasis:lyricTimingBasis,lyricOffsetSeconds,
+    track:currentLyricsTrack?{title:currentLyricsTrack.title||currentLyricsTrack.trackName||"",
+      artist:currentLyricsTrack.artist||currentLyricsTrack.artistName||"",
+      source:currentLyricsTrack.source||"",upstreamProvider:currentLyricsTrack.upstreamProvider||""}:null,
+    renderedIndex,renderedText:renderedIndex>=0?String(lyricState.lines[renderedIndex]?.text||""):"",
+    expectedIndex:playerTime>=0?auditExpectedLineIndex(playerTime):-1,
+    lyricsStatus:String(el.lyricsStatus?.textContent||"")
+   };
+  }
+ };
+}
 updateConnectionStatus();if(!apiKey)showMessage("먼저 검색 연결을 설정해 주세요","오른쪽 위 설정에서 YouTube Data API 키를 입력하면 음악 검색을 시작할 수 있어요.","error");
 function registerMusicServiceWorker(){
  if(!("serviceWorker" in navigator)||!/^https?:$/.test(location.protocol))return;
