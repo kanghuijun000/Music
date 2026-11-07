@@ -467,7 +467,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v30";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v31";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1278,7 +1278,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
         const candidateUrl=new URL("https://unison.boidu.dev/lyrics");
         candidateUrl.searchParams.set("v",String(candidate.videoId));
         const candidateResult=await fetchJson(candidateUrl,{},7000,provider+"/후보 영상 조회");
-        if(candidateResult.data?.success&&candidateResult.data?.data?.lyrics){
+        if(candidateResult.data?.success&&candidateResult.data?.data?.lyrics&&
+         String(candidateResult.data.data.videoId||"")===String(candidate.videoId)){
          body=candidateResult.data;
          lookupMode="ranked-search";
          lookupArtist=variant.artist;
