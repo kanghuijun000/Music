@@ -1,6 +1,11 @@
 name: Music YouTube Audio Probe
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/youtube-audio-probe.yml"
+      - "tools/youtube_audio_probe.py"
   workflow_dispatch:
     inputs:
       video_id:
