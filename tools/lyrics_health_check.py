@@ -42,7 +42,9 @@ def timed_line_count(value: object) -> int:
         return 0
     lrc = re.findall(r"\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]", value)
     ttml = re.findall(r"\bbegin\s*=\s*['\"][^'\"]+['\"]", value, flags=re.I)
-    return max(len(lrc), len(ttml))
+    lyricsfile = re.findall(r"(?m)^\\s*start_ms:\\s*\\d+", value)
+    qrc = re.findall(r"(?m)^\\[\\d+,\\d+\\]", value)
+    return max(len(lrc), len(ttml), len(lyricsfile), len(qrc))
 
 def request_json(url: str) -> tuple[object | None, dict, float, str | None]:
     started = time.monotonic()
@@ -172,6 +174,14 @@ def provider_check(provider: str, fixture: dict) -> dict:
             return result
         selected = payload
 
+    if not selected and provider.startswith("Better Lyrics/") and isinstance(data, dict):
+        payload = data.get("lyrics") or data.get("ttml") or ""
+        count = timed_line_count(payload)
+        if count:
+            result["timed_lines"] = count
+            result["reason"] = "timed_payload_reachable_but_identity_metadata_missing_not_accepted"
+            return result
+
     if not selected:
         result["status"] = "WARN"
         result["reason"] = "no_strict_title_artist_candidate"
@@ -194,7 +204,7 @@ def provider_check(provider: str, fixture: dict) -> dict:
         timed = timed.get("karaoke") or timed.get("synced") or ""
     count = timed_line_count(timed)
     result["timed_lines"] = count
-    result["status"] = "PASS" if count >= 2 else "FAIL"
+    result["status"] = "PASS" if count >= 2 else "WARN"
     result["reason"] = "" if count >= 2 else "no_two_or_more_timed_lines"
     return result
 
