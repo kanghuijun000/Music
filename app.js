@@ -1564,7 +1564,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    return timed.map(line=>{
     const words=Array.isArray(line.words)?line.words.map(word=>({
      text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
-    })).filter(word=>word.text&&Number.isFinite(word.start)):[];
+    })).filter(word=>word.text&&Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.end>word.start):[];
     return {time:Number(line.start)/1000,text:String(line.text||""),words};
    }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
   };
@@ -1982,6 +1982,7 @@ el.auditStartButton?.addEventListener("click",()=>{
 });
 el.auditMarkButton?.addEventListener("click",()=>{
  if(!playbackAudit.active||!ytPlayer||!lyricState.lines.length)return;
+ try{if(ytPlayer.getPlayerState()!==YT.PlayerState.PLAYING)return;}catch(_){return;}
  const index=lyricState.lastIndex,line=lyricState.lines[index];if(index<0||!line)return;
  let playerTime=0;try{playerTime=Number(ytPlayer.getCurrentTime())||0;}catch(_){return;}
  const offsetMs=Math.round(((playerTime-lyricOffsetSeconds)-Number(line.time))*1000);
