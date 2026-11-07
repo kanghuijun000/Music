@@ -11,12 +11,8 @@ on:
     types: [created]
   workflow_dispatch:
     inputs:
-      query:
-        description: "Song title and artist (leave empty for a random test)"
-        required: false
-        default: ""
       video_id:
-        description: "Optional exact YouTube video ID"
+        description: "YouTube video ID (optional; empty selects a random test song)"
         required: false
         default: ""
 
@@ -54,37 +50,30 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           COMMENT_BODY: ${{ github.event.comment.body }}
-          INPUT_QUERY: ${{ inputs.query }}
           INPUT_VIDEO_ID: ${{ inputs.video_id }}
         run: |
           python - <<'PY'
-          import os, random, subprocess, sys
+          import os, random, re, subprocess, sys
           pool = [
-              "모세 사랑인걸",
-              "너드커넥션 좋은 밤 좋은 꿈",
-              "너드커넥션 조용히 완전히 영원히",
-              "아이유 밤편지",
-              "잔나비 주저하는 연인들을 위해",
-              "NewJeans Ditto",
-              "The Weeknd Blinding Lights",
-              "Coldplay Yellow",
-              "Ed Sheeran Perfect",
-              "윤하 사건의 지평선",
-              "BTS Dynamite",
+              ("OneRepublic - Counting Stars", "5vilULw-9Gg"),
+              ("Coldplay - Yellow", "yKNxeF4KMsY"),
+              ("NewJeans - Ditto", "pSUydWEqKwE"),
+              ("BTS - Dynamite", "gdZLi9oWNZg"),
           ]
-          query = os.getenv("INPUT_QUERY", "").strip()
           video_id = os.getenv("INPUT_VIDEO_ID", "").strip()
+          label = ""
           if os.getenv("EVENT_NAME") == "issue_comment":
               body = os.getenv("COMMENT_BODY", "").strip()
-              query = body[len("/music-test"):].strip()
-          if not query and not video_id:
-              query = random.choice(pool)
-          command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", "45"]
-          if video_id:
-              command += ["--video-id", video_id]
-          else:
-              command += ["--query", query]
-          print("Starting test:", query or video_id, flush=True)
+              request = body[len("/music-test"):].strip()
+              if request:
+                  match = re.search(r"(?:video=)?([A-Za-z0-9_-]{11})", request)
+                  if not match:
+                      raise SystemExit("Use /music-test for random, or /music-test video=YOUTUBE_ID for a chosen song.")
+                  video_id = match.group(1)
+          if not video_id:
+              label, video_id = random.choice(pool)
+          command = [sys.executable, "tools/youtube_audio_probe.py", "--video-id", video_id, "--seconds", "45"]
+          print("Starting test:", label or video_id, flush=True)
           raise SystemExit(subprocess.call(command))
           PY
 
