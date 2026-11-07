@@ -184,7 +184,7 @@ def main() -> int:
                 page.evaluate("""(videoId) => {
                     const host = document.createElement("div");
                     host.id = "musicQaProbePlayer";
-                    host.style.cssText = "position:fixed;left:-10000px;top:0;width:640px;height:360px";
+                    host.style.cssText = "position:fixed;left:0;top:0;width:640px;height:360px;opacity:0.01;z-index:-1;pointer-events:none";
                     document.body.appendChild(host);
                     window.probe = {state:"loading",error:null,currentTime:0,duration:0,changes:[],apiReady:true};
                     const player = new YT.Player(host.id, {
