@@ -1227,6 +1227,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // Missing duration metadata must not count as a close match.
   const closeDuration=Number(item.duration)>0&&duration>=10;
   const exactVideoSource=(provider==="Unison"||provider==="LiriQo")&&item._sameVideoSource===true;
+  if(exactVideoSource&&!itemArtist){item._rejectCode="VIDEO_SOURCE_ARTIST_MISSING";record(provider,item._rejectCode,"영상 ID가 같더라도 제공처의 실제 가수 정보가 없어 후보를 제외했습니다.");return null;}
   const expectedTitles=[identity.title,...identity.titles,...extraTitles].map(normalize).filter(Boolean);
   const hasShortAmbiguousTitle=expectedTitles.some(value=>value.replace(/\s+/g,"").length<=2);
   const artistNames=[identity.artist,...(identity.artistAliases||[]),...(identity.isTopic?[channel]:[]),...extraArtists].filter(Boolean).map(normalize);
