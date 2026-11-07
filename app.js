@@ -467,7 +467,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v29";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v30";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1249,6 +1249,50 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
       const result=await fetchJson(songUrl,{},8000,provider+"/곡·가수 검색");
       if(result.data?.success&&result.data?.data?.lyrics){body=result.data;lookupMode="song";lookupArtist=variant.artist;break;}
      }catch(error){if(error?.code!=="HTTP_404"&&error?.code!=="CANCELLED")record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");}
+    }
+   }
+   if(!body?.success||!body?.data?.lyrics){
+    const variant=identity.queries.find(item=>item.artist);
+    if(variant){
+     try{
+      const searchUrl=new URL("https://unison.boidu.dev/lyrics/search");
+      searchUrl.searchParams.set("q",variant.title+" "+variant.artist);
+      searchUrl.searchParams.set("limit","10");
+      const searchResult=await fetchJson(searchUrl,{},7000,provider+"/후보 검색");
+      const ranked=(Array.isArray(searchResult.data?.data)?searchResult.data.data:[])
+       .filter(item=>{
+        const score=Number(item.matchScore)||0;
+        const candidateTitle=String(item.song||"");
+        const candidateArtist=String(item.artist||"");
+        const candidateDuration=Number(item.duration)||0;
+        const expectedDuration=Number(video.duration)||0;
+        const durationMatches=!candidateDuration||!expectedDuration||
+         Math.abs(candidateDuration-expectedDuration)<=Math.max(18,expectedDuration*0.12);
+        return Boolean(item.videoId)&&score>=0.92&&
+         titleScore(candidateTitle,[variant.title])>=90&&
+         artistScore(candidateArtist,[variant.artist])>=90&&durationMatches;
+       }).slice(0,3);
+      for(const candidate of ranked){
+       if(lyricSignal.aborted)break;
+       try{
+        const candidateUrl=new URL("https://unison.boidu.dev/lyrics");
+        candidateUrl.searchParams.set("v",String(candidate.videoId));
+        const candidateResult=await fetchJson(candidateUrl,{},7000,provider+"/후보 영상 조회");
+        if(candidateResult.data?.success&&candidateResult.data?.data?.lyrics){
+         body=candidateResult.data;
+         lookupMode="ranked-search";
+         lookupArtist=variant.artist;
+         break;
+        }
+       }catch(error){
+        if(error?.code==="CANCELLED")throw error;
+        if(error?.status!==404)record(provider+"/후보 영상 조회",error?.code||"PROVIDER_ERROR",error?.message||"후보 영상 조회 실패",error?.elapsed||0,error?.status||"");
+       }
+      }
+     }catch(error){
+      if(error?.code==="CANCELLED")throw error;
+      if(error?.status!==404)record(provider+"/후보 검색",error?.code||"PROVIDER_ERROR",error?.message||"후보 검색 실패",error?.elapsed||0,error?.status||"");
+     }
     }
    }
    if(!body?.success||!body?.data?.lyrics){
