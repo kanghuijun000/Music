@@ -1530,6 +1530,95 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
  })());
  jobs.push((async()=>{
+  const provider="Karalyr";
+  const variants=identity.queries.filter(item=>item.artist).slice(0,3);
+  for(const variant of variants){
+   if(lyricSignal.aborted)break;
+   try{
+    const url=new URL("https://karalyr.com/api/get");
+    url.searchParams.set("track_name",variant.title);
+    url.searchParams.set("artist_name",variant.artist);
+    // Do not send the YouTube video's full duration: lyric videos may contain intros/outros.
+    // The returned track duration is checked by the shared validator instead.
+    const {data}=await fetchJson(url,{},8000,provider);
+    if(data?.instrumental){record(provider,"INSTRUMENTAL","해당 곡은 연주곡으로 표시되어 있습니다.");continue;}
+    const timed=String(data?.syncedLyrics||"");
+    const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
+    const valid=accept(provider,{trackName:data.trackName||data.name||"",artistName:data.artistName||"",
+     duration:Number(data.duration)||0,syncedLyrics:timed,plainLyrics:"",ttmlLines:lines,
+     hasWordSync:enhanced.length>0,matchConfidence:0},[variant.artist],[variant.title]);
+    if(valid)break;
+    record(provider,"KARALYR_RESULT_REJECTED","응답은 받았지만 곡 정보 또는 싱크 가사 검증을 통과하지 못했습니다.");
+   }catch(error){
+    if(error?.code==="CANCELLED")break;
+    if(error?.status!==404&&error?.status!==429)record(provider,error?.code||"PROVIDER_ERROR",error?.message||"조회 실패",error?.elapsed||0,error?.status||"");
+   }
+   await delay(250);
+  }
+ })());
+ jobs.push((async()=>{
+  const provider="LiriQo";
+  const makeLines=track=>{
+   const timed=Array.isArray(track?.timed)?track.timed:[];
+   return timed.map(line=>{
+    const words=Array.isArray(line.words)?line.words.map(word=>({
+     text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
+    })).filter(word=>word.text&&Number.isFinite(word.start)):[];
+    return {time:Number(line.start)/1000,text:String(line.text||""),words};
+   }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
+  };
+  const tryResult=async(data,queryArtist="")=>{
+   const metadata=data?.metadata||{};
+   const pool=[...(Array.isArray(data?.tracks)?data.tracks:[]),...(data?.primary?[data.primary]:[])];
+   const unique=[];
+   for(const item of pool){
+    if(!item||unique.includes(item))continue;
+    unique.push(item);
+   }
+   const rank={syllable:4,word:3,character:2,line:1,plain:0};
+   unique.sort((a,b)=>(rank[String(b.syncLevel||"").toLowerCase()]||0)-(rank[String(a.syncLevel||"").toLowerCase()]||0));
+   for(const item of unique){
+    const syncLevel=String(item.syncLevel||"").toLowerCase();
+    if(!["syllable","word","character","line"].includes(syncLevel))continue;
+    const lines=makeLines(item);
+    if(lines.length<2)continue;
+    const trackTitle=metadata.title||item.title||"";
+    const trackArtist=metadata.artist||item.artist||"";
+    const durationValue=metadata.duration??item.duration??0;
+    const duration=typeof durationValue==="string"&&durationValue.includes(":")
+     ?durationValue.split(":").reduce((total,part)=>total*60+Number(part),0):Number(durationValue)||0;
+    const valid=accept(provider,{trackName:trackTitle,artistName:trackArtist,duration,
+     ttmlLines:lines,plainLyrics:String(item.plain||""),hasWordSync:lines.some(line=>line.words.length),
+     matchConfidence:0,_liriqoProvider:item.provider||item.upstreamProvider||""},
+     queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
+    if(valid)return true;
+   }
+   return false;
+  };
+  try{
+   const url=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
+   url.searchParams.set("v",video.id);
+   const {data}=await fetchJson(url,{},10000,provider+"/영상 ID");
+   if(data?.error)record(provider,"LIRIQO_NO_RESULT",String(data.error).slice(0,180));
+   else if(await tryResult(data))return;
+  }catch(error){
+   if(error?.code!=="CANCELLED"&&error?.status!==404)record(provider+"/영상 ID",error?.code||"PROVIDER_ERROR",error?.message||"조회 실패",error?.elapsed||0,error?.status||"");
+  }
+  const variant=identity.queries.find(item=>item.artist);
+  if(variant&&!lyricSignal.aborted){
+   try{
+    const url=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
+    url.searchParams.set("title",variant.title);url.searchParams.set("artist",variant.artist);
+    if(video.duration)url.searchParams.set("duration",String(Math.round(Number(video.duration))));
+    const {data}=await fetchJson(url,{},10000,provider+"/곡·가수 검색");
+    if(data?.error)record(provider,"LIRIQO_NO_RESULT",String(data.error).slice(0,180));
+    else if(!await tryResult(data,variant.artist))record(provider,"LIRIQO_RESULT_REJECTED","검색 결과가 곡·가수 또는 싱크 조건을 통과하지 못했습니다.");
+   }catch(error){
+    if(error?.code!=="CANCELLED"&&error?.status!==404)record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");
+   }
+  }
+ })());
+ jobs.push((async()=>{
   const provider="Better Lyrics";
   if(getBetterLyricsCooldown()>Date.now()){record(provider,"COOLDOWN_ACTIVE","이전 429 응답으로 요청 제한 대기 중입니다.");return;}
   const variants=identity.queries.slice(0,6);
