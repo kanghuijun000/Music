@@ -34,6 +34,9 @@ def artist_match(actual: object, expected: str) -> bool:
     a, e = norm(actual), norm(expected)
     return bool(a and e and (a == e or e in a or a in e))
 
+def identity_match(actual_title: object, actual_artist: object, expected_title: str, expected_artist: str) -> bool:
+    return title_match(actual_title, expected_title) and artist_match(actual_artist, expected_artist)
+
 def timed_line_count(value: object) -> int:
     if not isinstance(value, str):
         return 0
@@ -117,7 +120,7 @@ def provider_check(provider: str, fixture: dict) -> dict:
             continue
         actual_title = item.get("trackName") or item.get("track") or item.get("song") or item.get("title") or ""
         actual_artist = item.get("artistName") or item.get("artist") or ""
-        if not title_match(actual_title, title) or not artist_match(actual_artist, artist):
+        if not identity_match(actual_title, actual_artist, title, artist):
             continue
         duration = float(item.get("duration") or 0)
         expected = float(fixture.get("duration") or 0)
@@ -176,12 +179,16 @@ def main() -> int:
                     "status": "FAIL", "reason": type(exc).__name__
                 })
     # Synthetic negative check: unrelated candidate must never pass identity matching.
-    wrong_rejected = not (
-        title_match("다른 노래", "TICK TOCK") and artist_match("다른 가수", "알파")
-    )
+    correct_accepted = identity_match("TICK TOCK", "알파", "TICK TOCK", "알파")
+    wrong_title_rejected = not identity_match("다른 노래", "알파", "TICK TOCK", "알파")
+    wrong_artist_rejected = not identity_match("TICK TOCK", "다른 가수", "TICK TOCK", "알파")
     results.append({
-        "category": "safety", "name": "unrelated song/artist is rejected",
-        "status": "PASS" if wrong_rejected else "FAIL"
+        "category": "safety", "name": "exact song and artist identity accepted",
+        "status": "PASS" if correct_accepted else "FAIL"
+    })
+    results.append({
+        "category": "safety", "name": "wrong title and wrong artist are rejected",
+        "status": "PASS" if wrong_title_rejected and wrong_artist_rejected else "FAIL"
     })
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
