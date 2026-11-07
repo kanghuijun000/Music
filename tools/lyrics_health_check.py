@@ -105,6 +105,10 @@ def provider_check(provider: str, fixture: dict) -> dict:
         url = "https://api.synclrc.dev/search?" + q({"q": title, "limit": "10"})
     elif provider == "Unison":
         url = "https://unison.boidu.dev/lyrics/search?" + q({"q": f"{title} {artist}", "limit": "10"})
+    elif provider == "Karalyr":
+        url = "https://karalyr.com/api/get?" + q({"track_name": title, "artist_name": artist})
+    elif provider == "LiriQo":
+        url = "https://api.liriqo-alfarrizi.my.id/v1/lyrics?" + q({"title": title, "artist": artist})
     else:
         endpoint = {
             "Better Lyrics/TTML": "/getLyrics",
@@ -127,7 +131,20 @@ def provider_check(provider: str, fixture: dict) -> dict:
             result["response_detail"] = str(data["_http_error_detail"])[:240]
         return result
 
-    if isinstance(data, list):
+    if provider == "LiriQo":
+        metadata = data.get("metadata", {}) if isinstance(data, dict) else {}
+        candidates = []
+        for item in (data.get("tracks", []) if isinstance(data, dict) else []):
+            if isinstance(item, dict):
+                candidates.append({**item, "trackName": metadata.get("title") or item.get("title") or "",
+                                   "artistName": metadata.get("artist") or item.get("artist") or "",
+                                   "duration": metadata.get("duration") or item.get("duration") or 0})
+        if not candidates and isinstance(data, dict) and isinstance(data.get("primary"), dict):
+            item = data["primary"]
+            candidates = [{**item, "trackName": metadata.get("title") or item.get("title") or "",
+                           "artistName": metadata.get("artist") or item.get("artist") or "",
+                           "duration": metadata.get("duration") or item.get("duration") or 0}]
+    elif isinstance(data, list):
         candidates = data
     elif isinstance(data, dict) and isinstance(data.get("results"), list):
         candidates = data["results"]
@@ -170,16 +187,19 @@ def provider_check(provider: str, fixture: dict) -> dict:
             return result
         payload = lyric_data.get("data") if isinstance(lyric_data.get("data"), dict) else lyric_data
         if str(payload.get("videoId") or "") != video_id:
-            result["reason"] = "returned_video_id_mismatch"
-            return result
-        selected = payload
-
-    if not selected and provider.startswith("Better Lyrics/") and isinstance(data, dict):
-        payload = data.get("lyrics") or data.get("ttml") or ""
-        count = timed_line_count(payload)
-        if count:
-            result["timed_lines"] = count
-            result["reason"] = "timed_payload_reachable_but_identity_metadata_missing_not_accepted"
+            result["reason"] = "re    if provider == "LRCLIB" or provider == "Karalyr":
+        timed = selected.get("syncedLyrics") or selected.get("lyricsfile") or ""
+    elif provider == "LiriQo":
+        timed = selected.get("timed") or []
+    elif provider == "SyncLRC":
+        lyric_obj = selected.get("lyrics") if isinstance(selected.get("lyrics"), dict) else selected
+        timed = lyric_obj.get("karaoke") or lyric_obj.get("synced") or lyric_obj.get("lyrics") or ""
+    else:
+        timed = selected.get("lyrics") or selected.get("ttml") or selected.get("syncedLyrics") or ""
+    if isinstance(timed, dict):
+        timed = timed.get("karaoke") or timed.get("synced") or ""
+    count = timed_line_count(timed)
+hable_but_identity_metadata_missing_not_accepted"
             return result
 
     if not selected:
@@ -212,7 +232,7 @@ def main() -> int:
     results = check_static()
     # Deliberately test separate fixtures to reveal provider coverage, not just one lucky hit.
     for fixture in FIXTURES:
-        for provider in ("LRCLIB", "SyncLRC", "Unison", "Better Lyrics/TTML", "Better Lyrics/Kugou", "Better Lyrics/QQ"):
+        for provider in ("LRCLIB", "SyncLRC", "Unison", "Karalyr", "LiriQo", "Better Lyrics/TTML", "Better Lyrics/Kugou", "Better Lyrics/QQ"):
             try:
                 results.append(provider_check(provider, fixture))
             except Exception as exc:
