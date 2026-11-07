@@ -459,7 +459,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v20";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v21";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1099,15 +1099,17 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // but only together with a close duration and a strong title match.
   const closeDuration=duration>=22;
   const strongArtistMatch=Boolean(itemArtist)&&(identity.artistKnown||extraArtists.length>0)&&singer>=75;
-  const providerIdentityEvidence=Boolean(itemArtist)&&closeDuration&&title>=78;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
-  const titleThreshold=(strongArtistMatch&&closeDuration)||providerIdentityEvidence?78:90;
+  const titleThreshold=strongArtistMatch&&closeDuration?78:90;
   if(title<titleThreshold){item._rejectCode="MATCH_TITLE_MISMATCH";record(provider,item._rejectCode,"제목 일치도 부족 ("+Math.round(title)+", 기준 "+titleThreshold+")");return null;}
-  const verifiedArtistContext=identity.artistKnown||extraArtists.length>0||providerIdentityEvidence;
-  if(!verifiedArtistContext&&!exactVideoSource){
-   item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"곡의 가수 정보와 길이를 함께 확인할 수 없어 후보를 제외했습니다.");return null;
+  // A candidate's own artist name and a similar duration are not independent proof
+  // that it belongs to this video. Require artist context from the video/query,
+  // except when Unison explicitly returns lyrics for this exact video ID.
+  const verifiedArtistContext=identity.artistKnown||extraArtists.length>0||exactVideoSource;
+  if(!verifiedArtistContext){
+   item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"영상 또는 검색어에서 가수를 확인할 수 없어 후보를 제외했습니다.");return null;
   }
-  if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<65)){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
+  if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
