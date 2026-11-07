@@ -1468,7 +1468,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
       const enhanced=parseEnhancedLrc(timed),lines=enhanced.length?enhanced:parseLrc(timed);
       const valid=accept(provider,{trackName:item.track,artistName:item.artist,duration:Number(item.duration)||0,
        syncedLyrics:timed,plainLyrics:lyrics.plain||extractPlainText(timed),ttmlLines:lines,hasWordSync:enhanced.length>0},
-       identity.artistKnown?[identity.artist]:[item.artist],[query]);
+       identity.artistKnown?[identity.artist]:(identity.queries.find(entry=>entry.artist)?.artist?[identity.queries.find(entry=>entry.artist).artist]:[]),[query]);
       if(valid)break;
      }
      if(candidates.some(item=>item._source===provider))break;
