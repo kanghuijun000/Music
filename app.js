@@ -467,7 +467,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v27";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v28";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -1139,7 +1139,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const itemArtist=candidateArtist.trim();
   // Candidate artist metadata can support a match when the video identity is unknown,
   // but only together with a close duration and a strong title match.
-  const closeDuration=duration>=22;
+  // A verified provider duration may differ from the video by up to 18s (intro/outro/edit).\n  // Missing duration metadata must not count as a close match.\n  const closeDuration=Number(item.duration)>0&&duration>=10;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
   const expectedTitles=[identity.title,...identity.titles,...extraTitles].map(normalize).filter(Boolean);
   const hasShortAmbiguousTitle=expectedTitles.some(value=>value.replace(/\s+/g,"").length<=2);
