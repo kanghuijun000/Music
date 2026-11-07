@@ -1,4 +1,4 @@
-name: Music YouTube Audio Probe
+name: Music YouTube Audio and Lyrics Verification
 
 on:
   push:
@@ -6,28 +6,33 @@ on:
     paths:
       - ".github/workflows/youtube-audio-probe.yml"
       - "tools/youtube_audio_probe.py"
+      - "tools/lyric_audio_verify.py"
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
+      query:
+        description: "Song title and artist (leave empty for a random test)"
+        required: false
+        default: ""
       video_id:
-        description: "YouTube video ID (11 characters)"
-        required: true
-        default: "5vilULw-9Gg"
-      seconds:
-        description: "Capture duration (15–90 seconds)"
-        required: true
-        default: "35"
+        description: "Optional exact YouTube video ID"
+        required: false
+        default: ""
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: music-youtube-audio-probe
   cancel-in-progress: false
 
 jobs:
-  audio-probe:
+  audio-and-lyrics-verification:
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request == null && github.event.comment.user.login == github.repository_owner && startsWith(github.event.comment.body, '/music-test'))
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -37,31 +42,57 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install browser and audio tools
+      - name: Install browser, audio capture, and transcription tools
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils
           python -m pip install --upgrade pip
-          python -m pip install playwright
+          python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
 
-      - name: Play official YouTube embed and inspect real audio output
-        id: probe
-        continue-on-error: true
+      - name: Run requested or random song test
         env:
-          YOUTUBE_TEST_VIDEO_ID: ${{ inputs.video_id || '5vilULw-9Gg' }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          INPUT_QUERY: ${{ inputs.query }}
+          INPUT_VIDEO_ID: ${{ inputs.video_id }}
         run: |
-          python tools/youtube_audio_probe.py --video-id "$YOUTUBE_TEST_VIDEO_ID" --seconds "${{ inputs.seconds || '35' }}"
+          python - <<'PY'
+          import os, random, subprocess, sys
+          pool = [
+              "모세 사랑인걸",
+              "너드커넥션 좋은 밤 좋은 꿈",
+              "너드커넥션 조용히 완전히 영원히",
+              "아이유 밤편지",
+              "잔나비 주저하는 연인들을 위해",
+              "NewJeans Ditto",
+              "The Weeknd Blinding Lights",
+              "Coldplay Yellow",
+              "Ed Sheeran Perfect",
+              "윤하 사건의 지평선",
+              "BTS Dynamite",
+          ]
+          query = os.getenv("INPUT_QUERY", "").strip()
+          video_id = os.getenv("INPUT_VIDEO_ID", "").strip()
+          if os.getenv("EVENT_NAME") == "issue_comment":
+              body = os.getenv("COMMENT_BODY", "").strip()
+              query = body[len("/music-test"):].strip()
+          if not query and not video_id:
+              query = random.choice(pool)
+          command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", "45"]
+          if video_id:
+              command += ["--video-id", video_id]
+          else:
+              command += ["--query", query]
+          print("Starting test:", query or video_id, flush=True)
+          raise SystemExit(subprocess.call(command))
+          PY
 
-      - name: Upload numeric diagnostic report only
+      - name: Upload verification report (no audio retained)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: music-youtube-audio-probe
+          name: music-audio-lyrics-verification
           path: youtube-audio-probe-report.json
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Fail if playback audio could not be verified
-        if: steps.probe.outcome == 'failure'
-        run: exit 1
