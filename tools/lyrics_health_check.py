@@ -96,7 +96,7 @@ def check_static() -> list[dict]:
             not bool(re.search(r"^\s*//.*\\\\n.*const closeDuration=", app, re.M)),
         "synced-only candidate gate exists": "_synced" in app and "ttmlLines.length>=2" in app,
         "on-device playback audit is wired": "recordPlaybackAuditRender(index,current)" in app and "auditStartButton" in app,
-        "timed lyric renderer wiring is present": "active-lyric" in app and "lyricState.lines" in app,
+        "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
