@@ -97,7 +97,8 @@ def provider_check(provider: str, fixture: dict) -> dict:
     if provider == "LRCLIB":
         url = "https://lrclib.net/api/search?" + q({"track_name": title, "artist_name": artist})
     elif provider == "SyncLRC":
-        url = "https://api.synclrc.dev/search?" + q({"q": f"{title} {artist}", "limit": "10"})
+        # Match the app's actual search request: title only; identity is checked on each result.
+        url = "https://api.synclrc.dev/search?" + q({"q": title, "limit": "10"})
     elif provider == "Unison":
         url = "https://unison.boidu.dev/lyrics/search?" + q({"q": f"{title} {artist}", "limit": "10"})
     else:
@@ -116,11 +117,17 @@ def provider_check(provider: str, fixture: dict) -> dict:
             result["response_detail"] = str(data["_http_error_detail"])[:240]
         return result
 
-    candidates = data if isinstance(data, list) else (
-        data.get("results", data.get("data", [])) if isinstance(data, dict)
-        and isinstance(data.get("results", data.get("data", [])), list)
-        else [data] if isinstance(data, dict) else []
-    )
+    if isinstance(data, list):
+        candidates = data
+    elif isinstance(data, dict) and isinstance(data.get("results"), list):
+        candidates = data["results"]
+    elif isinstance(data, dict) and isinstance(data.get("data"), list):
+        candidates = data["data"]
+    elif isinstance(data, dict) and isinstance(data.get("data"), dict):
+        nested = data["data"]
+        candidates = nested.get("results", []) if isinstance(nested.get("results"), list) else []
+    else:
+        candidates = [data] if isinstance(data, dict) else []
     result["candidate_count"] = len(candidates)
     result["response_keys"] = sorted(list(data.keys()))[:20] if isinstance(data, dict) else []
     selected = None
