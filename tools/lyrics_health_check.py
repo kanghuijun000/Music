@@ -38,6 +38,9 @@ def identity_match(actual_title: object, actual_artist: object, expected_title: 
     return title_match(actual_title, expected_title) and artist_match(actual_artist, expected_artist)
 
 def timed_line_count(value: object) -> int:
+    if isinstance(value, list):
+        return sum(1 for line in value if isinstance(line, dict) and str(line.get("text") or "").strip()
+                   and isinstance(line.get("start"), (int, float)))
     if not isinstance(value, str):
         return 0
     lrc = re.findall(r"\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]", value)
@@ -48,7 +51,7 @@ def timed_line_count(value: object) -> int:
 
 def request_json(url: str) -> tuple[object | None, dict, float, str | None]:
     started = time.monotonic()
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "X-User-Agent": USER_AGENT, "Origin": "https://kanghuijun000.github.io", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
             raw = response.read(2_000_000)
@@ -56,14 +59,14 @@ def request_json(url: str) -> tuple[object | None, dict, float, str | None]:
             try:
                 data = json.loads(raw.decode("utf-8-sig"))
             except Exception:
-                return None, {"http": response.status}, elapsed, "invalid_json"
-            return data, {"http": response.status}, elapsed, None
+                return None, {"http": response.status, "cors": response.headers.get("Access-Control-Allow-Origin")}, elapsed, "invalid_json"
+            return data, {"http": response.status, "cors": response.headers.get("Access-Control-Allow-Origin")}, elapsed, None
     except urllib.error.HTTPError as exc:
         try:
             detail = exc.read(500).decode("utf-8", errors="replace").strip()
         except Exception:
             detail = ""
-        return {"_http_error_detail": detail}, {"http": exc.code}, round((time.monotonic() - started) * 1000), f"http_{exc.code}"
+        return {"_http_error_detail": detail}, {"http": exc.code, "cors": exc.headers.get("Access-Control-Allow-Origin") if exc.headers else None}, round((time.monotonic() - started) * 1000), f"http_{exc.code}"
     except Exception as exc:
         return None, {}, round((time.monotonic() - started) * 1000), type(exc).__name__
 
@@ -124,7 +127,7 @@ def provider_check(provider: str, fixture: dict) -> dict:
     result = {
         "category": "provider", "provider": provider,
         "fixture": f'{artist} - {title}', "http": meta.get("http"),
-        "elapsed_ms": elapsed, "status": "WARN", "reason": error or ""
+        "elapsed_ms": elapsed, "status": "WARN", "reason": error or "", "cors_allow_origin": meta.get("cors")
     }
     if error:
         if isinstance(data, dict) and data.get("_http_error_detail"):
