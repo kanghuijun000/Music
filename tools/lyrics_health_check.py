@@ -45,8 +45,8 @@ def timed_line_count(value: object) -> int:
         return 0
     lrc = re.findall(r"\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]", value)
     ttml = re.findall(r"\bbegin\s*=\s*['\"][^'\"]+['\"]", value, flags=re.I)
-    lyricsfile = re.findall(r"(?m)^\\s*start_ms:\\s*\\d+", value)
-    qrc = re.findall(r"(?m)^\\[\\d+,\\d+\\]", value)
+    lyricsfile = re.findall(r"(?m)^\s*start_ms:\s*\d+", value)
+    qrc = re.findall(r"(?m)^\[\d+,\d+\]", value)
     return max(len(lrc), len(ttml), len(lyricsfile), len(qrc))
 
 def request_json(url: str) -> tuple[object | None, dict, float, str | None]:
@@ -208,6 +208,12 @@ def provider_check(provider: str, fixture: dict) -> dict:
         ]
         return result
 
+    result["matched_title"] = str(selected.get("trackName") or selected.get("track") or selected.get("song") or selected.get("title") or "")[:100]
+    result["matched_artist"] = str(selected.get("artistName") or selected.get("artist") or "")[:100]
+    result["matched_duration"] = selected.get("duration")
+    result["sync_level"] = selected.get("syncLevel")
+    result["upstream_provider"] = selected.get("upstreamProvider") or selected.get("provider")
+    result["match_score"] = data.get("matchScore") if isinstance(data, dict) else None
     if provider == "LRCLIB" or provider == "Karalyr":
         timed = selected.get("syncedLyrics") or selected.get("lyricsfile") or ""
     elif provider == "LiriQo":
