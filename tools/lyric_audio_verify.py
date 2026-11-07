@@ -73,7 +73,7 @@ def verify(audio_path,video_id):
             return report
         from faster_whisper import WhisperModel
         model=WhisperModel("small",device="cpu",compute_type="int8")
-        segments,info=model.transcribe(str(audio_path),language="ko",beam_size=5,
+        segments,info=model.transcribe(str(audio_path),language=None,beam_size=5,
                                       vad_filter=True,word_timestamps=False)
         heard=[]
         for seg in segments:
@@ -81,9 +81,9 @@ def verify(audio_path,video_id):
             if txt: heard.append((float(seg.start),float(seg.end),txt))
         report["asr_language"]=info.language
         report["asr_segments"]=len(heard)
-        report["transcription_verified"]=bool(heard and info.language=="ko")
+        report["transcription_verified"]=bool(heard and info.language in ("ko","en","ja","zh"))
         if not heard:
-            report["reason"]="ASR did not detect usable Korean vocal text"
+            report["reason"]="ASR did not detect usable vocal text"
             return report
         # Estimate a single lyric/video offset. Match lyric lines against nearby ASR windows.
         best=None
