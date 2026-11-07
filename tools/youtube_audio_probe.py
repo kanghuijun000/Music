@@ -171,7 +171,15 @@ def main() -> int:
                 "-c:a", "pcm_s16le", str(audio_path),
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
-            html = make_page(args.video_id)
+            from lyric_audio_verify import identify, verify as verify_lyrics
+            video_title, expected_title, expected_artist, channel = identify(args.video_id)
+            app_video = {
+                "id": args.video_id,
+                "title": video_title,
+                "channelTitle": channel,
+                "duration": 0,
+                "thumbnail": f"https://i.ytimg.com/vi/{args.video_id}/hqdefault.jpg",
+            }
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(
                     headless=True,
@@ -180,35 +188,59 @@ def main() -> int:
                     env={**os.environ, "PULSE_SINK": "music_probe"},
                 )
                 page = browser.new_page()
-                # Serve a minimal probe page at the real app origin. This gives YouTube
-                # a valid HTTP Referer without loading the app's own player a second time.
-                page.route(
-                    "https://kanghuijun000.github.io/Music/qa-probe.html",
-                    lambda route: route.fulfill(
-                        status=200, content_type="text/html; charset=utf-8", body=html
-                    ),
-                )
-                page.goto("https://kanghuijun000.github.io/Music/qa-probe.html",
+                browser_errors = []
+                page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
+                page.goto("https://kanghuijun000.github.io/Music/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_function(
+                    "window.__musicQa && window.__musicQa.snapshot().playerReady",
+                    timeout=60000,
+                )
+                # Start capture before selecting the video so the recording begins at video time zero.
+                ffmpeg = subprocess.Popen([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "pulse", "-i", "music_probe.monitor",
+                    "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
+                    "-c:a", "pcm_s16le", str(audio_path),
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                page.evaluate("(video) => window.__musicQa.setVideo(video)", app_video)
                 deadline = time.monotonic() + args.seconds
                 last_time = 0.0
                 playing_seen = False
+                state_changes = []
+                renderer_samples = 0
+                renderer_mismatches = 0
+                last_state = None
                 while time.monotonic() < deadline:
-                    state = page.evaluate("window.probe || null")
-                    if state:
-                        report["player_state"] = state.get("state")
-                        report["player_error"] = state.get("error")
-                        report["reported_duration_seconds"] = round(float(state.get("duration") or 0), 2)
-                        current = float(state.get("currentTime") or 0)
-                        last_time = max(last_time, current)
-                        if state.get("state") == "playing":
-                            playing_seen = True
-                        if state.get("state") == "error":
-                            break
-                    time.sleep(0.5)
+                    snap = page.evaluate("window.__musicQa.snapshot()")
+                    state = snap.get("playerState")
+                    current = float(snap.get("playerTime") or 0)
+                    last_time = max(last_time, current)
+                    if state == 1:
+                        playing_seen = True
+                    if state != last_state:
+                        state_changes.append({"state": state, "playerTime": round(current, 2)})
+                        last_state = state
+                    if state == 1 and int(snap.get("expectedIndex", -1)) >= 0:
+                        renderer_samples += 1
+                        if int(snap.get("renderedIndex", -1)) != int(snap.get("expectedIndex", -1)):
+                            renderer_mismatches += 1
+                    time.sleep(0.2)
+                app_snapshot = page.evaluate("window.__musicQa.snapshot()")
                 report["player_playing_seen"] = playing_seen
                 report["player_time_advanced_seconds"] = round(last_time, 2)
-                report["player_state_changes"] = page.evaluate("window.probe?.changes || []")
+                report["player_state_changes"] = state_changes
+                report["browser_errors"] = browser_errors[:8]
+                report["app_renderer"] = {
+                    "timed_line_count": len(app_snapshot.get("lines") or []),
+                    "plain_lyrics_present": bool(app_snapshot.get("plainLyricsPresent")),
+                    "timing_basis": app_snapshot.get("timingBasis"),
+                    "lyric_source": (app_snapshot.get("track") or {}).get("source"),
+                    "upstream_provider": (app_snapshot.get("track") or {}).get("upstreamProvider"),
+                    "sample_count": renderer_samples,
+                    "mismatch_count": renderer_mismatches,
+                    "mismatch_ratio": round(renderer_mismatches / renderer_samples, 3) if renderer_samples else None,
+                }
                 browser.close()
 
             if ffmpeg:
@@ -218,15 +250,17 @@ def main() -> int:
                     ffmpeg.terminate()
                     ffmpeg.wait(timeout=5)
             report["audio"] = inspect_audio(audio_path)
-            from lyric_audio_verify import verify as verify_lyrics
-            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id)
-            report["lyric_content_verified"] = bool(report["lyric_verification"].get("identity_verified"))
+            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot)
+            report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
             report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
+            renderer = report.get("app_renderer") or {}
+            renderer_ok = bool(renderer.get("sample_count", 0) >= 5 and (renderer.get("mismatch_ratio") or 0) <= 0.05)
             report["probe_passed"] = bool(
                 report["player_playing_seen"]
                 and report["player_time_advanced_seconds"] >= 5
                 and report["audio"].get("audio_detected")
                 and report["lyric_verification"].get("overall") == "PASS"
+                and renderer_ok
             )
     except Exception as exc:
         report["probe_passed"] = False
