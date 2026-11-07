@@ -328,7 +328,6 @@ function selectIdentifiedTrack(tracks,video){
  return {title:best.title,artist:best.artist,duration:best.duration,confidence:best.confidence,timestamp:best.timestamp,acoustidId:String(best.track?.acoustidId||"")};
 }
 async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent){
- try{await initialLyricsPromise;}catch(_){}
  if(!isCurrent()||currentVideoId!==video.id)return false;
  const identified=selectIdentifiedTrack(tracks,video);
  if(!identified)return false;
@@ -376,7 +375,6 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
  const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
  const finishWithTracks=async tracks=>{
-  try{await initialLyricsPromise;}catch(_){}
   if(!isCurrent())return;
   const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
   if(!isCurrent())return;
@@ -1049,6 +1047,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const lyricSignal=requestController.signal;
  const diagnostics=[];
  const candidates=[];
+ let notifyFirstVerifiedCandidate;
+ let firstVerifiedCandidateNotified=false;
+ const firstVerifiedCandidate=new Promise(resolve=>{notifyFirstVerifiedCandidate=resolve;});
  const startedAt=Date.now();
  const identity=getLyricsIdentity(video,identifiedTrack);
  const track=identity.title;
@@ -1227,7 +1228,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // Missing duration metadata must not count as a close match.
   const closeDuration=Number(item.duration)>0&&duration>=10;
   const exactVideoSource=(provider==="Unison"||provider==="LiriQo")&&item._sameVideoSource===true;
-  if(exactVideoSource&&!itemArtist){item._rejectCode="VIDEO_SOURCE_ARTIST_MISSING";record(provider,item._rejectCode,"영상 ID가 같더라도 제공처의 실제 가수 정보가 없어 후보를 제외했습니다.");return null;}
+  const exactVideoIdentityWithoutArtist=exactVideoSource&&!itemArtist&&title===100&&closeDuration;
   const expectedTitles=[identity.title,...identity.titles,...extraTitles].map(normalize).filter(Boolean);
   const hasShortAmbiguousTitle=expectedTitles.some(value=>value.replace(/\s+/g,"").length<=2);
   const artistNames=[identity.artist,...(identity.artistAliases||[]),...(identity.isTopic?[channel]:[]),...extraArtists].filter(Boolean).map(normalize);
@@ -1247,7 +1248,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if(!verifiedArtistContext){
     item._rejectCode="MATCH_ARTIST_UNVERIFIED";record(provider,item._rejectCode,"영상 또는 검색어에서 가수를 확인할 수 없어 후보를 제외했습니다.");return null;
    }
-   if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
+   if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)&&!exactVideoIdentityWithoutArtist){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   }
   const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
@@ -1313,8 +1314,15 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }finally{clearTimeout(timer);lyricSignal.removeEventListener("abort",abortFromParent);}
  }
  function accept(provider,item,extraArtists=[],extraTitles=[]){
+  if(requestId!==lyricLoadToken||lyricSignal.aborted)return null;
   const valid=validate(item,extraArtists,extraTitles,provider);
-  if(valid){valid._source=provider;candidates.push(valid);}
+  if(valid){
+   valid._source=provider;candidates.push(valid);
+   if(valid._synced&&Number(valid._score)>=220&&!firstVerifiedCandidateNotified){
+    firstVerifiedCandidateNotified=true;
+    notifyFirstVerifiedCandidate(valid);
+   }
+  }
   return valid;
  }
  const jobs=[];
@@ -1685,10 +1693,19 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  })());
  const allJobs=Promise.allSettled(jobs);
  let searchDeadlineTimer;
- const deadline=new Promise(resolve=>{searchDeadlineTimer=setTimeout(()=>resolve(false),13000);});
- const jobsCompleted=await Promise.race([allJobs.then(()=>true),deadline]);
+ const deadline=new Promise(resolve=>{searchDeadlineTimer=setTimeout(()=>resolve("deadline"),13000);});
+ const outcome=await Promise.race([
+  allJobs.then(()=>"complete"),
+  firstVerifiedCandidate.then(()=>"candidate"),
+  deadline
+ ]);
  clearTimeout(searchDeadlineTimer);
- if(!jobsCompleted){
+ if(outcome==="candidate"){
+  // Give other fast providers a short chance to return a stronger verified match.
+  await delay(450);
+  if(requestId!==lyricLoadToken)return;
+  requestController.abort(Object.assign(new Error("검증된 가사를 확보해 나머지 검색을 종료합니다."),{code:"CANCELLED"}));
+ }else if(outcome==="deadline"){
   record("전체 검색","SEARCH_DEADLINE","13초 제한에 도달해 남은 제공처 요청을 취소합니다.");
   requestController.abort(Object.assign(new Error("가사 검색 제한 시간 초과"),{code:"CANCELLED"}));
   await allJobs;
