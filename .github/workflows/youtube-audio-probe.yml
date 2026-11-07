@@ -7,6 +7,9 @@ on:
       - ".github/workflows/youtube-audio-probe.yml"
       - "tools/youtube_audio_probe.py"
       - "tools/lyric_audio_verify.py"
+      - "app.js"
+      - "index.html"
+      - "sw.js"
   issue_comment:
     types: [created]
   workflow_dispatch:
