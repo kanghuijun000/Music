@@ -164,12 +164,6 @@ def main() -> int:
         start_audio_sink()
         with tempfile.TemporaryDirectory(prefix="music-audio-probe-") as temp:
             audio_path = Path(temp) / "probe.wav"
-            ffmpeg = subprocess.Popen([
-                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "pulse", "-i", "music_probe.monitor",
-                "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
-                "-c:a", "pcm_s16le", str(audio_path),
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
             from lyric_audio_verify import identify, verify as verify_lyrics
             video_title, expected_title, expected_artist, channel = identify(args.video_id)
@@ -182,14 +176,22 @@ def main() -> int:
             }
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(
-                    headless=True,
+                    headless=False,
                     args=["--no-sandbox", "--disable-dev-shm-usage",
-                          "--autoplay-policy=no-user-gesture-required"],
+                          "--autoplay-policy=no-user-gesture-required",
+                          "--disable-blink-features=AutomationControlled"],
                     env={**os.environ, "PULSE_SINK": "music_probe"},
                 )
-                page = browser.new_page()
+                page = browser.new_page(
+                    viewport={"width": 1365, "height": 900},
+                    user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                )
                 browser_errors = []
+                network_errors = []
                 page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
+                page.on("requestfailed", lambda request: network_errors.append({
+                    "url": request.url[:220], "failure": str(request.failure or "")[:180]
+                }) if "youtube" in request.url else None)
                 page.goto("https://kanghuijun000.github.io/Music/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_function(
@@ -231,6 +233,8 @@ def main() -> int:
                 report["player_time_advanced_seconds"] = round(last_time, 2)
                 report["player_state_changes"] = state_changes
                 report["browser_errors"] = browser_errors[:8]
+                report["youtube_network_errors"] = network_errors[:12]
+                report["youtube_player_error_code"] = app_snapshot.get("playerError")
                 report["app_renderer"] = {
                     "timed_line_count": len(app_snapshot.get("lines") or []),
                     "plain_lyrics_present": bool(app_snapshot.get("plainLyricsPresent")),
