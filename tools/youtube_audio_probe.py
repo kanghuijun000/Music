@@ -20,6 +20,7 @@ import tempfile
 import threading
 import time
 import wave
+import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -128,7 +129,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--video-id", default=os.getenv("YOUTUBE_TEST_VIDEO_ID", "5vilULw-9Gg"))
     parser.add_argument("--seconds", type=int, default=35)
+    parser.add_argument("--query", default=os.getenv("MUSIC_TEST_QUERY", ""))
     args = parser.parse_args()
+    if args.query:
+        search_url = "https://www.youtube.com/results?" + __import__("urllib.parse").parse.urlencode({"search_query": args.query})
+        request = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            page_html = response.read(8_000_000).decode("utf-8", errors="replace")
+        found = re.search(r'"videoRenderer":\s*\{\s*"videoId":\s*"([A-Za-z0-9_-]{11})"', page_html)
+        if not found:
+            raise SystemExit("Could not resolve a YouTube result for query: " + args.query)
+        args.video_id = found.group(1)
     if not re.fullmatch(r"[A-Za-z0-9_-]{11}", args.video_id):
         raise SystemExit("Invalid YouTube video ID; expected 11 characters")
     if not 15 <= args.seconds <= 90:
@@ -216,10 +227,15 @@ def main() -> int:
                     ffmpeg.terminate()
                     ffmpeg.wait(timeout=5)
             report["audio"] = inspect_audio(audio_path)
+            from lyric_audio_verify import verify as verify_lyrics
+            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id)
+            report["lyric_content_verified"] = bool(report["lyric_verification"].get("identity_verified"))
+            report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
             report["probe_passed"] = bool(
                 report["player_playing_seen"]
                 and report["player_time_advanced_seconds"] >= 5
                 and report["audio"].get("audio_detected")
+                and report["lyric_verification"].get("overall") == "PASS"
             )
     except Exception as exc:
         report["probe_passed"] = False
