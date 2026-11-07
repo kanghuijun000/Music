@@ -49,9 +49,9 @@ jobs:
         id: probe
         continue-on-error: true
         env:
-          YOUTUBE_TEST_VIDEO_ID: ${{ inputs.video_id }}
+          YOUTUBE_TEST_VIDEO_ID: ${{ inputs.video_id || '5vilULw-9Gg' }}
         run: |
-          python tools/youtube_audio_probe.py --video-id "$YOUTUBE_TEST_VIDEO_ID" --seconds "${{ inputs.seconds }}"
+          python tools/youtube_audio_probe.py --video-id "$YOUTUBE_TEST_VIDEO_ID" --seconds "${{ inputs.seconds || '35' }}"
 
       - name: Upload numeric diagnostic report only
         if: always()
