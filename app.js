@@ -1139,7 +1139,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const itemArtist=candidateArtist.trim();
   // Candidate artist metadata can support a match when the video identity is unknown,
   // but only together with a close duration and a strong title match.
-  // A verified provider duration may differ from the video by up to 18s (intro/outro/edit).\n  // Missing duration metadata must not count as a close match.\n  const closeDuration=Number(item.duration)>0&&duration>=10;
+  // A verified provider duration may differ from the video by up to 18s (intro/outro/edit).
+  // Missing duration metadata must not count as a close match.
+  const closeDuration=Number(item.duration)>0&&duration>=10;
   const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
   const expectedTitles=[identity.title,...identity.titles,...extraTitles].map(normalize).filter(Boolean);
   const hasShortAmbiguousTitle=expectedTitles.some(value=>value.replace(/\s+/g,"").length<=2);
