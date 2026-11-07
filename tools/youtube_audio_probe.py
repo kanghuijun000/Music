@@ -171,22 +171,6 @@ def main() -> int:
                 "-c:a", "pcm_s16le", str(audio_path),
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
-            html = make_page(args.video_id).encode("utf-8")
-
-            class Handler(BaseHTTPRequestHandler):
-                def do_GET(self):
-                    self.send_response(200)
-                    self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Cache-Control", "no-store")
-                    self.end_headers()
-                    self.wfile.write(html)
-
-                def log_message(self, *_):
-                    pass
-
-            server = ThreadingHTTPServer(("127.0.0.1", 8765), Handler)
-            threading.Thread(target=server.serve_forever, daemon=True).start()
-
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(
                     headless=True,
@@ -195,7 +179,31 @@ def main() -> int:
                     env={**os.environ, "PULSE_SINK": "music_probe"},
                 )
                 page = browser.new_page()
-                page.goto("http://127.0.0.1:8765", wait_until="domcontentloaded", timeout=30000)
+                page.goto("https://kanghuijun000.github.io/Music/", wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_function("window.YT && window.YT.Player", timeout=30000)
+                page.evaluate("""(videoId) => {
+                    const host = document.createElement("div");
+                    host.id = "musicQaProbePlayer";
+                    host.style.cssText = "position:fixed;left:-10000px;top:0;width:640px;height:360px";
+                    document.body.appendChild(host);
+                    window.probe = {state:"loading",error:null,currentTime:0,duration:0,changes:[],apiReady:true};
+                    const player = new YT.Player(host.id, {
+                        width:"640",height:"360",videoId,
+                        playerVars:{autoplay:1,controls:1,playsinline:1,rel:0,enablejsapi:1,origin:location.origin},
+                        events:{
+                            onReady:e=>{window.probe.state="ready";e.target.playVideo();},
+                            onStateChange:e=>{
+                                window.probe.state=({-1:"unstarted",0:"ended",1:"playing",2:"paused",3:"buffering",5:"cued"})[e.data]||String(e.data);
+                                window.probe.changes.push({state:window.probe.state,at:Date.now()});
+                            },
+                            onError:e=>{window.probe.error=String(e.data);window.probe.state="error";}
+                        }
+                    });
+                    window.probePlayer=player;
+                    window.probeTimer=setInterval(()=>{
+                        try{window.probe.currentTime=player.getCurrentTime()||0;window.probe.duration=player.getDuration()||0;}catch(_){}
+                    },250);
+                }""", args.video_id)
                 deadline = time.monotonic() + args.seconds
                 last_time = 0.0
                 playing_seen = False
@@ -211,9 +219,6 @@ def main() -> int:
                             playing_seen = True
                         if state.get("state") == "error":
                             break
-                        if playing_seen and last_time >= 8:
-                            # Continue capturing beyond startup to sample multiple audio windows.
-                            time.sleep(max(0, min(4, deadline - time.monotonic())))
                     time.sleep(0.5)
                 report["player_playing_seen"] = playing_seen
                 report["player_time_advanced_seconds"] = round(last_time, 2)
