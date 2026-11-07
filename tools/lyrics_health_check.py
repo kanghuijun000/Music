@@ -19,6 +19,7 @@ USER_AGENT = "Music-Lyrics-HealthCheck/1.0 (+https://github.com/kanghuijun000/Mu
 BASE_FIXTURES = [
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
+    {"title": "조용히 완전히 영원히", "artist": "너드커넥션", "duration": 189, "kind": "baseline"},
     {"title": "TICK TOCK", "artist": "알파", "duration": 0, "kind": "strict-match"},
 ]
 RANDOM_POOL = [
@@ -95,6 +96,9 @@ def check_static() -> list[dict]:
         "closeDuration is not hidden inside an escaped newline comment":
             not bool(re.search(r"^\s*//.*\\\\n.*const closeDuration=", app, re.M)),
         "synced-only candidate gate exists": "_synced" in app and "ttmlLines.length>=2" in app,
+        "exact video source can omit artist only with exact title and close duration": "exactVideoIdentityWithoutArtist=exactVideoSource&&!itemArtist&&title===100&&closeDuration" in app,
+        "verified lyrics can finish before all providers settle": "firstVerifiedCandidate.then(()=>" in app and "await delay(450)" in app,
+        "audio identification can start its song-specific retry without waiting for the first search": "try{await initialLyricsPromise;}catch(_){}" not in app and "const finishWithTracks=async tracks=>{" in app,
         "on-device playback audit is wired": "recordPlaybackAuditRender(index,current)" in app and "auditStartButton" in app,
         "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
@@ -265,6 +269,16 @@ def main() -> int:
     results.append({
         "category": "safety", "name": "exact song and artist identity accepted",
         "status": "PASS" if correct_accepted else "FAIL"
+    })
+    exact_video_missing_artist_allowed = (
+        title_match("조용히 완전히 영원히", "조용히 완전히 영원히")
+        and 189 > 0 and abs(189 - 189) <= max(18, 189 * .12)
+    )
+    exact_video_wrong_title_rejected = not title_match("다른 노래", "조용히 완전히 영원히")
+    exact_video_wrong_duration_rejected = abs(240 - 189) > max(18, 189 * .12)
+    results.append({
+        "category": "safety", "name": "exact video-bound title and duration may verify missing artist metadata",
+        "status": "PASS" if exact_video_missing_artist_allowed and exact_video_wrong_title_rejected and exact_video_wrong_duration_rejected else "FAIL"
     })
     results.append({
         "category": "safety", "name": "wrong title and wrong artist are rejected",
