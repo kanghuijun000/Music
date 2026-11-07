@@ -104,8 +104,14 @@ def provider_check(provider: str, fixture: dict) -> dict:
     elif provider == "Unison":
         url = "https://unison.boidu.dev/lyrics/search?" + q({"q": f"{title} {artist}", "limit": "10"})
     else:
-        url = "https://api.betterlyrics.org/getLyrics?" + q({
-            "s": title, "a": artist, "al": "", "d": str(fixture.get("duration") or "")
+        endpoint = {
+            "Better Lyrics/TTML": "/ttml/getLyrics",
+            "Better Lyrics/Kugou": "/kugou/getLyrics",
+            "Better Lyrics/QQ": "/qq/getLyrics",
+        }[provider]
+        url = "https://api.betterlyrics.org" + endpoint + "?" + q({
+            "s": title, "a": artist, "al": str(fixture.get("album") or ""),
+            "d": str(int(fixture.get("duration") or 0))
         })
 
     data, meta, elapsed, error = request_json(url)
