@@ -1226,7 +1226,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   // A verified provider duration may differ from the video by up to 18s (intro/outro/edit).
   // Missing duration metadata must not count as a close match.
   const closeDuration=Number(item.duration)>0&&duration>=10;
-  const exactVideoSource=provider==="Unison"&&item._sameVideoSource===true;
+  const exactVideoSource=(provider==="Unison"||provider==="LiriQo")&&item._sameVideoSource===true;
   const expectedTitles=[identity.title,...identity.titles,...extraTitles].map(normalize).filter(Boolean);
   const hasShortAmbiguousTitle=expectedTitles.some(value=>value.replace(/\s+/g,"").length<=2);
   const artistNames=[identity.artist,...(identity.artistAliases||[]),...(identity.isTopic?[channel]:[]),...extraArtists].filter(Boolean).map(normalize);
@@ -1589,7 +1589,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      ?durationValue.split(":").reduce((total,part)=>total*60+Number(part),0):Number(durationValue)||0;
     const valid=accept(provider,{trackName:trackTitle,artistName:trackArtist,duration,
      ttmlLines:lines,plainLyrics:String(item.plain||""),hasWordSync:lines.some(line=>line.words.length),
-     matchConfidence:0,_liriqoProvider:item.provider||item.upstreamProvider||""},
+     matchConfidence:0,_liriqoProvider:item.provider||item.upstreamProvider||"",_sameVideoSource:String(data.videoId||"")===String(video.id)},
      queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
     if(valid)return true;
    }
