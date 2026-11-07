@@ -459,7 +459,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  if(isCurrent())setLyricsStatus("음원 식별이 지연되고 있어요. 음악과 기존 가사는 계속 재생돼요.");
 }
 
-const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v22";
+const LYRIC_CACHE_STORAGE_KEY="music_lyrics_cache_v23";
 const LYRIC_CACHE_LIMIT=150;
 const LYRIC_API_COOLDOWN_KEY="music_lrclib_retry_after_v1";
 const BETTER_LYRICS_COOLDOWN_KEY="music_betterlyrics_retry_after_v1";
@@ -486,6 +486,24 @@ function storeLyric(cacheKey,item){
   for(const key of keys.slice(LYRIC_CACHE_LIMIT))delete next[key];
   localStorage.setItem(LYRIC_CACHE_STORAGE_KEY,JSON.stringify(next));
  }catch(error){console.warn("Lyrics cache could not be saved:",error);}
+}
+
+function removeLyricsAssociatedWithVideo(videoId){
+ if(!videoId)return 0;
+ let removed=0;
+ for(const [key,item] of [...lyricCache.entries()]){
+  if(item?.videoMetadata?.id===videoId){lyricCache.delete(key);removed++;}
+ }
+ try{
+  const saved=JSON.parse(localStorage.getItem(LYRIC_CACHE_STORAGE_KEY)||"{}");
+  if(saved&&typeof saved==="object"){
+   for(const [key,item] of Object.entries(saved)){
+    if(item?.videoMetadata?.id===videoId){delete saved[key];removed++;}
+   }
+   localStorage.setItem(LYRIC_CACHE_STORAGE_KEY,JSON.stringify(saved));
+  }
+ }catch(error){console.warn("Rejected lyric cache cleanup failed:",error);}
+ return removed;
 }
 
 function videoLyricCacheMatches(cached,video){
@@ -1456,7 +1474,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  });
  const selected=candidates.find(item=>item._synced)||candidates.find(item=>item.plainLyrics);
  if(!selected){
-  const sharedPlain=findSharedPlainLyricCache(video);
+  const sharedPlain=identifiedTrack?null:findSharedPlainLyricCache(video);
   if(sharedPlain){
    lyricState.loading=false;lyricState.lines=[];lyricState.plain=String(sharedPlain.plain||"");
    currentLyricsTrack={title:sharedPlain.trackName||"",artist:sharedPlain.artistName||"",duration:Number(sharedPlain.duration)||0};
@@ -1475,6 +1493,27 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   showLyricsMessage("가사를 표시하지 못했어요. 아래 진단 정보를 확인해 주세요.");
   showDiagnostics(summary);
   return;
+ }
+ if(identifiedTrack){
+  const candidateTitle=selected.trackName||selected.title||"";
+  const candidateArtist=selected.artistName||selected.artist||"";
+  const candidateDuration=Number(selected.duration)||0;
+  const expectedDuration=Number(identifiedTrack.duration)||0;
+  const durationMatches=!candidateDuration||!expectedDuration||
+   Math.abs(candidateDuration-expectedDuration)<=Math.max(15,expectedDuration*0.12);
+  const identityMatches=trackSimilarity(candidateTitle,identifiedTrack.title)>=0.92&&
+   trackSimilarity(candidateArtist,identifiedTrack.artist)>=0.82&&durationMatches;
+  if(!identityMatches){
+   record(selected._source||"가사 검증","IDENTIFIED_TRACK_MISMATCH",
+    "음원 식별 결과와 가사 후보의 곡 정보가 달라 연결을 차단했습니다. 후보: "+candidateArtist+" — "+candidateTitle);
+   removeLyricsAssociatedWithVideo(video.id);
+   lyricState.loading=false;lyricState.lines=[];lyricState.plain="";lyricState.wordSynced=false;
+   lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricTimingBasis="catalog";lyricOffsetSeconds=0;
+   currentLyricsTrack=null;
+   showLyricsMessage("재생 중인 곡과 가사가 일치하지 않아 표시하지 않았어요.");
+   showDiagnostics("음원 식별 결과와 가사 후보가 달라 잘못된 가사를 연결하지 않았습니다.");
+   return;
+  }
  }
  const wordLines=selected.ttmlLines||[];
  const hasWords=wordLines.some(item=>item.words?.length);
