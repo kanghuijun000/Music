@@ -171,6 +171,7 @@ def main() -> int:
                 "-c:a", "pcm_s16le", str(audio_path),
             ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
+            html = make_page(args.video_id)
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(
                     headless=True,
@@ -179,31 +180,16 @@ def main() -> int:
                     env={**os.environ, "PULSE_SINK": "music_probe"},
                 )
                 page = browser.new_page()
-                page.goto("https://kanghuijun000.github.io/Music/", wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_function("window.YT && window.YT.Player", timeout=30000)
-                page.evaluate("""(videoId) => {
-                    const host = document.createElement("div");
-                    host.id = "musicQaProbePlayer";
-                    host.style.cssText = "position:fixed;left:0;top:0;width:640px;height:360px;opacity:0.01;z-index:-1;pointer-events:none";
-                    document.body.appendChild(host);
-                    window.probe = {state:"loading",error:null,currentTime:0,duration:0,changes:[],apiReady:true};
-                    const player = new YT.Player(host.id, {
-                        width:"640",height:"360",videoId,
-                        playerVars:{autoplay:1,controls:1,playsinline:1,rel:0,enablejsapi:1,origin:location.origin},
-                        events:{
-                            onReady:e=>{window.probe.state="ready";e.target.playVideo();},
-                            onStateChange:e=>{
-                                window.probe.state=({-1:"unstarted",0:"ended",1:"playing",2:"paused",3:"buffering",5:"cued"})[e.data]||String(e.data);
-                                window.probe.changes.push({state:window.probe.state,at:Date.now()});
-                            },
-                            onError:e=>{window.probe.error=String(e.data);window.probe.state="error";}
-                        }
-                    });
-                    window.probePlayer=player;
-                    window.probeTimer=setInterval(()=>{
-                        try{window.probe.currentTime=player.getCurrentTime()||0;window.probe.duration=player.getDuration()||0;}catch(_){}
-                    },250);
-                }""", args.video_id)
+                # Serve a minimal probe page at the real app origin. This gives YouTube
+                # a valid HTTP Referer without loading the app's own player a second time.
+                page.route(
+                    "https://kanghuijun000.github.io/Music/qa-probe.html",
+                    lambda route: route.fulfill(
+                        status=200, content_type="text/html; charset=utf-8", body=html
+                    ),
+                )
+                page.goto("https://kanghuijun000.github.io/Music/qa-probe.html",
+                          wait_until="domcontentloaded", timeout=45000)
                 deadline = time.monotonic() + args.seconds
                 last_time = 0.0
                 playing_seen = False
