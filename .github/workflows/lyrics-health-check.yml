@@ -1,0 +1,52 @@
+name: Music Lyrics Health Check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/lyrics-health-check.yml"
+      - "tools/lyrics_health_check.py"
+      - "app.js"
+      - "index.html"
+      - "sw.js"
+  schedule:
+    - cron: "17 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lyrics-health-check
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run static and provider checks
+        id: check
+        continue-on-error: true
+        run: python tools/lyrics_health_check.py
+
+      - name: Upload diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-lyrics-health-report
+          path: lyrics-health-report.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail workflow when checks fail
+        if: steps.check.outcome == 'failure'
+        run: exit 1
