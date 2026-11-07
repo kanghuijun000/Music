@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 import sys
 import time
@@ -15,11 +16,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT = 9
 USER_AGENT = "Music-Lyrics-HealthCheck/1.0 (+https://github.com/kanghuijun000/Music)"
-FIXTURES = [
+BASE_FIXTURES = [
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
     {"title": "TICK TOCK", "artist": "알파", "duration": 0, "kind": "strict-match"},
 ]
+RANDOM_POOL = [
+    {"title": "밤편지", "artist": "아이유", "duration": 0, "kind": "random"},
+    {"title": "주저하는 연인들을 위해", "artist": "잔나비", "duration": 0, "kind": "random"},
+    {"title": "Ditto", "artist": "NewJeans", "duration": 0, "kind": "random"},
+    {"title": "Blinding Lights", "artist": "The Weeknd", "duration": 0, "kind": "random"},
+    {"title": "Yellow", "artist": "Coldplay", "duration": 0, "kind": "random"},
+    {"title": "Perfect", "artist": "Ed Sheeran", "duration": 0, "kind": "random"},
+    {"title": "사건의 지평선", "artist": "윤하", "duration": 0, "kind": "random"},
+    {"title": "Dynamite", "artist": "BTS", "duration": 0, "kind": "random"},
+]
+# Daily seeded sample: varied but reproducible for a given date.
+FIXTURES = BASE_FIXTURES + random.Random(datetime.now(timezone.utc).date().isoformat()).sample(RANDOM_POOL, 3)
 
 def norm(value: object) -> str:
     value = str(value or "").lower()
@@ -83,6 +96,7 @@ def check_static() -> list[dict]:
             not bool(re.search(r"^\s*//.*\\\\n.*const closeDuration=", app, re.M)),
         "synced-only candidate gate exists": "_synced" in app and "ttmlLines.length>=2" in app,
         "on-device playback audit is wired": "recordPlaybackAuditRender(index,current)" in app and "auditStartButton" in app,
+        "timed lyric renderer wiring is present": "active-lyric" in app and "lyricState.lines" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
@@ -266,7 +280,10 @@ def main() -> int:
             "provider_passed": sum(x["category"] == "provider" and x["status"] == "PASS" for x in results),
             "provider_warnings": sum(x["category"] == "provider" and x["status"] == "WARN" for x in results),
             "browser_cors": "NOT_TESTED",
-            "real_playback_sync": "NOT_TESTED"
+            "real_playback_sync": "NOT_TESTED",
+            "fixture_count": len(FIXTURES),
+            "random_fixture_count": len(FIXTURES) - len(BASE_FIXTURES),
+            "fixture_names": [f'{x["artist"]} - {x["title"]}' for x in FIXTURES]
         },
         "results": results
     }
