@@ -101,10 +101,10 @@ def check_static() -> list[dict]:
 def provider_check(provider: str, fixture: dict) -> dict:
     title, artist = fixture["title"], fixture["artist"]
     q = urllib.parse.urlencode
+    duration = str(int(fixture.get("duration") or 0))
     if provider == "LRCLIB":
         url = "https://lrclib.net/api/search?" + q({"track_name": title, "artist_name": artist})
     elif provider == "SyncLRC":
-        # Match the app's actual search request: title only; identity is checked on each result.
         url = "https://api.synclrc.dev/search?" + q({"q": title, "limit": "10"})
     elif provider == "Unison":
         url = "https://unison.boidu.dev/lyrics/search?" + q({"q": f"{title} {artist}", "limit": "10"})
@@ -119,17 +119,19 @@ def provider_check(provider: str, fixture: dict) -> dict:
             "Better Lyrics/QQ": "/qq/getLyrics",
         }[provider]
         url = "https://api.betterlyrics.org" + endpoint + "?" + q({
-            "s": title, "a": artist, "al": str(fixture.get("album") or ""),
-            "d": str(int(fixture.get("duration") or 0))
+            "s": title, "a": artist, "al": "", "d": duration
         })
 
     data, meta, elapsed, error = request_json(url)
     result = {
         "category": "provider", "provider": provider,
         "fixture": f'{artist} - {title}', "http": meta.get("http"),
-        "elapsed_ms": elapsed, "status": "WARN", "reason": error or "", "cors_allow_origin": meta.get("cors")
+        "elapsed_ms": elapsed, "status": "WARN", "reason": error or "",
+        "cors_allow_origin": meta.get("cors")
     }
     if error:
+        if error == "http_401" and provider.startswith("Better Lyrics/"):
+            result["reason"] = "api_key_required_on_live_endpoint"
         if isinstance(data, dict) and data.get("_http_error_detail"):
             result["response_detail"] = str(data["_http_error_detail"])[:240]
         return result
@@ -158,24 +160,24 @@ def provider_check(provider: str, fixture: dict) -> dict:
         candidates = nested.get("results", []) if isinstance(nested.get("results"), list) else []
     else:
         candidates = [data] if isinstance(data, dict) else []
+
     result["candidate_count"] = len(candidates)
-    result["response_keys"] = sorted(list(data.keys()))[:20] if isinstance(data, dict) else []
+    result["response_keys"] = sorted(list(data.keys()))[:24] if isinstance(data, dict) else []
     selected = None
-    for item in candidates[:10]:
+    for item in candidates[:20]:
         if not isinstance(item, dict):
             continue
         actual_title = item.get("trackName") or item.get("track") or item.get("song") or item.get("title") or ""
         actual_artist = item.get("artistName") or item.get("artist") or ""
         if not identity_match(actual_title, actual_artist, title, artist):
             continue
-        duration = float(item.get("duration") or 0)
-        expected = float(fixture.get("duration") or 0)
-        if duration and expected and abs(duration - expected) > max(18, expected * .12):
+        candidate_duration = float(item.get("duration") or 0)
+        expected_duration = float(fixture.get("duration") or 0)
+        if candidate_duration and expected_duration and abs(candidate_duration - expected_duration) > max(18, expected_duration * .12):
             continue
         selected = item
         break
 
-    # Unison search returns candidates only; fetch lyrics by the exact returned video ID.
     if provider == "Unison" and selected:
         video_id = str(selected.get("videoId") or selected.get("video_id") or "")
         if not video_id:
@@ -190,23 +192,11 @@ def provider_check(provider: str, fixture: dict) -> dict:
             return result
         payload = lyric_data.get("data") if isinstance(lyric_data.get("data"), dict) else lyric_data
         if str(payload.get("videoId") or "") != video_id:
-            result["reason"] = "re    if provider == "LRCLIB" or provider == "Karalyr":
-        timed = selected.get("syncedLyrics") or selected.get("lyricsfile") or ""
-    elif provider == "LiriQo":
-        timed = selected.get("timed") or []
-    elif provider == "SyncLRC":
-        lyric_obj = selected.get("lyrics") if isinstance(selected.get("lyrics"), dict) else selected
-        timed = lyric_obj.get("karaoke") or lyric_obj.get("synced") or lyric_obj.get("lyrics") or ""
-    else:
-        timed = selected.get("lyrics") or selected.get("ttml") or selected.get("syncedLyrics") or ""
-    if isinstance(timed, dict):
-        timed = timed.get("karaoke") or timed.get("synced") or ""
-    count = timed_line_count(timed)
-hable_but_identity_metadata_missing_not_accepted"
+            result["reason"] = "returned_video_id_mismatch"
             return result
+        selected = payload
 
     if not selected:
-        result["status"] = "WARN"
         result["reason"] = "no_strict_title_artist_candidate"
         result["sample_metadata"] = [
             {
@@ -218,17 +208,21 @@ hable_but_identity_metadata_missing_not_accepted"
         ]
         return result
 
-    # Provider-specific timed lyric fields; never print or persist lyric contents.
-    timed = (
-        selected.get("syncedLyrics") or selected.get("karaoke") or selected.get("synced")
-        or selected.get("ttml") or selected.get("lyrics")
-    )
+    if provider == "LRCLIB" or provider == "Karalyr":
+        timed = selected.get("syncedLyrics") or selected.get("lyricsfile") or ""
+    elif provider == "LiriQo":
+        timed = selected.get("timed") or []
+    elif provider == "SyncLRC":
+        lyric_obj = selected.get("lyrics") if isinstance(selected.get("lyrics"), dict) else selected
+        timed = lyric_obj.get("karaoke") or lyric_obj.get("synced") or lyric_obj.get("lyrics") or ""
+    else:
+        timed = selected.get("lyrics") or selected.get("ttml") or selected.get("syncedLyrics") or ""
     if isinstance(timed, dict):
         timed = timed.get("karaoke") or timed.get("synced") or ""
     count = timed_line_count(timed)
     result["timed_lines"] = count
     result["status"] = "PASS" if count >= 2 else "WARN"
-    result["reason"] = "" if count >= 2 else "no_two_or_more_timed_lines"
+    result["reason"] = "" if count >= 2 else "candidate_found_but_no_two_timed_lines"
     return result
 
 def main() -> int:
