@@ -233,3 +233,7 @@ h1 em{color:var(--accent)}
 /* Android touch drag: prevent browser gesture cancellation on playlist rows. */
 .playlist-song{touch-action:auto;overscroll-behavior:auto;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 .playlist-song *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+
+
+/* Navigation views: honor hidden on the grid-based home workspace. */
+.hero[hidden],.workspace[hidden],.playlist-library[hidden],.playlist-detail[hidden]{display:none!important;}
