@@ -237,3 +237,26 @@ h1 em{color:var(--accent)}
 
 /* Navigation views: honor hidden on the grid-based home workspace. */
 .hero[hidden],.workspace[hidden],.playlist-library[hidden],.playlist-detail[hidden]{display:none!important;}
+
+
+/* v132: keep transient messages and floating actions clear of the fixed bottom navigation. */
+:root{--bottom-nav-clearance:calc(63px + env(safe-area-inset-bottom,0px));}
+.toast{z-index:50;left:50%;right:auto;bottom:calc(var(--bottom-nav-clearance) + 14px);width:max-content;max-width:calc(100vw - 32px);padding:12px 16px;text-align:center;line-height:1.5;white-space:normal;overflow-wrap:anywhere;}
+.toast.show{transform:translate(-50%,0);}
+.bottom-nav{min-height:63px;padding-bottom:calc(9px + env(safe-area-inset-bottom,0px));}
+.app-shell{padding-bottom:calc(82px + env(safe-area-inset-bottom,0px));}
+.playlist-library,.playlist-detail{padding-bottom:calc(118px + env(safe-area-inset-bottom,0px));scroll-margin-top:12px;}
+.playlist-fab{bottom:calc(var(--bottom-nav-clearance) + 16px);z-index:35;max-width:calc(100vw - 32px);}
+.settings-dialog,.playlist-create-dialog,.playlist-search-dialog{max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;}
+@media(max-width:560px){
+ .toast{max-width:calc(100vw - 24px);font-size:12px;}
+ .playlist-library,.playlist-detail{padding-top:18px;padding-bottom:calc(124px + env(safe-area-inset-bottom,0px));}
+ .playlist-detail-top{margin-bottom:22px;}
+ .playlist-detail-actions{flex-wrap:wrap;}
+ .playlist-play-all{min-width:0;}
+ footer{flex-wrap:wrap;padding:14px 0 8px;}
+}
+@media(max-height:560px){
+ .settings-dialog,.playlist-create-dialog,.playlist-search-dialog{max-height:calc(100dvh - 20px);}
+ .toast{bottom:calc(var(--bottom-nav-clearance) + 10px);}
+}
