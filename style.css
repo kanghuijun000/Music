@@ -260,3 +260,10 @@ h1 em{color:var(--accent)}
  .settings-dialog,.playlist-create-dialog,.playlist-search-dialog{max-height:calc(100dvh - 20px);}
  .toast{bottom:calc(var(--bottom-nav-clearance) + 10px);}
 }
+
+
+/* v134: align the home settings control to a clean, circular icon button. */
+.topbar #settingsButton{width:40px;height:40px;min-width:40px;padding:0;border-radius:50%;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.14);color:#e5e5eb;}
+.topbar #settingsButton svg{display:block;width:20px;height:20px;}
+.topbar #settingsButton:hover{border-color:#fa2d5570;background:#fa2d5512;color:#ff7189;}
+.topbar #settingsButton:focus-visible{outline:2px solid #ff7189;outline-offset:3px;}
