@@ -2141,35 +2141,88 @@ function renderPlaylistDetail(){
  playlistEl.detailCount.textContent=item.songs.length+"곡";
  playlistEl.songs.replaceChildren();
  playlistEl.songsEmpty.hidden=item.songs.length>0;
+ const activeHere=activePlaylistId===item.id;
+ const playButton=document.getElementById("playlistPlayAllButton");
+ const stopButton=document.getElementById("playlistStopButton");
+ let playerState=-1;try{if(ytPlayer)playerState=ytPlayer.getPlayerState();}catch(_){}
+ const isPlaying=activeHere&&playerState===YT.PlayerState.PLAYING;
+ playButton.textContent=isPlaying?"Ⅱ 일시정지":"▶ 재생";
+ stopButton.disabled=!activeHere;
  item.songs.forEach((song,index)=>{
-  const row=document.createElement("article");row.className="playlist-song"+(activePlaylistId===item.id&&activePlaylistIndex===index?" is-playing":"");
+  const row=document.createElement("article");row.className="playlist-song"+(activeHere&&activePlaylistIndex===index?" is-playing":"");
+  row.dataset.songId=song.id;
+  const handle=document.createElement("button");handle.type="button";handle.className="playlist-song-drag-handle";handle.textContent="⠿";handle.setAttribute("aria-label",song.title+" 길게 눌러 순서 이동");handle.title="길게 눌러 드래그";
   const play=document.createElement("button");play.type="button";play.className="playlist-song-main";
   const img=document.createElement("img");img.className="playlist-song-thumb";img.alt="";img.src=song.thumbnail||"";
   const info=document.createElement("span");info.className="playlist-song-info";
   const title=document.createElement("strong");title.textContent=song.title;
   const artist=document.createElement("small");artist.textContent=song.channelTitle;
   info.append(title,artist);play.append(img,info);play.addEventListener("click",()=>playPlaylist(item.id,index));
-  const tools=document.createElement("span");tools.className="playlist-song-tools";
-  const up=document.createElement("button");up.type="button";up.textContent="↑";up.disabled=index===0;up.setAttribute("aria-label","위로 이동");up.addEventListener("click",()=>movePlaylistSong(item.id,index,-1));
-  const down=document.createElement("button");down.type="button";down.textContent="↓";down.disabled=index===item.songs.length-1;down.setAttribute("aria-label","아래로 이동");down.addEventListener("click",()=>movePlaylistSong(item.id,index,1));
-  const remove=document.createElement("button");remove.type="button";remove.textContent="×";remove.setAttribute("aria-label",song.title+" 삭제");remove.addEventListener("click",()=>removePlaylistSong(item.id,index));
-  tools.append(up,down,remove);row.append(play,tools);playlistEl.songs.append(row);
+  const remove=document.createElement("button");remove.type="button";remove.className="playlist-song-remove";remove.textContent="×";remove.setAttribute("aria-label",song.title+" 삭제");remove.addEventListener("click",()=>removePlaylistSong(item.id,index));
+  row.append(handle,play,remove);playlistEl.songs.append(row);
+  installPlaylistDrag(handle,row,item.id);
  });
 }
-function movePlaylistSong(id,index,direction){
- const item=findPlaylist(id),target=index+direction;if(!item||target<0||target>=item.songs.length)return;
- [item.songs[index],item.songs[target]]=[item.songs[target],item.songs[index]];
- if(activePlaylistId===id){
-  if(activePlaylistIndex===index)activePlaylistIndex=target;
-  else if(activePlaylistIndex===target)activePlaylistIndex=index;
- }
+function reorderPlaylistSong(id,from,to){
+ const item=findPlaylist(id);if(!item||from<0||to<0||from>=item.songs.length||to>=item.songs.length||from===to)return;
+ const currentSongId=activePlaylistId===id?item.songs[activePlaylistIndex]?.id:null;
+ const moved=item.songs.splice(from,1)[0];item.songs.splice(to,0,moved);
+ if(currentSongId){activePlaylistIndex=item.songs.findIndex(song=>song.id===currentSongId);}
  saveMusicPlaylists();renderPlaylistDetail();
+}
+function installPlaylistDrag(handle,row,playlistIdValue){
+ let holdTimer=null,dragging=false,pointerId=null,startX=0,startY=0;
+ const clearMarks=()=>playlistEl.songs.querySelectorAll(".playlist-song").forEach(node=>node.classList.remove("drop-before","drop-after"));
+ const finish=(event,cancelled=false)=>{
+  if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  if(!dragging)return;
+  dragging=false;row.classList.remove("dragging");
+  const target=!cancelled?document.elementFromPoint(event.clientX,event.clientY)?.closest(".playlist-song"):null;
+  const item=findPlaylist(playlistIdValue);
+  if(item&&target&&target.parentElement===playlistEl.songs){
+   const from=item.songs.findIndex(song=>song.id===row.dataset.songId);
+   const targetIndex=item.songs.findIndex(song=>song.id===target.dataset.songId);
+   const rect=target.getBoundingClientRect();
+   const after=event.clientY>rect.top+rect.height/2;
+   let to=targetIndex+(after?1:0);
+   if(from<to)to--;
+   to=Math.max(0,Math.min(item.songs.length-1,to));
+   clearMarks();if(from!==to)reorderPlaylistSong(playlistIdValue,from,to);
+  }else clearMarks();
+  try{if(handle.hasPointerCapture(pointerId))handle.releasePointerCapture(pointerId);}catch(_){}
+  pointerId=null;
+ };
+ handle.addEventListener("pointerdown",event=>{
+  if(event.button!==0&&event.pointerType==="mouse")return;
+  pointerId=event.pointerId;startX=event.clientX;startY=event.clientY;
+  holdTimer=setTimeout(()=>{
+   dragging=true;row.classList.add("dragging");
+   try{handle.setPointerCapture(pointerId);}catch(_){}
+   if(navigator.vibrate)navigator.vibrate(18);
+  },320);
+ });
+ handle.addEventListener("pointermove",event=>{
+  if(!dragging){
+   if(holdTimer&&Math.hypot(event.clientX-startX,event.clientY-startY)>12){clearTimeout(holdTimer);holdTimer=null;}
+   return;
+  }
+  const target=document.elementFromPoint(event.clientX,event.clientY)?.closest(".playlist-song");
+  clearMarks();
+  if(target&&target!==row&&target.parentElement===playlistEl.songs){
+   const rect=target.getBoundingClientRect();
+   target.classList.add(event.clientY<rect.top+rect.height/2?"drop-before":"drop-after");
+  }
+  event.preventDefault();
+ });
+ handle.addEventListener("pointerup",event=>finish(event,false));
+ handle.addEventListener("pointercancel",event=>finish(event,true));
+ handle.addEventListener("lostpointercapture",event=>{if(dragging)finish(event,true);});
 }
 function removePlaylistSong(id,index){
  const item=findPlaylist(id);if(!item||!item.songs[index])return;
  const wasCurrent=activePlaylistId===id&&activePlaylistIndex===index;
  item.songs.splice(index,1);
- if(wasCurrent){activePlaylistId="";activePlaylistIndex=-1;if(ytPlayer)ytPlayer.pauseVideo();}
+ if(wasCurrent){activePlaylistId="";activePlaylistIndex=-1;if(ytPlayer)ytPlayer.stopVideo();}
  else if(activePlaylistId===id&&activePlaylistIndex>index)activePlaylistIndex--;
  saveMusicPlaylists();renderPlaylistDetail();showToast("노래를 모음곡에서 삭제했어요.");
 }
@@ -2178,6 +2231,27 @@ function playPlaylist(id,index=0){
  activePlaylistId=id;activePlaylistIndex=Math.max(0,Math.min(index,item.songs.length-1));
  showPlaylistLibraryIfNotVisible();
  playPlaylistTrack(activePlaylistIndex);
+}
+function togglePlaylistPlayback(){
+ const id=openedPlaylistId,item=findPlaylist(id);if(!item||!item.songs.length){showToast("먼저 모음곡에 노래를 추가해 주세요.");return;}
+ if(activePlaylistId===id&&ytPlayer){
+  let state=-1;try{state=ytPlayer.getPlayerState();}catch(_){}
+  if(state===YT.PlayerState.PLAYING){ytPlayer.pauseVideo();return;}
+  if(state===YT.PlayerState.PAUSED||state===YT.PlayerState.CUED||state===YT.PlayerState.BUFFERING){
+   ytPlayer.playVideo();return;
+  }
+  if(activePlaylistIndex>=0&&currentVideoId===item.songs[activePlaylistIndex]?.id){ytPlayer.playVideo();return;}
+ }
+ playPlaylist(id,0);
+}
+function stopPlaylistPlayback(){
+ if(!activePlaylistId)return;
+ activePlaylistId="";activePlaylistIndex=-1;
+ if(ytPlayer){try{ytPlayer.stopVideo();}catch(_){}}
+ clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;
+ el.playbackState.textContent="재생 종료";updateMediaSession("none");
+ try{el.currentTime.textContent="0:00";el.progressBar.value="0";}catch(_){}
+ renderPlaylistDetail();
 }
 function showPlaylistLibraryIfNotVisible(){
  if(playlistEl.library.hidden&&playlistEl.detail.hidden)showPlaylistLibrary();
@@ -2256,10 +2330,11 @@ document.getElementById("playlistRenameButton").addEventListener("click",()=>{
 document.getElementById("playlistDeleteButton").addEventListener("click",()=>{
  const item=currentOpenedPlaylist();if(!item)return;
  if(!confirm("'"+item.name+"' 모음곡을 삭제할까요?"))return;
- if(activePlaylistId===item.id){activePlaylistId="";activePlaylistIndex=-1;if(ytPlayer)ytPlayer.pauseVideo();}
+ if(activePlaylistId===item.id){activePlaylistId="";activePlaylistIndex=-1;if(ytPlayer)ytPlayer.stopVideo();}
  musicPlaylists=musicPlaylists.filter(entry=>entry.id!==item.id);saveMusicPlaylists();openedPlaylistId="";showPlaylistLibrary();
 });
-document.getElementById("playlistPlayAllButton").addEventListener("click",()=>playPlaylist(openedPlaylistId,0));
+document.getElementById("playlistPlayAllButton").addEventListener("click",togglePlaylistPlayback);
+document.getElementById("playlistStopButton").addEventListener("click",stopPlaylistPlayback);
 playlistEl.createForm.addEventListener("submit",event=>{event.preventDefault();createPlaylist();});
 playlistEl.searchForm.addEventListener("submit",event=>{event.preventDefault();searchPlaylistSongs(playlistEl.searchInput.value);});
 document.getElementById("playlistSearchClose").addEventListener("click",()=>playlistEl.searchDialog.close());
