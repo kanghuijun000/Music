@@ -2151,7 +2151,6 @@ function renderPlaylistDetail(){
  item.songs.forEach((song,index)=>{
   const row=document.createElement("article");row.className="playlist-song"+(activeHere&&activePlaylistIndex===index?" is-playing":"");
   row.dataset.songId=song.id;
-  const handle=document.createElement("button");handle.type="button";handle.className="playlist-song-drag-handle";handle.textContent="⠿";handle.setAttribute("aria-label",song.title+" 길게 눌러 순서 이동");handle.title="길게 눌러 드래그";
   const play=document.createElement("button");play.type="button";play.className="playlist-song-main";
   const img=document.createElement("img");img.className="playlist-song-thumb";img.alt="";img.src=song.thumbnail||"";
   const info=document.createElement("span");info.className="playlist-song-info";
@@ -2159,8 +2158,8 @@ function renderPlaylistDetail(){
   const artist=document.createElement("small");artist.textContent=song.channelTitle;
   info.append(title,artist);play.append(img,info);play.addEventListener("click",()=>playPlaylist(item.id,index));
   const remove=document.createElement("button");remove.type="button";remove.className="playlist-song-remove";remove.textContent="×";remove.setAttribute("aria-label",song.title+" 삭제");remove.addEventListener("click",()=>removePlaylistSong(item.id,index));
-  row.append(handle,play,remove);playlistEl.songs.append(row);
-  installPlaylistDrag(handle,row,item.id);
+  row.append(play,remove);playlistEl.songs.append(row);
+  installPlaylistDrag(row,item.id);
  });
 }
 function reorderPlaylistSong(id,from,to){
@@ -2170,13 +2169,15 @@ function reorderPlaylistSong(id,from,to){
  if(currentSongId){activePlaylistIndex=item.songs.findIndex(song=>song.id===currentSongId);}
  saveMusicPlaylists();renderPlaylistDetail();
 }
-function installPlaylistDrag(handle,row,playlistIdValue){
+function installPlaylistDrag(row,playlistIdValue){
  let holdTimer=null,dragging=false,pointerId=null,startX=0,startY=0;
  const clearMarks=()=>playlistEl.songs.querySelectorAll(".playlist-song").forEach(node=>node.classList.remove("drop-before","drop-after"));
  const finish=(event,cancelled=false)=>{
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
   if(!dragging)return;
   dragging=false;row.classList.remove("dragging");
+  row.dataset.dragged="1";
+  setTimeout(()=>{delete row.dataset.dragged;},450);
   const target=!cancelled?document.elementFromPoint(event.clientX,event.clientY)?.closest(".playlist-song"):null;
   const item=findPlaylist(playlistIdValue);
   if(item&&target&&target.parentElement===playlistEl.songs){
@@ -2189,19 +2190,20 @@ function installPlaylistDrag(handle,row,playlistIdValue){
    to=Math.max(0,Math.min(item.songs.length-1,to));
    clearMarks();if(from!==to)reorderPlaylistSong(playlistIdValue,from,to);
   }else clearMarks();
-  try{if(handle.hasPointerCapture(pointerId))handle.releasePointerCapture(pointerId);}catch(_){}
+  try{if(row.hasPointerCapture(pointerId))row.releasePointerCapture(pointerId);}catch(_){}
   pointerId=null;
  };
- handle.addEventListener("pointerdown",event=>{
+ row.addEventListener("pointerdown",event=>{
   if(event.button!==0&&event.pointerType==="mouse")return;
+  if(event.target.closest(".playlist-song-remove"))return;
   pointerId=event.pointerId;startX=event.clientX;startY=event.clientY;
   holdTimer=setTimeout(()=>{
    dragging=true;row.classList.add("dragging");
-   try{handle.setPointerCapture(pointerId);}catch(_){}
+   try{row.setPointerCapture(pointerId);}catch(_){}
    if(navigator.vibrate)navigator.vibrate(18);
-  },320);
+  },350);
  });
- handle.addEventListener("pointermove",event=>{
+ row.addEventListener("pointermove",event=>{
   if(!dragging){
    if(holdTimer&&Math.hypot(event.clientX-startX,event.clientY-startY)>12){clearTimeout(holdTimer);holdTimer=null;}
    return;
@@ -2214,9 +2216,13 @@ function installPlaylistDrag(handle,row,playlistIdValue){
   }
   event.preventDefault();
  });
- handle.addEventListener("pointerup",event=>finish(event,false));
- handle.addEventListener("pointercancel",event=>finish(event,true));
- handle.addEventListener("lostpointercapture",event=>{if(dragging)finish(event,true);});
+ row.addEventListener("pointerup",event=>finish(event,false));
+ row.addEventListener("pointercancel",event=>finish(event,true));
+ row.addEventListener("lostpointercapture",event=>{if(dragging)finish(event,true);});
+ row.addEventListener("click",event=>{
+  if(row.dataset.dragged==="1"){event.preventDefault();event.stopImmediatePropagation();delete row.dataset.dragged;}
+ },true);
+ row.addEventListener("contextmenu",event=>event.preventDefault());
 }
 function removePlaylistSong(id,index){
  const item=findPlaylist(id);if(!item||!item.songs[index])return;
