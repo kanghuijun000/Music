@@ -223,3 +223,9 @@ h1 em{color:var(--accent)}
 .playlist-song.drop-before:before{top:-5px}.playlist-song.drop-after:after{bottom:-5px}
 .playlist-song-remove{width:32px;height:36px;flex:none;border:0;border-radius:7px;background:transparent;color:#a7a7b0;font-size:21px}
 .playlist-song-remove:active{color:#ff7189}
+
+
+/* Whole playlist row is the long-press drag surface; suppress Android text selection/callout. */
+.playlist-song{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+.playlist-song *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+.playlist-song.dragging{z-index:4;box-shadow:0 12px 30px #0009;}
