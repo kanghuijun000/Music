@@ -2287,3 +2287,5 @@ function registerMusicServiceWorker(){
  window.addEventListener("focus",updateWorker);
 }
 
+
+registerMusicServiceWorker();
