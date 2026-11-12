@@ -2170,55 +2170,89 @@ function reorderPlaylistSong(id,from,to){
  saveMusicPlaylists();renderPlaylistDetail();
 }
 function installPlaylistDrag(row,playlistIdValue){
- let holdTimer=null,dragging=false,pointerId=null,startX=0,startY=0;
+ let holdTimer=null,dragging=false,startX=0,startY=0,lastX=0,lastY=0,touchMode=false;
  const clearMarks=()=>playlistEl.songs.querySelectorAll(".playlist-song").forEach(node=>node.classList.remove("drop-before","drop-after"));
- const finish=(event,cancelled=false)=>{
+ const markTarget=(x,y)=>{
+  const target=document.elementFromPoint(x,y)?.closest(".playlist-song");
+  clearMarks();
+  if(target&&target!==row&&target.parentElement===playlistEl.songs){
+   const rect=target.getBoundingClientRect();
+   target.classList.add(y<rect.top+rect.height/2?"drop-before":"drop-after");
+  }
+ };
+ const finish=(x,y,cancelled=false)=>{
   if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
   if(!dragging)return;
   dragging=false;row.classList.remove("dragging");
   row.dataset.dragged="1";
-  setTimeout(()=>{delete row.dataset.dragged;},450);
-  const target=!cancelled?document.elementFromPoint(event.clientX,event.clientY)?.closest(".playlist-song"):null;
+  setTimeout(()=>{delete row.dataset.dragged;},500);
+  const target=!cancelled?document.elementFromPoint(x,y)?.closest(".playlist-song"):null;
   const item=findPlaylist(playlistIdValue);
   if(item&&target&&target.parentElement===playlistEl.songs){
    const from=item.songs.findIndex(song=>song.id===row.dataset.songId);
    const targetIndex=item.songs.findIndex(song=>song.id===target.dataset.songId);
    const rect=target.getBoundingClientRect();
-   const after=event.clientY>rect.top+rect.height/2;
+   const after=y>rect.top+rect.height/2;
    let to=targetIndex+(after?1:0);
    if(from<to)to--;
    to=Math.max(0,Math.min(item.songs.length-1,to));
    clearMarks();if(from!==to)reorderPlaylistSong(playlistIdValue,from,to);
   }else clearMarks();
-  try{if(row.hasPointerCapture(pointerId))row.releasePointerCapture(pointerId);}catch(_){}
-  pointerId=null;
  };
- row.addEventListener("pointerdown",event=>{
-  if(event.button!==0&&event.pointerType==="mouse")return;
-  if(event.target.closest(".playlist-song-remove"))return;
-  pointerId=event.pointerId;startX=event.clientX;startY=event.clientY;
+ const begin=(x,y)=>{
+  startX=lastX=x;startY=lastY=y;
   holdTimer=setTimeout(()=>{
    dragging=true;row.classList.add("dragging");
-   try{row.setPointerCapture(pointerId);}catch(_){}
-   if(navigator.vibrate)navigator.vibrate(18);
-  },350);
+   if(navigator.vibrate)navigator.vibrate(25);
+  },450);
+ };
+ const cancelHoldIfMoved=(x,y)=>{
+  if(holdTimer&&Math.hypot(x-startX,y-startY)>14){clearTimeout(holdTimer);holdTimer=null;}
+ };
+ row.addEventListener("touchstart",event=>{
+  if(event.touches.length!==1||event.target.closest(".playlist-song-remove"))return;
+  touchMode=true;
+  const t=event.touches[0];begin(t.clientX,t.clientY);
+ },{passive:true});
+ row.addEventListener("touchmove",event=>{
+  if(!touchMode||event.touches.length!==1)return;
+  const t=event.touches[0];lastX=t.clientX;lastY=t.clientY;
+  if(!dragging){cancelHoldIfMoved(lastX,lastY);return;}
+  event.preventDefault();
+  markTarget(lastX,lastY);
+ },{passive:false});
+ row.addEventListener("touchend",event=>{
+  if(!touchMode)return;
+  const t=event.changedTouches[0];
+  if(dragging)finish(t.clientX,t.clientY,false);
+  else if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  touchMode=false;
+ },{passive:true});
+ row.addEventListener("touchcancel",()=>{
+  if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  if(dragging)finish(lastX,lastY,true);
+  touchMode=false;
+ },{passive:true});
+ row.addEventListener("pointerdown",event=>{
+  if(event.pointerType==="touch"||touchMode)return;
+  if(event.button!==0||event.target.closest(".playlist-song-remove"))return;
+  begin(event.clientX,event.clientY);
  });
  row.addEventListener("pointermove",event=>{
-  if(!dragging){
-   if(holdTimer&&Math.hypot(event.clientX-startX,event.clientY-startY)>12){clearTimeout(holdTimer);holdTimer=null;}
-   return;
-  }
-  const target=document.elementFromPoint(event.clientX,event.clientY)?.closest(".playlist-song");
-  clearMarks();
-  if(target&&target!==row&&target.parentElement===playlistEl.songs){
-   const rect=target.getBoundingClientRect();
-   target.classList.add(event.clientY<rect.top+rect.height/2?"drop-before":"drop-after");
-  }
-  event.preventDefault();
+  if(event.pointerType==="touch"||touchMode)return;
+  if(!dragging){cancelHoldIfMoved(event.clientX,event.clientY);return;}
+  event.preventDefault();lastX=event.clientX;lastY=event.clientY;markTarget(lastX,lastY);
  });
- row.addEventListener("pointerup",event=>finish(event,false));
- row.addEventListener("pointercancel",event=>finish(event,true));
- row.addEventListener("lostpointercapture",event=>{if(dragging)finish(event,true);});
+ row.addEventListener("pointerup",event=>{
+  if(event.pointerType==="touch"||touchMode)return;
+  if(dragging)finish(event.clientX,event.clientY,false);
+  else if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+ });
+ row.addEventListener("pointercancel",()=>{
+  if(touchMode)return;
+  if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}
+  if(dragging)finish(lastX,lastY,true);
+ });
  row.addEventListener("click",event=>{
   if(row.dataset.dragged==="1"){event.preventDefault();event.stopImmediatePropagation();delete row.dataset.dragged;}
  },true);
