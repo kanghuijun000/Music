@@ -2146,7 +2146,7 @@ function renderPlaylistDetail(){
  const stopButton=document.getElementById("playlistStopButton");
  let playerState=-1;try{if(ytPlayer)playerState=ytPlayer.getPlayerState();}catch(_){}
  const isPlaying=activeHere&&playerState===YT.PlayerState.PLAYING;
- playButton.textContent=isPlaying?"Ⅱ 일시정지":"▶ 재생";
+ playButton.textContent=isPlaying?"Ⅱ 일시정지":(activeHere&&playerState===YT.PlayerState.PAUSED?"▶ 다시 재생":"▶ 재생");
  stopButton.disabled=!activeHere;
  item.songs.forEach((song,index)=>{
   const row=document.createElement("article");row.className="playlist-song"+(activeHere&&activePlaylistIndex===index?" is-playing":"");
