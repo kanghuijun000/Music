@@ -1993,8 +1993,17 @@ document.querySelectorAll("[data-query]").forEach(button=>button.addEventListene
 el.settingsButton.addEventListener("click",openSettings);
 const apiGuideDialog=document.getElementById("apiGuideDialog");
 document.getElementById("apiGuideOpenButton").addEventListener("click",()=>apiGuideDialog.showModal());
+document.getElementById("copyApiOriginButton").addEventListener("click",async()=>{
+ const button=document.getElementById("copyApiOriginButton");
+ try{await navigator.clipboard.writeText("https://kanghuijun000.github.io/*");button.textContent="복사 완료";showToast("Music 사이트 주소를 복사했어요.");}
+ catch(_){button.textContent="복사 실패";showToast("주소를 길게 눌러 직접 복사해 주세요.");}
+ setTimeout(()=>{button.textContent="주소 복사";},1800);
+});
+document.getElementById("apiGuideFinishButton").addEventListener("click",()=>{
+ apiGuideDialog.close();el.settingsDialog.showModal();el.apiKeyInput.focus();
+});
 apiGuideDialog.addEventListener("click",event=>{if(event.target===apiGuideDialog)apiGuideDialog.close();});
-el.saveKeyButton.addEventListener("click",()=>{const value=el.apiKeyInput.value.trim();if(!value){showToast("API 키를 입력해 주세요.");return;}apiKey=value;localStorage.setItem(STORAGE_KEY,apiKey);updateConnectionStatus();el.settingsDialog.close();showToast("API 키를 이 기기에 저장했어요.");});
+el.saveKeyButton.addEventListener("click",()=>{const value=el.apiKeyInput.value.trim();if(!value){showToast("API 키를 입력해 주세요.");return;}if(!/^AIza[\\w-]{20,}$/.test(value)){showToast("API 키 형식이 올바르지 않은 것 같아요. Google Cloud에서 복사한 키를 확인해 주세요.");return;}apiKey=value;localStorage.setItem(STORAGE_KEY,apiKey);updateConnectionStatus();el.settingsDialog.close();showToast("API 키를 이 기기에 저장했어요.");});
 el.removeKeyButton.addEventListener("click",()=>{apiKey="";localStorage.removeItem(STORAGE_KEY);el.apiKeyInput.value="";updateConnectionStatus();el.settingsDialog.close();showToast("저장된 API 키를 삭제했어요.");});
 el.settingsDialog.addEventListener("click",event=>{if(event.target===el.settingsDialog)el.settingsDialog.close();});
 el.playPauseButton.addEventListener("click",()=>{if(!ytPlayer)return;if(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)ytPlayer.pauseVideo();else ytPlayer.playVideo();});
