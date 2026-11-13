@@ -1800,27 +1800,30 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    el.lyricsAttribution.textContent=attribution?"출처 · "+attribution:"";
    el.lyricsAttribution.hidden=!attribution;
   }
- const sourceIsVideoBound=Boolean(selected._videoBound);
- const fromOtherUnisonVideo=Boolean(selected._unisonOtherVideo);
+ const sourceIsVideoBound=Boolean(selected._synced&&selected._videoBound);
+ const fromOtherUnisonVideo=Boolean(selected._synced&&selected._unisonOtherVideo);
  lyricTimingBasis=sourceIsVideoBound?"video":"catalog";
- const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,
-  source:fromOtherUnisonVideo?"Unison shared text":selected._source,
-  trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||0,
-  acoustidId:identifiedTrack?.acoustidId||currentIdentifiedTrack?.acoustidId||"",
-  videoMetadata:{id:video.id,title:video.title,channelTitle:video.channelTitle,duration:Number(video.duration)||0}};
- if(sourceIsVideoBound){
-  storeLyric(video.id,cachedLyrics);
-  const timingCache=readTrackAnalysisCache()[video.id];
-  if(timingCache?.status==="completed"){
-   const match=selectTrackStart(timingCache.tracks,video);
-   if(match)applyTrackOffset(getVideoLyricOffset(video.id,match.timestamp));
-  }
- }else if(fromOtherUnisonVideo){
-  lyricState.lines=[];lyricState.wordSynced=false;lyricTimingBasis="catalog";
-  cachedLyrics.lines=[];cachedLyrics.wordSynced=false;cachedLyrics.timingBasis="catalog";
-  cachedLyrics.plain=lyricState.plain||cachedLyrics.plain;
-  if(cachedLyrics.plain.trim())for(const key of getSongLyricCacheKeys(video,cachedLyrics))storeLyric(key,cachedLyrics);
- }else storeLyricsForVideo(video,cachedLyrics,true);
+ if(!selected._synced)lyricOffsetSeconds=0;
+ if(selected._synced){
+  const cachedLyrics={lines:lyricState.lines,plain:lyricState.plain,wordSynced:hasWords,timingBasis:lyricTimingBasis,
+   source:fromOtherUnisonVideo?"Unison shared text":selected._source,
+   trackName:selected.trackName||selected.title||track,artistName:selected.artistName||selected.artist||artist,duration:Number(selected.duration)||0,
+   acoustidId:identifiedTrack?.acoustidId||currentIdentifiedTrack?.acoustidId||"",
+   videoMetadata:{id:video.id,title:video.title,channelTitle:video.channelTitle,duration:Number(video.duration)||0}};
+  if(sourceIsVideoBound){
+   storeLyric(video.id,cachedLyrics);
+   const timingCache=readTrackAnalysisCache()[video.id];
+   if(timingCache?.status==="completed"){
+    const match=selectTrackStart(timingCache.tracks,video);
+    if(match)applyTrackOffset(getVideoLyricOffset(video.id,match.timestamp));
+   }
+  }else if(fromOtherUnisonVideo){
+   lyricState.lines=[];lyricState.wordSynced=false;lyricTimingBasis="catalog";
+   cachedLyrics.lines=[];cachedLyrics.wordSynced=false;cachedLyrics.timingBasis="catalog";
+   cachedLyrics.plain=lyricState.plain||cachedLyrics.plain;
+   if(cachedLyrics.plain.trim())for(const key of getSongLyricCacheKeys(video,cachedLyrics))storeLyric(key,cachedLyrics);
+  }else storeLyricsForVideo(video,cachedLyrics,true);
+ }
  lyricState.loading=false;
  hideDiagnostics();
  renderLyrics();
