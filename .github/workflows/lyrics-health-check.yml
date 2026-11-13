@@ -33,6 +33,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check sw.js
+
       - name: Run static and provider checks
         id: check
         continue-on-error: true
