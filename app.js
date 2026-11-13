@@ -1673,7 +1673,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if(typeof item?.qrc==="string"){const parsed=parseQrc(item.qrc);if(parsed.length>=2)return parsed;}
    return normalized;
   };
-  const tryResult=data=>{
+  const tryResult=(data,queryArtist="")=>{
    const metadata=data?.metadata||{};
    const pool=[...(Array.isArray(data?.tracks)?data.tracks:[]),...(data?.primary?[data.primary]:[])];
    const unique=[];
@@ -1693,7 +1693,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      ttmlLines:lines,plainLyrics:plain,hasWordSync:lines.some(line=>line.words.length),
      matchConfidence:0,_liriqoProvider:item.upstreamProvider||item.provider||item.lyricsSource||"",
      _sameVideoSource:String(data.videoId||"")===String(video.id)},
-     [],[identity.title,...identity.titles]);
+     queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
     if(valid)return true;
    }
    return false;
@@ -1736,7 +1736,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      if(video.duration)songUrl.searchParams.set("duration",String(Math.round(Number(video.duration))));
      const songData=await request(songUrl,"곡·가수 검색");
      if(requestId!==lyricLoadToken)return;
-     if(songData&&!tryResult(songData))record(provider,"LIRIQO_NO_USABLE_MATCH","곡·가수 검색 결과가 곡 정보 또는 가사 형식 검증을 통과하지 못했습니다.");
+     if(songData&&!tryResult(songData,variant.artist))record(provider,"LIRIQO_NO_USABLE_MATCH","곡·가수 검색 결과가 곡 정보 또는 가사 형식 검증을 통과하지 못했습니다.");
     }
    }
   }finally{
