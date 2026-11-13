@@ -1991,6 +1991,9 @@ document.addEventListener("click",event=>{if(!event.target.closest(".search-area
 renderRecentSearches();
 document.querySelectorAll("[data-query]").forEach(button=>button.addEventListener("click",()=>{el.searchInput.value=button.dataset.query;searchMusic(button.dataset.query);}));
 el.settingsButton.addEventListener("click",openSettings);
+const apiGuideDialog=document.getElementById("apiGuideDialog");
+document.getElementById("apiGuideOpenButton").addEventListener("click",()=>apiGuideDialog.showModal());
+apiGuideDialog.addEventListener("click",event=>{if(event.target===apiGuideDialog)apiGuideDialog.close();});
 el.saveKeyButton.addEventListener("click",()=>{const value=el.apiKeyInput.value.trim();if(!value){showToast("API 키를 입력해 주세요.");return;}apiKey=value;localStorage.setItem(STORAGE_KEY,apiKey);updateConnectionStatus();el.settingsDialog.close();showToast("API 키를 이 기기에 저장했어요.");});
 el.removeKeyButton.addEventListener("click",()=>{apiKey="";localStorage.removeItem(STORAGE_KEY);el.apiKeyInput.value="";updateConnectionStatus();el.settingsDialog.close();showToast("저장된 API 키를 삭제했어요.");});
 el.settingsDialog.addEventListener("click",event=>{if(event.target===el.settingsDialog)el.settingsDialog.close();});
