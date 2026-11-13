@@ -264,6 +264,12 @@ def provider_check(provider: str, fixture: dict) -> dict:
     result["lyric_mode"] = "synced" if count >= 2 else "plain" if plain_count >= 2 else "none"
     result["status"] = "PASS" if count >= 2 or plain_count >= 2 else "WARN"
     result["reason"] = "" if count >= 2 or plain_count >= 2 else "candidate_found_but_no_usable_lyrics"
+    if provider == "LiriQo":
+        cors = meta.get("cors")
+        result["browser_cors"] = "PASS" if cors in ("*", "https://kanghuijun000.github.io") else "NOT_CONFIRMED"
+        if meta.get("http") == 200 and result["browser_cors"] != "PASS":
+            result["status"] = "WARN"
+            result["reason"] = (result["reason"] + "; " if result["reason"] else "") + "browser_cors_header_missing"
     return result
 
 def main() -> int:
@@ -310,7 +316,12 @@ def main() -> int:
             "failed": sum(x["status"] == "FAIL" for x in results),
             "provider_passed": sum(x["category"] == "provider" and x["status"] == "PASS" for x in results),
             "provider_warnings": sum(x["category"] == "provider" and x["status"] == "WARN" for x in results),
-            "browser_cors": "NOT_TESTED",
+            "browser_cors": (
+                "PASS" if (liriqo_successes := [x for x in results if x.get("category") == "provider"
+                                                and x.get("provider") == "LiriQo" and x.get("http") == 200])
+                and all(x.get("browser_cors") == "PASS" for x in liriqo_successes)
+                else "NOT_CONFIRMED"
+            ),
             "real_playback_sync": "NOT_TESTED",
             "fixture_count": len(FIXTURES),
             "random_fixture_count": len(FIXTURES) - len(BASE_FIXTURES),
@@ -324,7 +335,8 @@ def main() -> int:
     for item in results:
         label = item.get("provider") or item.get("name")
         fixture = f' [{item["fixture"]}]' if item.get("fixture") else ""
-        print(f'{item["status"]:4} {item["category"]:8} {label}{fixture} {item.get("reason", "")} {item.get("response_detail", "")}')
+        cors = f' cors={item.get("browser_cors")}' if item.get("provider") == "LiriQo" else ""
+        print(f'{item["status"]:4} {item["category"]:8} {label}{fixture} {item.get("reason", "")} {item.get("response_detail", "")}{cors}')
     print(json.dumps(report["summary"], ensure_ascii=False))
     return 1 if any(x["category"] in ("static", "safety") and x["status"] == "FAIL" for x in results) else 0
 
