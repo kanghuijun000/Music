@@ -277,3 +277,23 @@ h1 em{color:var(--accent)}
 
 /* Beginner-friendly YouTube API key guide */
 .api-guide-open{padding:0;color:var(--accent);font-size:11px;text-align:left}.api-guide-dialog{max-height:min(88vh,850px);overflow-y:auto}.api-guide-steps{padding-left:22px;margin:0;display:grid;gap:16px}.api-guide-steps li{padding-left:4px;color:var(--accent);font-size:12px;line-height:1.6}.api-guide-steps li strong{color:var(--text);font-size:13px}.api-guide-steps p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.8}.api-guide-steps a,.api-guide-dialog .privacy-note a{color:var(--accent);text-decoration:none}.api-guide-steps code{overflow-wrap:anywhere;color:#d8e7bd;background:#ffffff0c;padding:2px 4px;border-radius:4px}.api-guide-notice{margin-top:20px;padding:13px;border:1px solid #b6f36a38;border-radius:12px;background:#b6f36a0b}.api-guide-notice strong{font-size:12px;color:var(--accent)}.api-guide-notice p{margin:6px 0 0;color:var(--muted);font-size:11px;line-height:1.8}
+
+
+/* Guided YouTube API setup wizard */
+.api-guide-dialog{width:min(560px,calc(100% - 24px));max-height:90vh;padding:20px;overscroll-behavior:contain}
+.api-guide-dialog .settings-description{margin-bottom:14px}
+.api-guide-progress{display:flex;justify-content:space-between;gap:8px;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;color:var(--muted);font-size:10px}
+.api-guide-steps{display:grid;gap:10px}
+.api-guide-step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#ffffff04}
+.api-step-number{width:27px;height:27px;border-radius:9px;background:#b6f36a18;color:var(--accent);display:grid;place-items:center;font-size:12px;font-weight:800}
+.api-step-content{min-width:0}.api-step-content>strong{display:block;color:var(--text);font-size:13px}
+.api-step-content>p,.api-step-content details p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.75}
+.api-guide-action{display:inline-flex;align-items:center;justify-content:center;min-height:35px;margin-top:9px;padding:0 12px;border:1px solid #b6f36a55;border-radius:9px;background:#b6f36a0c;color:var(--accent)!important;font-size:11px;font-weight:700;text-decoration:none}
+.api-step-content details{margin-top:9px}.api-step-content summary{color:#c4c9d5;font-size:10px;cursor:pointer}
+.api-guide-substep{display:grid;gap:5px;margin-top:10px;padding:10px;border-radius:9px;background:#0003}
+.api-guide-substep b{font-size:10px;color:#e6e9f1}.api-guide-substep span{font-size:10px;line-height:1.6;color:var(--muted)}
+.api-origin-copy{display:flex;align-items:center;gap:7px;min-width:0;margin-top:4px}
+.api-origin-copy code{flex:1;min-width:0;overflow-wrap:anywhere;padding:8px;border-radius:7px;background:#0005;color:#d8e7bd;font-size:10px}
+.api-origin-copy button{flex:none;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#ffffff0a;color:var(--text);font-size:10px}
+.api-guide-finish{font:inherit;cursor:pointer}
+@media(max-width:560px){.api-guide-dialog{padding:15px}.api-guide-step{padding:11px}.api-origin-copy{align-items:stretch}.api-origin-copy button{font-size:9px}}
