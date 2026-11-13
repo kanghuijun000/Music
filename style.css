@@ -274,3 +274,6 @@ h1 em{color:var(--accent)}
 .youtube-player-area .youtube-player-label{display:none!important;}
 .youtube-player-area .player-frame{width:200px!important;height:200px!important;margin:0!important;border:0!important;border-radius:0!important;}
 .youtube-player-area .player-frame iframe{width:200px!important;height:200px!important;}
+
+/* Beginner-friendly YouTube API key guide */
+.api-guide-open{padding:0;color:var(--accent);font-size:11px;text-align:left}.api-guide-dialog{max-height:min(88vh,850px);overflow-y:auto}.api-guide-steps{padding-left:22px;margin:0;display:grid;gap:16px}.api-guide-steps li{padding-left:4px;color:var(--accent);font-size:12px;line-height:1.6}.api-guide-steps li strong{color:var(--text);font-size:13px}.api-guide-steps p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.8}.api-guide-steps a,.api-guide-dialog .privacy-note a{color:var(--accent);text-decoration:none}.api-guide-steps code{overflow-wrap:anywhere;color:#d8e7bd;background:#ffffff0c;padding:2px 4px;border-radius:4px}.api-guide-notice{margin-top:20px;padding:13px;border:1px solid #b6f36a38;border-radius:12px;background:#b6f36a0b}.api-guide-notice strong{font-size:12px;color:var(--accent)}.api-guide-notice p{margin:6px 0 0;color:var(--muted);font-size:11px;line-height:1.8}
