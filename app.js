@@ -1744,7 +1744,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const sync=(b._synced?10000:0)-(a._synced?10000:0);
   return sync+(b._score-a._score);
  });
- const selected=candidates.find(item=>item._synced&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2);
+ const selected=candidates.find(item=>item._synced&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2)||
+  candidates.filter(item=>!item._synced&&String(item.plainLyrics||"").trim().length>=12)
+   .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0]||null;
  if(!selected){
   lyricState.loading=false;
   if(aiAssistButton)aiAssistButton.hidden=false;
