@@ -1,9 +1,10 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="v137";
+const CACHE_VERSION="v138";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
  "./index.html",
+ "./install.html",
  "./style.css",
  "./app.js?v=137",
  "./manifest.json",
@@ -39,15 +40,17 @@ self.addEventListener("fetch",event=>{
  if(request.method!=="GET")return;
  const url=new URL(request.url);
  if(url.origin!==self.location.origin)return;
- if(request.mode==="navigate"||url.pathname.endsWith("/index.html")){
+ if(request.mode==="navigate"||url.pathname.endsWith("/index.html")||url.pathname.endsWith("/install.html")){
   event.respondWith((async()=>{
    try{
     const fresh=await fetch(request,{cache:"no-store"});
     const cache=await caches.open(CACHE_NAME);
-    cache.put("./index.html",fresh.clone()).catch(()=>{});
+    const target=url.pathname.endsWith("/install.html")?"./install.html":"./index.html";
+    cache.put(target,fresh.clone()).catch(()=>{});
     return fresh;
    }catch(_){
-    return (await caches.match("./index.html"))||Response.error();
+    const target=url.pathname.endsWith("/install.html")?"./install.html":"./index.html";
+    return (await caches.match(target))||Response.error();
    }
   })());
   return;
