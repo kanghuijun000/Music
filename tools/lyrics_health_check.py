@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TIMEOUT = 9
+TIMEOUT = 12
 USER_AGENT = "Music-Lyrics-HealthCheck/1.0 (+https://github.com/kanghuijun000/Music)"
 BASE_FIXTURES = [
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
@@ -103,6 +103,21 @@ def check_static() -> list[dict]:
         "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
+        "LiriQo runs only as a fallback when no synced lyrics were found": (
+            "if(!candidates.some(item=>item._synced))" in app
+            and 'const provider="LiriQo";' in app
+            and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
+        ),
+        "LiriQo plain-text results can be used as a final fallback": (
+            "item.plain||item.plainLyrics" in app and '==="plain"?item.lyrics' in app
+        ),
+        "LiriQo millisecond timestamps are converted to seconds": (
+            "time:Number(line.start)/1000" in app and "start:Number(word.start)/1000" in app
+        ),
+        "LiriQo requests are cancelled when the user changes songs": (
+            "lyricFallbackAbortController" in app
+            and "if(lyricFallbackAbortController)lyricFallbackAbortController.abort" in app
+        ),
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
         "app and service-worker versions agree": bool(
             re.search(r"app\.js\?v=(\d+)", index)
@@ -157,16 +172,14 @@ def provider_check(provider: str, fixture: dict) -> dict:
     if provider == "LiriQo":
         metadata = data.get("metadata", {}) if isinstance(data, dict) else {}
         candidates = []
-        for item in (data.get("tracks", []) if isinstance(data, dict) else []):
+        pool = list(data.get("tracks", [])) if isinstance(data, dict) and isinstance(data.get("tracks"), list) else []
+        if isinstance(data, dict) and isinstance(data.get("primary"), dict):
+            pool.append(data["primary"])
+        for item in pool:
             if isinstance(item, dict):
-                candidates.append({**item, "trackName": metadata.get("title") or item.get("title") or "",
-                                   "artistName": metadata.get("artist") or item.get("artist") or "",
-                                   "duration": metadata.get("duration") or item.get("duration") or 0})
-        if not candidates and isinstance(data, dict) and isinstance(data.get("primary"), dict):
-            item = data["primary"]
-            candidates = [{**item, "trackName": metadata.get("title") or item.get("title") or "",
-                           "artistName": metadata.get("artist") or item.get("artist") or "",
-                           "duration": metadata.get("duration") or item.get("duration") or 0}]
+                candidates.append({**item, "trackName": item.get("title") or item.get("trackName") or metadata.get("title") or "",
+                                   "artistName": item.get("artist") or item.get("artistName") or metadata.get("artist") or "",
+                                   "duration": item.get("duration") or metadata.get("duration") or 0})
     elif isinstance(data, list):
         candidates = data
     elif isinstance(data, dict) and isinstance(data.get("results"), list):
@@ -244,9 +257,13 @@ def provider_check(provider: str, fixture: dict) -> dict:
     if isinstance(timed, dict):
         timed = timed.get("karaoke") or timed.get("synced") or ""
     count = timed_line_count(timed)
+    plain = selected.get("plain") or selected.get("plainLyrics") or ""
+    plain_count = sum(1 for line in str(plain).splitlines() if line.strip())
     result["timed_lines"] = count
-    result["status"] = "PASS" if count >= 2 else "WARN"
-    result["reason"] = "" if count >= 2 else "candidate_found_but_no_two_timed_lines"
+    result["plain_lines"] = plain_count
+    result["lyric_mode"] = "synced" if count >= 2 else "plain" if plain_count >= 2 else "none"
+    result["status"] = "PASS" if count >= 2 or plain_count >= 2 else "WARN"
+    result["reason"] = "" if count >= 2 or plain_count >= 2 else "candidate_found_but_no_usable_lyrics"
     return result
 
 def main() -> int:
