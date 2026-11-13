@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090a0f">
+  <meta name="description" content="Music 앱 설치 안내">
+  <meta name="application-name" content="Music">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Music">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/music-icon.svg" type="image/svg+xml">
+  <title>Music 설치</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 50% -15%,#26334b 0,transparent 53%),#090a0f;color:#f5f6fa;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;display:grid;place-items:center;padding:24px}
+    main{width:min(100%,440px);text-align:center}
+    .logo{width:78px;height:78px;margin:0 auto 18px;border-radius:24px;background:linear-gradient(145deg,#d9e5ff,#7186b5);color:#101522;display:grid;place-items:center;font-size:43px;font-weight:900;box-shadow:0 14px 40px #7186b544}
+    .eyebrow{font-size:10px;font-weight:800;letter-spacing:2.5px;color:#9eafd2}
+    h1{font-size:32px;letter-spacing:-1.2px;margin:9px 0}
+    .lead{font-size:14px;line-height:1.75;color:#a7adbb;margin:0 auto 26px;max-width:340px}
+    .panel{background:#151821;border:1px solid #292f3c;border-radius:19px;padding:20px;text-align:left;margin:12px 0}
+    .panel h2{font-size:15px;margin:0 0 9px}
+    .panel p,.steps{font-size:12px;line-height:1.8;color:#a7adbb;margin:0}
+    .steps{padding-left:20px;margin-top:9px}
+    button,.open-link{width:100%;min-height:52px;border:0;border-radius:14px;padding:14px 16px;background:linear-gradient(110deg,#dce7ff,#8ea5d3);color:#111827;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}
+    .secondary{margin-top:10px;background:#202633;border:1px solid #343e50;color:#e5e9f2}
+    #install-btn[hidden],#ios-help[hidden],#android-help[hidden],#installed-note[hidden],#chrome-open[hidden],#open-app[hidden]{display:none}
+    .note{font-size:11px;line-height:1.7;color:#70798a;margin:17px 8px 0}
+    #status{font-size:12px;color:#bdcbed;min-height:20px;margin:12px 0 0}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo" aria-hidden="true">M</div>
+    <div class="eyebrow">MUSIC, WITHOUT THE NOISE</div>
+    <h1>Music</h1>
+    <p class="lead">좋아하는 음악을 가사와 함께.<br>설치하면 홈 화면에서 바로 실행할 수 있어요.</p>
+
+    <a class="open-link" id="chrome-open" hidden
+      href="intent://kanghuijun000.github.io/Music/install.html#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=https%3A%2F%2Fkanghuijun000.github.io%2FMusic%2Finstall.html;end">
+      Chrome으로 열고 설치하기
+    </a>
+    <p id="status" role="status" aria-live="polite"></p>
+    <button id="install-btn" type="button" hidden>Music 설치하기</button>
+
+    <section class="panel" id="ios-help" hidden>
+      <h2>iPhone / iPad에서 설치하기</h2>
+      <p>Safari에서 이 페이지를 연 다음 아래 순서로 진행해 주세요.</p>
+      <ol class="steps">
+        <li>화면 아래 또는 위의 공유 버튼을 누릅니다.</li>
+        <li>메뉴에서 '홈 화면에 추가'를 선택합니다.</li>
+        <li>'추가'를 눌러 설치를 완료합니다.</li>
+      </ol>
+      <a class="open-link secondary" href="./">Music 열기</a>
+    </section>
+
+    <section class="panel" id="android-help" hidden>
+      <h2>설치 버튼이 보이지 않나요?</h2>
+      <p>Chrome 메뉴(⋮)에서 '앱 설치' 또는 '홈 화면에 추가'를 선택해 주세요. 카카오톡 안에서 열었다면 아래 버튼으로 Chrome에서 다시 열 수 있습니다.</p>
+    </section>
+
+    <section class="panel" id="installed-note" hidden>
+      <h2>이미 설치되어 있어요</h2>
+      <p>홈 화면의 Music 아이콘으로 실행할 수 있습니다.</p>
+      <a class="open-link" href="./">Music 실행하기</a>
+    </section>
+
+    <a class="open-link secondary" id="open-app" href="./">웹에서 바로 사용하기</a>
+    <p class="note">설치는 기기와 브라우저의 지원 여부에 따라 달라질 수 있습니다. 설치 여부와 최종 확인은 기기에서 진행됩니다.</p>
+  </main>
+
+  <script>
+    (() => {
+      const installButton = document.getElementById("install-btn");
+      const chromeOpen = document.getElementById("chrome-open");
+      const iosHelp = document.getElementById("ios-help");
+      const androidHelp = document.getElementById("android-help");
+      const installedNote = document.getElementById("installed-note");
+      const status = document.getElementById("status");
+      const openApp = document.getElementById("open-app");
+      let installPrompt = null;
+
+      const standalone = () =>
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.navigator.standalone === true;
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const isAndroid = /android/i.test(navigator.userAgent);
+      const isKakao = /KAKAOTALK/i.test(navigator.userAgent);
+
+      if (standalone()) {
+        installedNote.hidden = false;
+        openApp.hidden = true;
+      } else if (isIOS) {
+        iosHelp.hidden = false;
+        openApp.hidden = true;
+      } else {
+        androidHelp.hidden = false;
+        if (isAndroid && isKakao) {
+          chromeOpen.hidden = false;
+          openApp.hidden = true;
+          status.textContent = "카카오톡 밖의 Chrome에서 설치할 수 있도록 열어 주세요.";
+        }
+      }
+
+      window.addEventListener("beforeinstallprompt", event => {
+        event.preventDefault();
+        installPrompt = event;
+        installButton.hidden = false;
+        androidHelp.hidden = true;
+      });
+
+      installButton.addEventListener("click", async () => {
+        if (!installPrompt) {
+          status.textContent = "브라우저 메뉴에서 '앱 설치' 또는 '홈 화면에 추가'를 선택해 주세요.";
+          androidHelp.hidden = false;
+          return;
+        }
+        installButton.disabled = true;
+        installPrompt.prompt();
+        const choice = await installPrompt.userChoice;
+        installPrompt = null;
+        installButton.disabled = false;
+        installButton.hidden = true;
+        status.textContent = choice.outcome === "accepted"
+          ? "설치 요청을 완료했습니다."
+          : "설치가 취소되었습니다. 원할 때 다시 설치할 수 있습니다.";
+        androidHelp.hidden = choice.outcome !== "accepted";
+      });
+
+      window.addEventListener("appinstalled", () => {
+        installPrompt = null;
+        installButton.hidden = true;
+        androidHelp.hidden = true;
+        installedNote.hidden = false;
+        openApp.hidden = true;
+        chromeOpen.hidden = true;
+        status.textContent = "Music 설치가 완료되었습니다.";
+      });
+
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" })
+            .then(registration => registration.update())
+            .catch(() => {});
+        }, { once: true });
+      }
+    })();
+  </script>
+</body>
+</html>
