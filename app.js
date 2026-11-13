@@ -532,7 +532,7 @@ function videoLyricCacheMatches(cached,video){
 
 const ids=["searchForm","searchInput","searchButton","coverImage","resultsTitle","resultCount","resultsList","messageState","playerFrame","nowTitle","nowChannel","connectionStatus","settingsButton","settingsDialog","apiKeyInput","saveKeyButton","removeKeyButton","progressBar","currentTime","totalTime","playPauseButton","playbackState","lyricsView","lyricsStatus","lyricsDiagnostics","lyricsDiagnosticsContent","lyricsAttribution","auditStartButton","auditMarkButton","auditCopyButton","auditStatus"];
 const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
-let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,ytPlayerError=null,progressTimer=null,lyricTimer=null,playbackAuditTimer=null,seeking=false,lyricLoadToken=0,lyricAbortController=null,selectedVideoDuration=0,contentTimelineReady=false,searchRequestToken=0,searchAbortController=null;
+let apiKey=localStorage.getItem(STORAGE_KEY)||"",currentVideoId="",lastResults=[],toastTimer,ytPlayer=null,ytReady=false,ytPlayerError=null,progressTimer=null,lyricTimer=null,playbackAuditTimer=null,seeking=false,lyricLoadToken=0,lyricAbortController=null,lyricFallbackAbortController=null,selectedVideoDuration=0,contentTimelineReady=false,searchRequestToken=0,searchAbortController=null;
 let currentIdentifiedTrack=null,currentLyricsTrack=null;
 
 const ALBUM_ART_CACHE_KEY="music_album_art_cache_v1";
@@ -1042,6 +1042,8 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
 async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const requestId=++lyricLoadToken;
  if(lyricAbortController)lyricAbortController.abort(new Error("다른 곡으로 전환했어요."));
+ if(lyricFallbackAbortController)lyricFallbackAbortController.abort(new Error("다른 곡으로 전환했어요."));
+ lyricFallbackAbortController=null;
  const requestController=new AbortController();
  lyricAbortController=requestController;
  const lyricSignal=requestController.signal;
@@ -1566,68 +1568,6 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
  })());
  jobs.push((async()=>{
-  const provider="LiriQo";
-  const makeLines=track=>{
-   const timed=Array.isArray(track?.timed)?track.timed:[];
-   return timed.map(line=>{
-    const words=Array.isArray(line.words)?line.words.map(word=>({
-     text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
-    })).filter(word=>word.text&&Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.end>word.start):[];
-    return {time:Number(line.start)/1000,text:String(line.text||""),words};
-   }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
-  };
-  const tryResult=async(data,queryArtist="")=>{
-   const metadata=data?.metadata||{};
-   const pool=[...(Array.isArray(data?.tracks)?data.tracks:[]),...(data?.primary?[data.primary]:[])];
-   const unique=[];
-   for(const item of pool){
-    if(!item||unique.includes(item))continue;
-    unique.push(item);
-   }
-   const rank={syllable:4,word:3,character:2,line:1,plain:0};
-   unique.sort((a,b)=>(rank[String(b.syncLevel||"").toLowerCase()]||0)-(rank[String(a.syncLevel||"").toLowerCase()]||0));
-   for(const item of unique){
-    const syncLevel=String(item.syncLevel||"").toLowerCase();
-    if(!["syllable","word","character","line"].includes(syncLevel))continue;
-    const lines=makeLines(item);
-    if(lines.length<2)continue;
-    const trackTitle=metadata.title||item.title||"";
-    const trackArtist=metadata.artist||item.artist||"";
-    const durationValue=metadata.duration??item.duration??0;
-    const duration=typeof durationValue==="string"&&durationValue.includes(":")
-     ?durationValue.split(":").reduce((total,part)=>total*60+Number(part),0):Number(durationValue)||0;
-    const valid=accept(provider,{trackName:trackTitle,artistName:trackArtist,duration,
-     ttmlLines:lines,plainLyrics:String(item.plain||""),hasWordSync:lines.some(line=>line.words.length),
-     matchConfidence:0,_liriqoProvider:item.provider||item.upstreamProvider||"",_sameVideoSource:String(data.videoId||"")===String(video.id)},
-     queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
-    if(valid)return true;
-   }
-   return false;
-  };
-  try{
-   const url=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
-   url.searchParams.set("v",video.id);
-   const {data}=await fetchJson(url,{},10000,provider+"/영상 ID");
-   if(data?.error)record(provider,"LIRIQO_NO_RESULT",String(data.error).slice(0,180));
-   else if(await tryResult(data))return;
-  }catch(error){
-   if(error?.code!=="CANCELLED"&&error?.status!==404)record(provider+"/영상 ID",error?.code||"PROVIDER_ERROR",error?.message||"조회 실패",error?.elapsed||0,error?.status||"");
-  }
-  const variant=identity.queries.find(item=>item.artist);
-  if(variant&&!lyricSignal.aborted){
-   try{
-    const url=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
-    url.searchParams.set("title",variant.title);url.searchParams.set("artist",variant.artist);
-    if(video.duration)url.searchParams.set("duration",String(Math.round(Number(video.duration))));
-    const {data}=await fetchJson(url,{},10000,provider+"/곡·가수 검색");
-    if(data?.error)record(provider,"LIRIQO_NO_RESULT",String(data.error).slice(0,180));
-    else if(!await tryResult(data,variant.artist))record(provider,"LIRIQO_RESULT_REJECTED","검색 결과가 곡·가수 또는 싱크 조건을 통과하지 못했습니다.");
-   }catch(error){
-    if(error?.code!=="CANCELLED"&&error?.status!==404)record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");
-   }
-  }
- })());
- jobs.push((async()=>{
   const provider="Better Lyrics";
   if(getBetterLyricsCooldown()>Date.now()){record(provider,"COOLDOWN_ACTIVE","이전 429 응답으로 요청 제한 대기 중입니다.");return;}
   const variants=identity.queries.slice(0,6);
@@ -1711,6 +1651,99 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   await allJobs;
  }
  if(requestId!==lyricLoadToken)return;
+ if(!candidates.some(item=>item._synced)){
+  const provider="LiriQo";
+  const fallbackController=new AbortController();
+  lyricFallbackAbortController=fallbackController;
+  const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),7500);
+  const makeLines=item=>{
+   const timed=Array.isArray(item?.timed)?item.timed:[];
+   const normalized=timed.map(line=>{
+    const rawWords=Array.isArray(line.words)?line.words:
+     (Array.isArray(item?.words?.[line.id])?item.words[line.id]:[]);
+    const words=rawWords.map(word=>({
+     text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
+    })).filter(word=>word.text&&Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.end>word.start);
+    return {time:Number(line.start)/1000,text:String(line.text||""),words};
+   }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
+   if(normalized.length>=2)return normalized;
+   if(typeof item?.lrc==="string"){const parsed=parseLrc(item.lrc);if(parsed.length>=2)return parsed;}
+   if(typeof item?.ttml==="string"){const parsed=parseTtml(item.ttml);if(parsed.length>=2)return parsed;}
+   if(typeof item?.lyricsfile==="string"){const parsed=parseLyricsfile(item.lyricsfile);if(parsed.length>=2)return parsed;}
+   if(typeof item?.qrc==="string"){const parsed=parseQrc(item.qrc);if(parsed.length>=2)return parsed;}
+   return normalized;
+  };
+  const tryResult=data=>{
+   const metadata=data?.metadata||{};
+   const pool=[...(Array.isArray(data?.tracks)?data.tracks:[]),...(data?.primary?[data.primary]:[])];
+   const unique=[];
+   for(const item of pool)if(item&&!unique.includes(item))unique.push(item);
+   const rank={syllable:4,word:3,character:2,line:1,plain:0};
+   unique.sort((a,b)=>(rank[String(b.syncLevel||"").toLowerCase()]||0)-(rank[String(a.syncLevel||"").toLowerCase()]||0));
+   for(const item of unique){
+    const lines=makeLines(item);
+    const trackTitle=String(item.title||item.trackName||item.track||metadata.title||"").trim();
+    const trackArtist=String(item.artist||item.artistName||metadata.artist||"").trim();
+    const durationValue=item.duration??metadata.duration??0;
+    const duration=typeof durationValue==="string"&&durationValue.includes(":")
+     ?durationValue.split(":").reduce((total,part)=>total*60+Number(part),0):Number(durationValue)||0;
+    const plain=String(item.plain||item.plainLyrics||(String(item.syncLevel||"").toLowerCase()==="plain"?item.lyrics:"")||"");
+    if(lines.length<2&&!plain.trim())continue;
+    const valid=accept(provider,{trackName:trackTitle,artistName:trackArtist,duration,
+     ttmlLines:lines,plainLyrics:plain,hasWordSync:lines.some(line=>line.words.length),
+     matchConfidence:0,_liriqoProvider:item.upstreamProvider||item.provider||item.lyricsSource||"",
+     _sameVideoSource:String(data.videoId||"")===String(video.id)},
+     [],[identity.title,...identity.titles]);
+    if(valid)return true;
+   }
+   return false;
+  };
+  const request=async(url,label)=>{
+   const began=Date.now();
+   try{
+    const response=await fetch(url,{headers:{"Accept":"application/json"},signal:fallbackController.signal});
+    const raw=await response.text();
+    let data=null;
+    if(raw){try{data=JSON.parse(raw);}catch(_){}}
+    if(!response.ok){
+     const error=Object.assign(new Error("HTTP "+response.status+(data?.error?": "+String(data.error).slice(0,150):"")),
+      {status:response.status,code:"HTTP_"+response.status,elapsed:Date.now()-began});
+     throw error;
+    }
+    if(!data||typeof data!=="object")throw Object.assign(new Error("응답이 JSON 형식이 아닙니다."),{code:"INVALID_JSON",elapsed:Date.now()-began});
+    return data;
+   }catch(error){
+    if(requestId!==lyricLoadToken||fallbackController.signal.aborted&&error?.name==="AbortError")return null;
+    if(error?.status===404)record(provider,"LIRIQO_NOT_FOUND",label+"에서 일치하는 가사를 찾지 못했습니다.",Date.now()-began,404);
+    else record(provider+"/"+label,error?.code||"NETWORK_OR_CORS",error?.message||"연결 실패",error?.elapsed||Date.now()-began,error?.status||"");
+    return null;
+   }
+  };
+  try{
+   const videoUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
+   videoUrl.searchParams.set("v",video.id);
+   const videoData=await request(videoUrl, "영상 ID 검색");
+   if(requestId!==lyricLoadToken)return;
+   if(videoData&&!tryResult(videoData)){
+    record(provider,"LIRIQO_NO_USABLE_MATCH","영상 ID 결과에 곡 정보와 일치하는 표시 가능한 가사가 없습니다.");
+   }
+   if(!candidates.some(item=>item._source===provider)&&requestId===lyricLoadToken&&!fallbackController.signal.aborted){
+    const variant=identity.queries.find(item=>item.artist);
+    if(variant){
+     const songUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
+     songUrl.searchParams.set("title",variant.title);
+     songUrl.searchParams.set("artist",variant.artist);
+     if(video.duration)songUrl.searchParams.set("duration",String(Math.round(Number(video.duration))));
+     const songData=await request(songUrl,"곡·가수 검색");
+     if(requestId!==lyricLoadToken)return;
+     if(songData&&!tryResult(songData))record(provider,"LIRIQO_NO_USABLE_MATCH","곡·가수 검색 결과가 곡 정보 또는 가사 형식 검증을 통과하지 못했습니다.");
+    }
+   }
+  }finally{
+   clearTimeout(fallbackTimer);
+   if(lyricFallbackAbortController===fallbackController)lyricFallbackAbortController=null;
+  }
+ }
  if(candidates.length===0&&usePuter){
   try{
    const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
