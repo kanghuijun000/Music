@@ -2454,3 +2454,33 @@ function registerMusicServiceWorker(){
 
 
 registerMusicServiceWorker();
+
+// 1. 오디오 객체 생성
+const audio = new Audio('여기에_오디오_파일_주소나_경로.mp3');
+
+// 2. 재생 함수
+function playMusic() {
+  audio.play().then(() => {
+    // 재생이 시작된 후에 Media Session 설정
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: '노래 제목',
+        artist: '가수 이름',
+        album: '앨범 이름',
+        artwork: [
+          { src: '앨범_커버_이미지_주소.jpg', sizes: '512x512', type: 'image/jpeg' }
+        ]
+      });
+
+      // 잠금 화면 및 알림창의 재생/일시정지 버튼 동작 정의
+      navigator.mediaSession.setActionHandler('play', () => {
+        audio.play();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        audio.pause();
+      });
+    }
+  }).catch(error => {
+    console.log("재생 실패:", error);
+  });
+}
