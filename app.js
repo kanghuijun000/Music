@@ -2484,3 +2484,46 @@ function playMusic() {
     console.log("재생 실패:", error);
   });
 }
+// 1. 메인 음악 플레이어 (사용자가 재생할 음악)
+const audio = new Audio('내_진짜_음악_파일경로.mp3');
+
+// 2. 백그라운드 유지를 위한 무음 오디오 객체 (Base64로 된 1초 무음 소스)
+const silentAudio = new Audio('data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//uQxAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABgwCAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=');
+silentAudio.loop = true; // 무한 반복 재생 설정
+
+// 3. 사용자가 음악 재생 버튼을 눌렀을 때 실행되는 함수
+function playMusic() {
+  // 실제 음악 재생
+  audio.play().then(() => {
+    // 백그라운드 유지를 위한 무음 오디오도 같이 재생
+    silentAudio.play().catch(error => {
+      console.log("무음 오디오 재생 차단됨:", error);
+    });
+  }).catch(error => {
+    console.log("음악 재생 실패:", error);
+  });
+
+  // Media Session 설정 (잠금 화면 컨트롤러 유지용)
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: '노래 제목',
+      artist: '가수 이름',
+      album: '앨범 이름'
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      audio.play();
+      silentAudio.play();
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      audio.pause();
+      silentAudio.pause(); // 일시정지 시 무음 오디오도 같이 멈춤
+    });
+  }
+}
+
+// 4. 사용자가 일시정지 버튼을 눌렀을 때
+function pauseMusic() {
+  audio.pause();
+  silentAudio.pause();
+}
