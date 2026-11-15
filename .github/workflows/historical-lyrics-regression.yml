@@ -7,6 +7,7 @@ on:
       - ".github/workflows/historical-lyrics-regression.yml"
       - "tools/historical_lyrics_regression.py"
       - "tools/youtube_audio_probe.py"
+      - "tools/lyric_audio_verify.py"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,7 @@ concurrency:
 
 jobs:
   historical-commit:
-    name: "7-song regression — ${{ matrix.stage }}"
+    name: "14-song regression — ${{ matrix.stage }}"
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -80,7 +81,7 @@ jobs:
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
 
-      - name: Test this historical commit with the same seven songs
+      - name: Test this historical commit with the same fourteen songs
         run: xvfb-run -a python tools/historical_lyrics_regression.py --commit "${{ matrix.commit }}"
 
       - name: Upload per-commit regression report
