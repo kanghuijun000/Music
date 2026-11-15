@@ -125,6 +125,7 @@ def check_static() -> list[dict]:
         "QA snapshot exposes provider-level lyric diagnostics": "lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId" in app,
         "QA snapshot validates loaded lyric timestamps and lines": "staticValidation:auditValidateLoadedLyrics()" in app,
         "loaded lyric audit checks verified Korean spacing": "normalizeTimedLyricsSpacing(lines,lyricState.plain||\"\")" in app and "한국어 가사 띄어쓰기를 검증할 수 없습니다." in app,
+        "spacing validator is shared at top level before the QA audit": 0 <= app.find("function normalizeTimedLyricsSpacing") < app.find("function auditValidateLoadedLyrics") and app.count("function normalizeTimedLyricsSpacing") == 1,
         "plain-lyrics fallback remains valid when audio verification is unavailable": "renderer.get(\"plain_lyrics_present\")" in probe and 'report["verification_status"] = "INCONCLUSIVE"' in probe,
         "retrieval-only videos still receive strict song identity verification": '"--skip-audio"' in probe and "verify_lyrics(None, args.video_id, app_snapshot, identified)" in probe and "if audio_path is None:" in verifier,
         "comma-containing artist names are not split into false aliases": "Commas can be part of one artist name" in app and 'trackText(artist)==="car the garden"' in app and 'trackText(artist)==="카더가든"' in app and "creditedArtist.split" not in app,
