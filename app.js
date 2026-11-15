@@ -16,6 +16,7 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
+let lyricPreviewRenderedToken=0;
 const lyricCache=new Map();
 // TrackID.dev: video-level track timestamps. Results are cached per YouTube video.
 const TRACK_ANALYSIS_CACHE_KEY="music_track_timing_v1";
@@ -926,8 +927,9 @@ function renderLyrics(){
  if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
- if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&timelineReady)return;
+ if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&timelineReady&&(index>=0||lyricPreviewRenderedToken===lyricLoadToken))return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
+  if(index<0)lyricPreviewRenderedToken=lyricLoadToken;
   if(!lyricFlowAudit.renderedRequests.includes(lyricLoadToken)){
    lyricFlowAudit.renderedRequests.push(lyricLoadToken);
    recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:Number(lyricState.lines[0]?.time)||0,currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
