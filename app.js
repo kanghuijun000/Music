@@ -1333,7 +1333,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const cachedLines=(cached?.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
  const spacingRecoveredLines=restoreTimedLineSpacing(cachedLines,cachedPlain);
  const cacheSpacingRecovered=spacingRecoveredLines!==cachedLines;
- const cacheHasUnspacedKorean=cachedLines.some(item=>/[가-힣]/u.test(String(item.text||""))&&!/\s/u.test(String(item.text||"")));
+ const cacheHasUnspacedKorean=cachedLines.filter(item=>{const value=String(item.text||"");return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;}).length>=2;
  const cacheSpacingRepairFailed=Boolean(cached&&cacheHasUnspacedKorean&&!cacheSpacingRecovered);
  if(cached&&hasUsableCachedLyrics(cached)&&!usePuter&&!cacheSpacingRepairFailed){
   lyricState.lines=spacingRecoveredLines;
