@@ -53,7 +53,7 @@ RANDOM_POOL = [
 ]
 # Deterministic random sample: identical songs on every commit, so commit-to-commit
 # differences cannot be explained by a changing test set.
-TESTS = FIXED + random.Random("Music-lyrics-regression-2026-11-15").sample(RANDOM_POOL, 5)
+TESTS = FIXED + random.Random("Music-lyrics-regression-2026-11-15").sample(RANDOM_POOL, min(5, len(RANDOM_POOL)))
 
 def run(cmd, *, timeout=1200):
     return subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
