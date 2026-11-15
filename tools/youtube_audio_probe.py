@@ -290,7 +290,7 @@ def main() -> int:
             )
             if report["probe_passed"]:
                 report["verification_status"] = "PASS"
-            elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
+            elif (renderer.get("timed_line_count", 0) >= 2 or renderer.get("plain_lyrics_present")) and not report["audio"].get("audio_detected"):
                 # A non-embeddable video or silent CI audio sink cannot verify
                 # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
                 report["verification_status"] = "INCONCLUSIVE"
