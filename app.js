@@ -1331,10 +1331,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   (validVideoCache||findSharedLyricCache(video));
  const cachedPlain=String(cached?.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
  const cachedLines=(cached?.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
- const spacingRecoveredLines=restoreTimedLineSpacing(cachedLines,cachedPlain);
- const cacheSpacingRecovered=spacingRecoveredLines!==cachedLines;
- const cacheHasUnspacedKorean=cachedLines.filter(item=>{const value=String(item.text||"");return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;}).length>=2;
- const cacheSpacingRepairFailed=Boolean(cached&&cacheHasUnspacedKorean&&!cacheSpacingRecovered);
+ const cacheSpacing=normalizeTimedLyricsSpacing(cachedLines,cachedPlain);
+ const spacingRecoveredLines=cacheSpacing.lines;
+ const cacheSpacingRecovered=cacheSpacing.restored;
+ const cacheSpacingRepairFailed=Boolean(cached&&cacheSpacing.unsafe);
  if(cached&&hasUsableCachedLyrics(cached)&&!usePuter&&!cacheSpacingRepairFailed){
   lyricState.lines=spacingRecoveredLines;
   lyricState.plain=cachedPlain;
@@ -1447,6 +1447,16 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
   return output;
  }
+ function normalizeTimedLyricsSpacing(lines,plainText){
+  const source=Array.isArray(lines)?lines:[];
+  const restored=restoreTimedLineSpacing(source,plainText);
+  const unspacedLongKorean=restored.filter(item=>{
+   const value=String(item?.text||"");
+   return /[가-힣]/u.test(value)&&!/[\\s]/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
+  }).length;
+  const unsafe=unspacedLongKorean>=2;
+  return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
+ }
  function validate(item,extraArtists=[],extraTitles=[],provider="가사 제공처"){
   if(!item){record(provider,"EMPTY_RESPONSE","응답 데이터가 비어 있습니다.");return null;}
   const evidence=item._providerQueryEvidence||null;
@@ -1494,14 +1504,19 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    }
    if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)&&!exactVideoIdentityWithoutArtist){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   }
-  const lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
+  const plain=String(item.plainLyrics||item.plain||"").split(/\\r?\\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
+  let lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
+  const spacing=normalizeTimedLyricsSpacing(lines,plain.join("\\n"));
+  lines=spacing.lines;
+  if(spacing.unsafe){
+   record(provider,"KOREAN_SPACING_UNVERIFIED","띄어쓰기를 확인할 원문이 없어 잘못된 한국어 싱크 가사를 제외하고 일반 가사만 유지합니다.");
+  }
   const songDuration=Number(item.duration)||Number(video.duration)||0;
   const distinctTimestampCount=new Set(lines.map(line=>Math.round(Number(line.time)*100))).size;
   const validLines=lines.length>=2&&distinctTimestampCount>=2&&(!songDuration||lines.every(line=>line.time<=songDuration+90));
   lines.forEach(line=>delete line._order);
-  const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
   if(!validLines&&!plain.length){
    item._rejectCode=lines.length?"PARSE_TIMESTAMPS_INVALID":"PARSE_NO_LYRICS";
    record(provider,item._rejectCode,lines.length+"개 타임스탬프 행을 읽었지만 표시 조건을 통과하지 못했습니다.");
