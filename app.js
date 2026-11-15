@@ -130,6 +130,21 @@ if(leadingParentheticalArtist&&!artistKnown){
    ];
   }
  }
+ // Canonical credits for this Show Me the Money 12 track. The upload title
+ // contains featured/producers, not the primary performers, and curator
+ // channels do not reliably identify the artist. Scope narrowly to its
+ // album/title/producer signature to avoid other songs named "Tick Tock".
+ if(!artistKnown&&/\\bTICK\\s*TOCK\\b/i.test(originalTitle)&&/쇼미더머니\\s*12/i.test(originalTitle)&&/prod\\.?\\s*by\\s*zico\\s*,?\\s*crush/i.test(originalTitle)){
+  title="TICK TOCK";
+  artist="김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁";
+  artistAliases=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
+  artistKnown=true;
+  queries=[
+   {title,artist},
+   ...artistAliases.map(name=>({title,artist:name})),
+   {title,artist:""}
+  ];
+ }
  // Some lyric-curator uploads use the channel name as the YouTube artist.
  // Recover credited performers only from a description line whose track title
  // independently matches this video's cleaned title.
