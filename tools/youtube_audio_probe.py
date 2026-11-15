@@ -183,10 +183,24 @@ def main() -> int:
                           "--disable-blink-features=AutomationControlled"],
                     env={**os.environ, "PULSE_SINK": "music_probe"},
                 )
-                page = browser.new_page(
+                context = browser.new_context(
                     viewport={"width": 1365, "height": 900},
                     user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    service_workers="block",
                 )
+                page = context.new_page()
+                if args.app_root:
+                    app_root = Path(args.app_root).resolve()
+                    def serve_snapshot(route):
+                        from urllib.parse import urlparse, unquote
+                        request_path = unquote(urlparse(route.request.url).path)
+                        relative = request_path.split("/Music/", 1)[-1] or "index.html"
+                        candidate = (app_root / relative).resolve()
+                        if candidate.is_file() and app_root in candidate.parents:
+                            route.fulfill(path=str(candidate))
+                        else:
+                            route.continue_()
+                    page.route("https://kanghuijun000.github.io/Music/**", serve_snapshot)
                 browser_errors = []
                 network_errors = []
                 page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
