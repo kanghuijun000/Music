@@ -130,6 +130,25 @@ if(leadingParentheticalArtist&&!artistKnown){
    ];
   }
  }
+ // Some lyric-curator uploads use the channel name as the YouTube artist.
+ // Recover credited performers only from a description line whose track title
+ // independently matches this video's cleaned title.
+ if(!artistKnown&&video?.description){
+  const descriptionLines=String(video.description).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+   .map(line=>line.match(/^(.{2,180}?)\s[-–—]\s(.{2,180})$/))
+   .find(match=>match&&trackSimilarity(match[2],raw)>=0.92&&trackText(match[1])!==trackText(channel));
+  if(credit){
+   const creditedArtist=String(credit[1]||"").trim();
+   const creditedTitle=String(credit[2]||"").trim();
+   if(creditedArtist&&creditedTitle){
+    title=creditedTitle;
+    artist=creditedArtist;
+    artistKnown=true;
+    queries=[{title:creditedTitle,artist:creditedArtist},{title:creditedTitle,artist:""}];
+   }
+  }
+ }
  const titleAliases=artistAliases.length&&leadingParentheticalArtist
   ?parentheticalAliases.filter(value=>value!==String(leadingParentheticalArtist[2]||"").trim())
   :parentheticalAliases;
@@ -2048,7 +2067,7 @@ async function searchMusic(query){
   const allowed=new Map((details.items||[]).filter(v=>v.snippet?.categoryId==="10"&&v.status?.embeddable===true&&!isLikelyShortVideo(v)).map(v=>[v.id,v]));
   lastResults=(searchData.items||[]).filter(item=>allowed.has(item.id.videoId)).map(item=>{
    const v=allowed.get(item.id.videoId),thumbs=v.snippet.thumbnails||item.snippet.thumbnails||{},iso=v.contentDetails?.duration||"PT0S",m=iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/),duration=m?Number(m[1]||0)*3600+Number(m[2]||0)*60+Number(m[3]||0):0;
-   return{id:v.id,title:v.snippet.title,channelTitle:v.snippet.channelTitle,thumbnail:thumbs.high?.url||thumbs.medium?.url||thumbs.default?.url||"",duration};
+   return{id:v.id,title:v.snippet.title,channelTitle:v.snippet.channelTitle,description:String(v.snippet.description||""),thumbnail:thumbs.high?.url||thumbs.medium?.url||thumbs.default?.url||"",duration};
   });
   el.resultCount.textContent=lastResults.length+"곡";
   if(!lastResults.length){showMessage("재생 가능한 음악이 없어요","음악 카테고리이면서 외부 재생이 허용된 영상이 없어요. 다른 검색어를 시도해 보세요.");return;}
