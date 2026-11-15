@@ -35,6 +35,8 @@ FIXED = [
     {"name": "비망록 — Buzz", "query": "버즈 비망록 가사"},
     {"name": "사랑인걸 — Moses", "query": "모세 사랑인걸 가사"},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection", "query": "너드커넥션 좋은 밤 좋은 꿈 가사 웅키"},
+    {"name": "Home Sweet Home — Car, the garden (lyric upload)", "video_id": "9ZAmRR6mDpU"},
+    {"name": "Home Sweet Home — Car, the garden (official audio)", "video_id": "ctS0kU2k4HE"},
     {"name": "TICK TOCK — SMTM12", "query": "TICK TOCK Feat ZICO Prod ZICO Crush 쇼미더머니 12 알파 가사"},
 ]
 RANDOM_POOL = [
@@ -119,6 +121,14 @@ def main():
                     "plain_lyrics_present": detail.get("app_renderer", {}).get("plain_lyrics_present", False),
                     "timing_basis": detail.get("app_renderer", {}).get("timing_basis"),
                     "lyric_verification": detail.get("lyric_verification", {}),
+                    "verification_status": detail.get("verification_status", "MISSING"),
+                    "player_playing_seen": detail.get("player_playing_seen", False),
+                    "player_time_advanced_seconds": detail.get("player_time_advanced_seconds", 0),
+                    "youtube_player_error_code": detail.get("youtube_player_error_code"),
+                    "browser_errors": detail.get("browser_errors", []),
+                    "youtube_network_errors": detail.get("youtube_network_errors", []),
+                    "renderer_sample_count": (detail.get("app_renderer") or {}).get("sample_count", 0),
+                    "renderer_mismatch_ratio": (detail.get("app_renderer") or {}).get("mismatch_ratio"),
                     "audio": detail.get("audio", {}),
                     "error": detail.get("error"),
                 }
@@ -133,13 +143,20 @@ def main():
         "synced_lyrics_loaded": sum(1 for x in results if int(x.get("timed_line_count") or 0) >= 2),
         "plain_only": sum(1 for x in results if x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
         "no_lyrics_loaded": sum(1 for x in results if not x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
+        "identity_verified": sum(1 for x in results if (x.get("lyric_verification") or {}).get("identity_verified")),
+        "retrieval_passed": sum(1 for x in results if (x.get("lyric_verification") or {}).get("identity_verified") and (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present"))),
         "vocal_sync_passed": sum(1 for x in results if (x.get("lyric_verification") or {}).get("vocal_sync_verified")),
+        "vocal_sync_inconclusive": sum(1 for x in results if x.get("verification_status") == "INCONCLUSIVE"),
+        "vocal_sync_failed": sum(1 for x in results if x.get("verification_status") == "FAIL"),
+        "youtube_embed_blocked": sum(1 for x in results if x.get("youtube_player_error_code") in (101, 150)),
+        "player_started": sum(1 for x in results if x.get("player_playing_seen")),
         "youtube_or_environment_inconclusive": sum(1 for x in results if not (x.get("audio") or {}).get("audio_detected")),
     }
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if len(results) == len(TESTS) else 1
+    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present"))]
+    return 0 if len(results) == len(TESTS) and not retrieval_failures else 1
 
 if __name__ == "__main__":
     raise SystemExit(main())
