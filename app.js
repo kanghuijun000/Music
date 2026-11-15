@@ -223,7 +223,11 @@ function findIdentifiedLyricCache(video,identifiedTrack){
  for(const key of getSongLyricCacheKeys(video,metadata)){
   const cached=entries.find(entry=>entry[0]===key)?.[1];
   if(!hasUsableCachedLyrics(cached))continue;
-  if(key.startsWith("song-acoustid:")||(trackSimilarity(cached.trackName,metadata.trackName)>=0.92&&trackSimilarity(cached.artistName,metadata.artistName)>=0.82)){
+  // A fingerprint cache key is useful for discovery, but title and artist
+  // must still independently confirm the exact song before lyrics are reused.
+  const titleMatches=trackSimilarity(cached.trackName,metadata.trackName)>=0.92;
+  const artistMatches=trackSimilarity(cached.artistName,metadata.artistName)>=0.82;
+  if(titleMatches&&artistMatches){
    const prepared=prepareSharedCacheForVideo(cached,key,video.id);if(prepared)return prepared;
   }
  }
@@ -368,22 +372,44 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   Math.abs(Number(previous.track.duration)-Number(identified.duration))<=Math.max(15,Number(identified.duration)*0.12);
  const sameTrack=previous?.track&&trackSimilarity(previous.track.title,identified.title)>=0.92&&
   trackSimilarity(previous.track.artist,identified.artist)>=0.82&&durationClose;
- currentIdentifiedTrack=identified;recordLyricFlow("audio_track_identified",{title:identified.title,artist:identified.artist,hasExistingLyrics:hasLyrics,sameTrack:Boolean(sameTrack)});
-  
+ const previousPlainFallback=Boolean(previous&&!previous.lines.length&&String(previous.plain||"").trim());
+ currentIdentifiedTrack=identified;recordLyricFlow("audio_track_identified",{title:identified.title,artist:identified.artist,hasExistingLyrics:hasLyrics,sameTrack:Boolean(sameTrack),existingLyricsSynced:Boolean(previous?.lines?.length)});
  loadAlbumArtwork(video,identified);
  // Apply the fingerprint timestamp even when the existing lyrics already match.
- // Video-bound lyrics are normalized by applyTrackOffset before being reused.
+ // Video-bound lyrics are normalized by applyTrackOffset before they are reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
- if(hasLyrics&&sameTrack){
+ const hasVerifiedSyncedLyrics=lyricState.lines.length>=2&&
+  lyricState.lines.every(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim());
+ // A same-track synced result is already the best usable result; never replace it
+ // with a plain-text response from a later provider search.
+ if(hasLyrics&&sameTrack&&hasVerifiedSyncedLyrics){
   storeIdentifiedLyricsForSong(video,identified);
   setLyricsStatus("음원 확인 · "+identified.artist+" — "+identified.title);
   return true;
  }
- showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");recordLyricFlow("identified_lyrics_search_started",{title:identified.title,artist:identified.artist});
-  
+ // A same-track plain lyric result is not final: retry with the fingerprinted
+ // title/artist so providers and the shared song cache can supply timed lyrics.
+ showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 싱크 가사를 다시 검색하고 있어요…");
+ recordLyricFlow("identified_lyrics_search_started",{title:identified.title,artist:identified.artist,reason:previousPlainFallback?"upgrade_plain_to_synced":"verify_identified_track"});
  await loadLyrics(video,false,identified);
- if(!isCurrent()||currentVideoId!==video.id)return;
+ if(!isCurrent()||currentVideoId!==video.id)return false;
  const found=Boolean(lyricState.lines.length||String(lyricState.plain||"").trim());
+ const foundSynced=lyricState.lines.length>=2;
+ if(!found&&previous&&sameTrack&&previousPlainFallback){
+  // The audio fingerprint confirms the previous plain lyrics are for this song.
+  // Keep them if no timed source is available; never turn them into fake sync lyrics.
+  lyricState.lines=previous.lines.map(line=>({...line}));
+  lyricState.plain=previous.plain;
+  lyricState.wordSynced=previous.wordSynced;
+  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.loading=false;
+  lyricTimingBasis=previous.timingBasis||"catalog";
+  lyricOffsetSeconds=Number(previous.offset)||0;
+  currentLyricsTrack=previous.track?{...previous.track}:{title:identified.title,artist:identified.artist,duration:identified.duration};
+  renderLyrics();
+  setLyricsStatus("음원 확인 · "+identified.artist+" — "+identified.title+" · 싱크 가사를 찾지 못해 기존 일반 가사를 유지해요.");
+  recordLyricFlow("identified_plain_lyrics_preserved",{title:identified.title,artist:identified.artist,reason:"no_verified_synced_replacement"});
+  return true;
+ }
  if(!found&&previous){
   // Never keep lyrics from a different track after audio fingerprinting identifies this video.
   lyricState.lines=[];lyricState.plain="";lyricState.wordSynced=false;
@@ -392,8 +418,8 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   renderLyrics();
   setLyricsStatus("음원은 확인했지만 해당 곡과 일치하는 가사를 찾지 못했어요. 다른 곡의 가사는 표시하지 않았어요.");
  }else if(found){
-  storeIdentifiedLyricsForSong(video,identified);
-  setLyricsStatus("음원 식별로 곡 정보 보정됨");
+  if(foundSynced)storeIdentifiedLyricsForSong(video,identified);
+  setLyricsStatus(foundSynced?"음원 식별로 싱크 가사를 확인했어요.":"음원 식별로 곡 정보 보정됨");
  }
  return true;
 }
