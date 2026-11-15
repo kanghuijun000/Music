@@ -95,6 +95,7 @@ def check_static() -> list[dict]:
     index = (ROOT / "index.html").read_text(encoding="utf-8")
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
     verifier = (ROOT / "tools/lyric_audio_verify.py").read_text(encoding="utf-8")
+    probe = (ROOT / "tools/youtube_audio_probe.py").read_text(encoding="utf-8")
     results = []
     checks = {
         "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
@@ -119,6 +120,8 @@ def check_static() -> list[dict]:
         "lyric-video description credits are available for identity matching": "snippet.description" in app and "video?.description" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
         "audio regression rejects an un-applied lyric/video offset": "app_applied_offset_seconds" in verifier and "app_to_vocal_offset_error_seconds" in verifier and "offset_error<=1.5" in verifier,
+        "official YouTube descriptions reach the app identity parser": "fetch_video_description(video_id)" in verifier and '"description": description' in probe and "video_title, expected_title, expected_artist, channel, description = identified" in probe,
+        "comma-containing artist names are not split into false aliases": "never arbitrary comma fragments" in app and 'creditedAliases.push("카더가든")' in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
             "if(!candidates.some(item=>item._synced))" in app
