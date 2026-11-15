@@ -130,6 +130,7 @@ def main() -> int:
     parser.add_argument("--video-id", default=os.getenv("YOUTUBE_TEST_VIDEO_ID", "5vilULw-9Gg"))
     parser.add_argument("--seconds", type=int, default=35)
     parser.add_argument("--query", default=os.getenv("MUSIC_TEST_QUERY", ""))
+    parser.add_argument("--app-root", default="", help="Serve this historical app snapshot while keeping the GitHub Pages origin")
     args = parser.parse_args()
     if args.query:
         search_url = "https://www.youtube.com/results?" + __import__("urllib.parse").parse.urlencode({"search_query": args.query})
