@@ -93,16 +93,21 @@ def main():
             else:
                 command += ["--query", test["query"]]
             try:
-                proc = run(command, timeout=1200)
                 probe_path = ROOT / "youtube-audio-probe-report.json"
+                probe_path.unlink(missing_ok=True)
+                proc = run(command, timeout=1200)
                 detail = json.loads(probe_path.read_text(encoding="utf-8")) if probe_path.exists() else {}
+                verification = detail.get("lyric_verification") or {}
                 result = {
                     "song": test["name"],
                     "exit_code": proc.returncode,
                     "probe_passed": detail.get("probe_passed", False),
                     "video_id": detail.get("video_id"),
-                    "video_title": detail.get("video_title"),
-                    "app_track": detail.get("app_renderer", {}).get("track"),
+                    "video_title": verification.get("video_title"),
+                    "app_track": {
+                        "title": verification.get("app_track_title"),
+                        "artist": verification.get("app_track_artist"),
+                    },
                     "timed_line_count": detail.get("app_renderer", {}).get("timed_line_count", 0),
                     "plain_lyrics_present": detail.get("app_renderer", {}).get("plain_lyrics_present", False),
                     "timing_basis": detail.get("app_renderer", {}).get("timing_basis"),
