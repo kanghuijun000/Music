@@ -86,13 +86,14 @@ def identify(video_id):
                 break
     return title,track,artist,author,description
 
-def verify(audio_path,video_id,app_snapshot):
+def verify(audio_path,video_id,app_snapshot,identified=None):
     report={"app_lyrics_loaded":False,"identity_verified":False,
             "transcription_verified":False,"lyric_content_verified":False,
             "vocal_sync_verified":False,"overall":"UNVERIFIED",
             "audio_file_retained":False}
     try:
-        video_title,expected_title,expected_artist,channel,description=identify(video_id)
+        identity=identified if isinstance(identified,(tuple,list)) and len(identified)==5 else identify(video_id)
+        video_title,expected_title,expected_artist,channel,description=identity
         app_snapshot=app_snapshot if isinstance(app_snapshot,dict) else {}
         lines=[x for x in app_snapshot.get("lines",[]) if isinstance(x,dict)
                and str(x.get("text") or "").strip()
