@@ -212,7 +212,7 @@ if(leadingParentheticalArtist&&!artistKnown){
      ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
     ];
     // The artist's Korean and international spellings are both used by lyric providers.
-    if(trackText(creditedArtist)==="carthegarden")creditedAliases.push("카더가든");
+    if(trackText(creditedArtist)==="car the garden")creditedAliases.push("카더가든");
     if(trackText(creditedArtist)==="카더가든")creditedAliases.push("Car, the garden");
     artistAliases=[...new Set(creditedAliases.filter(Boolean))];
     artistKnown=true;
