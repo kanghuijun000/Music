@@ -180,9 +180,9 @@ if(leadingParentheticalArtist&&!artistKnown){
  // Canonical song identity overrides per-video channel/title guesses.
  // The same track is uploaded under lyric-curator, Mnet and artist/topic channels.
  const tickTockEvidence=[originalTitle,String(video?.description||""),channelRaw].join(" ");
- const tickTockTitle=/\\bTICK\\s*TOCK\\b/i.test(originalTitle);
- const tickTockSmtm=/쇼미더머니\\s*12|\\bSMTM\\s*12\\b|SHOW\\s*ME\\s*THE\\s*MONEY\\s*12/i.test(tickTockEvidence);
- const tickTockProducer=/ZICO/i.test(tickTockEvidence)&&/Crush/i.test(tickTockEvidence)&&/prod\\.?\\s*by/i.test(tickTockEvidence);
+ const tickTockTitle=/\bTICK\s*TOCK\b/i.test(originalTitle);
+ const tickTockSmtm=/쇼미더머니\s*12|\bSMTM\s*12\b|SHOW\s*ME\s*THE\s*MONEY\s*12/i.test(tickTockEvidence);
+ const tickTockProducer=/ZICO/i.test(tickTockEvidence)&&/Crush/i.test(tickTockEvidence)&&/prod\.?\s*by/i.test(tickTockEvidence);
  const tickTockPerformers=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
  const tickTockEvidenceNormalized=trackText(tickTockEvidence);
  const tickTockPerformerHits=tickTockPerformers.filter(name=>tickTockEvidenceNormalized.includes(trackText(name))).length;
