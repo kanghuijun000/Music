@@ -61,6 +61,12 @@ jobs:
             stage: "tick-tock-canonical-cache"
           - commit: "766ea974e912bb4aca07179e8d8026bdd682fe68"
             stage: "tick-tock-regex-correction"
+          - commit: "ff08c106ce746b764f5f5e77eaa78e96c3df8fc2"
+            stage: "before-korean-spacing-guard"
+          - commit: "a14f3e2e00a8612e8924d5f88b5e6580aae94972"
+            stage: "after-korean-spacing-guard"
+          - commit: "680e1bba3b68a8175e3a752cd6ad7cb9f4d5b972"
+            stage: "after-smooth-lyric-transition"
 
     steps:
       - name: Check out full history
