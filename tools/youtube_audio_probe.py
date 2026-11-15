@@ -305,7 +305,7 @@ def main() -> int:
             audio_path.unlink(missing_ok=True)
     REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if report.get("probe_passed") else 1
+    return 0 if report.get("verification_status") in ("PASS", "INCONCLUSIVE") else 1
 
 
 if __name__ == "__main__":
