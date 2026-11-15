@@ -117,6 +117,16 @@ if (homeSweetHomeTopicIdentity.title !== "Home Sweet Home" || homeSweetHomeTopic
   throw new Error("Home Sweet Home Topic-channel identity parsing failed");
 }
 
+const soldOutOriginalVideoIdentity = getLyricsIdentity({
+  id: "sold-out-original-video",
+  title: "Hawk Nelson- Sold Out (Lyrics Video)",
+  channelTitle: "Music Terminal",
+  description: "OriginalMusicVideo: • Hawk Nelson - Sold Out (Official Lyric Video)"
+});
+if (soldOutOriginalVideoIdentity.title !== "Sold Out" || soldOutOriginalVideoIdentity.artist !== "Hawk Nelson" ||
+    !soldOutOriginalVideoIdentity.artistKnown || !soldOutOriginalVideoIdentity.queries.some(query => query.artist === "Hawk Nelson")) {
+  throw new Error("Sold Out original-video credit did not identify Hawk Nelson and the track");
+}
 const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
