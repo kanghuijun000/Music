@@ -982,10 +982,10 @@ function parseTimedTextTime(value){
  return Number.isFinite(seconds)?seconds:NaN;
 }
 function preserveTimedTextSpacing(sourceText,wordText){
- const source=String(sourceText||"").replace(/\\s+/gu," ").trim();
- const words=String(wordText||"").replace(/\\s+/gu," ").trim();
+ const source=String(sourceText||"").replace(/\s+/gu," ").trim();
+ const words=String(wordText||"").replace(/\s+/gu," ").trim();
  if(!source)return words;
- const compact=value=>value.replace(/\\s+/gu,"");
+ const compact=value=>value.replace(/\s+/gu,"");
  return compact(source)&&compact(source)===compact(words)?source:words;
 }
 function parseTtml(source){
