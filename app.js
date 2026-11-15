@@ -1921,13 +1921,13 @@ function renderResults(items){el.resultsList.replaceChildren();el.messageState.h
 async function youtubeRequest(endpoint,params,signal){const url=new URL(API_BASE+"/"+endpoint);Object.entries({...params,key:apiKey}).forEach(([key,value])=>url.searchParams.set(key,value));let response;try{response=await fetch(url,{signal});}catch(error){if(signal?.aborted)throw new Error(signal.reason?.message||"검색 요청이 취소됐어요.");throw new Error("Google API에 연결하지 못했어요. ("+(error?.message||"네트워크 오류")+")");}let data={};try{data=await response.json();}catch(_){}if(!response.ok){const apiError=data?.error||{},reason=apiError.errors?.[0]?.reason||"reason 정보 없음",message=apiError.message||response.statusText||"Google 오류",status=response.status;let hint="";if(reason==="keyInvalid"||reason==="keyExpired")hint="Google Cloud에서 키가 유효한지 확인하세요.";else if(reason==="accessNotConfigured")hint="YouTube Data API v3를 활성화해야 합니다.";else if(reason==="quotaExceeded"||reason==="dailyLimitExceeded")hint="YouTube Data API 할당량을 초과했습니다.";else if(/referer|referrer|API_KEY_HTTP_REFERRER_BLOCKED/i.test(reason+" "+message))hint="GitHub Pages 도메인을 웹사이트 제한에 등록해야 합니다.";throw new Error("요청 단계: "+endpoint+". HTTP "+status+". Google 오류 코드: "+reason+". 설명: "+message+(hint?" 해결 단서: "+hint:""));}return data;}
 async function getVideoDurationSeconds(video){
  const iso=String(video?.contentDetails?.duration||"");
- const match=iso.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/);
+ const match=iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
  return match?Number(match[1]||0)*3600+Number(match[2]||0)*60+Number(match[3]||0):0;
 }
 function isLikelyShortVideo(video){
  const title=String(video?.snippet?.title||"");
  const channel=String(video?.snippet?.channelTitle||"");
- if(/(?:#\\s*(?:shorts?|쇼츠)|\\bshorts?\\b|쇼츠|세로\s*영상)/i.test(title+" "+channel))return true;
+ if(/(?:#\s*(?:shorts?|쇼츠)|\bshorts?\b|쇼츠|세로\s*영상)/i.test(title+" "+channel))return true;
  const duration=getVideoDurationSeconds(video);
  const thumbs=Object.values(video?.snippet?.thumbnails||{});
  const vertical=thumbs.some(item=>Number(item?.width)>0&&Number(item?.height)>0&&Number(item.height)/Number(item.width)>1.08);
