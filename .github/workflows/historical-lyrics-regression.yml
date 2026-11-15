@@ -1,0 +1,93 @@
+name: Historical Music Lyrics Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/historical-lyrics-regression.yml"
+      - "tools/historical_lyrics_regression.py"
+      - "tools/youtube_audio_probe.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-music-lyrics-regression
+  cancel-in-progress: false
+
+jobs:
+  historical-commit:
+    name: "7-song regression — ${{ matrix.stage }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - commit: "17845ac5147727c40badbd8a0050a211d50a3d89"
+            stage: "baseline-before-lyric-regressions"
+          - commit: "b60a77e220f9ab78f5eb19fb2d374367663a39b3"
+            stage: "artist-song-parsing"
+          - commit: "1e1bfaf9740177acd0f596909eb8979d26868c2f"
+            stage: "lyric-loading-diagnostics"
+          - commit: "91f375fcf6466d5a0fbf6124f4956bf871b5ef1e"
+            stage: "lyric-timing-event-order"
+          - commit: "4cad139da9c4ec86839e8f0567564c6fcf83787b"
+            stage: "verified-lyric-preview"
+          - commit: "6d54cd6443f307a90d36eefeab39a7f59882e5c2"
+            stage: "preview-render-loop"
+          - commit: "795498eebe0fd78ab337b8a7db723039a6122476"
+            stage: "retry-after-audio-identification"
+          - commit: "19d30e13af1a6e5be20fcac510ec901db3b6092c"
+            stage: "shared-artist-alias-cache"
+          - commit: "f94b2d7a1171c96992bbc99d20507e752305c2a4"
+            stage: "parenthesized-title-parsing"
+          - commit: "8a1ded61150c941feaa4c5d9ab2de21eafcf12d2"
+            stage: "description-credit-identification"
+          - commit: "51a92711807ae32f762bb1c927376c94e0602b1d"
+            stage: "promote-video-sync-to-song-cache"
+          - commit: "c4fbf88b935f46b7a87ca190db2bdc948dbc92e5"
+            stage: "separate-video-offset-from-song-cache"
+          - commit: "46bcd5d852b317aac836178029bc4da54e28a90a"
+            stage: "full-description-artist-credit"
+          - commit: "f68710a5a70100de56c9f495fb1853ac80b7fa6b"
+            stage: "individual-credited-performers"
+          - commit: "38fcf9ff8d2d78c7d05393a82a33ed81340d07f3"
+            stage: "tick-tock-artist-identification"
+          - commit: "3338a3863eaa6d62c58c1ad5c10d112a04876c16"
+            stage: "tick-tock-canonical-cache"
+          - commit: "766ea974e912bb4aca07179e8d8026bdd682fe68"
+            stage: "tick-tock-regex-correction"
+
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install browser and audio verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils xvfb
+          python -m pip install --upgrade pip
+          python -m pip install playwright faster-whisper
+          python -m playwright install --with-deps chromium
+
+      - name: Test this historical commit with the same seven songs
+        run: xvfb-run -a python tools/historical_lyrics_regression.py --commit "${{ matrix.commit }}"
+
+      - name: Upload per-commit regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-lyrics-${{ matrix.stage }}
+          path: historical-lyrics-regression-*.json
+          if-no-files-found: warn
+          retention-days: 30
