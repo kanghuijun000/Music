@@ -258,13 +258,16 @@ function getSongLyricCacheKeys(video,metadata=null){
  return keys;
 }
 function cachedArtistIdentityNames(cached){
- const names=[String(cached?.artistName||"").trim()];
- // Preserve alternate spellings discovered in the source video's explicit
- // "Artist (alias) - Song" title, so other uploads of that same song can
- // safely reuse catalog-timed lyrics across Korean/English artist names.
- if(cached?.videoMetadata){
+ const storedArtist=String(cached?.artistName||"").trim();
+ const names=[storedArtist];
+ // Preserve alternate spellings only when the provider's stored artist
+ // independently agrees with the source video's explicit artist identity.
+ if(cached?.videoMetadata&&storedArtist){
   const sourceIdentity=getLyricsIdentity(cached.videoMetadata);
-  names.push(sourceIdentity.artist,...(sourceIdentity.artistAliases||[]));
+  const sourceArtists=[sourceIdentity.artist,...(sourceIdentity.artistAliases||[])].filter(Boolean);
+  if(sourceIdentity.artistKnown&&sourceArtists.some(name=>artistIdentityMatches(storedArtist,name,0.82))){
+   names.push(...sourceArtists);
+  }
  }
  return [...new Set(names.map(value=>String(value||"").trim()).filter(Boolean))];
 }
