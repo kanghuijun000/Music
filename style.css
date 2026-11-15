@@ -313,3 +313,8 @@ h1 em{color:var(--accent)}
 .recent-insert-icon{width:23px;height:23px;flex:none;display:grid;place-items:center;color:#d8d8df;opacity:.9}
 .recent-insert-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:560px){.recent-searches{top:calc(100% + 5px);left:-4px;right:-4px;max-height:62vh;padding:6px 4px;border-radius:12px}.recent-row{min-height:51px;gap:14px;padding:9px 11px}.recent-query-text{font-size:13px}}
+
+
+/* Mobile search suggestions should scroll with the page, not trap vertical swipes in the dropdown. */
+.recent-searches{max-height:none;overflow:visible;overscroll-behavior:auto;touch-action:pan-y;-webkit-overflow-scrolling:auto}
+@media(max-width:560px){.recent-searches{max-height:none;overflow:visible;overscroll-behavior:auto;touch-action:pan-y}}
