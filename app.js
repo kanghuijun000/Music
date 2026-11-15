@@ -137,10 +137,12 @@ if(leadingParentheticalArtist&&!artistKnown){
   const descriptionLines=String(video.description).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
   const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
    .map(line=>line.match(/^(.{2,180}?)\s[-–—]\s(.{2,180})$/))
-   .find(match=>match&&trackSimilarity(match[2],raw)>=0.92&&trackText(match[1])!==trackText(channel));
+   // Lyric uploads often repeat feat./producer/album text in the description.
+   // Compare the cleaned song title, not the full promotional title string.
+   .find(match=>match&&trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92&&trackText(match[1])!==trackText(channel));
   if(credit){
    const creditedArtist=String(credit[1]||"").trim();
-   const creditedTitle=String(credit[2]||"").trim();
+   const creditedTitle=cleanVideoTitle(credit[2]);
    if(creditedArtist&&creditedTitle){
     title=creditedTitle;
     artist=creditedArtist;
