@@ -2449,7 +2449,8 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
     renderedIndex,renderedText:renderedIndex>=0?String(lyricState.lines[renderedIndex]?.text||""):"",
     expectedIndex:playerTime>=0?auditExpectedLineIndex(playerTime):-1,
     lyricsStatus:String(el.lyricsStatus?.textContent||""),
-    lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice(-60):[]}
+    lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice(-60):[]},
+    staticValidation:auditValidateLoadedLyrics()
    };
   }
  };
