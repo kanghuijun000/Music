@@ -8,6 +8,9 @@ on:
       - ".github/workflows/lyrics-health-check.yml"
       - "tools/lyrics_health_check.py"
       - "tools/lyric_cache_alias_test.js"
+      - "tools/lyric_audio_verify.py"
+      - "tools/youtube_audio_probe.py"
+      - "tools/historical_lyrics_regression.py"
       - "app.js"
       - "index.html"
       - "sw.js"
@@ -17,6 +20,9 @@ on:
       - ".github/workflows/lyrics-health-check.yml"
       - "tools/lyrics_health_check.py"
       - "tools/lyric_cache_alias_test.js"
+      - "tools/lyric_audio_verify.py"
+      - "tools/youtube_audio_probe.py"
+      - "tools/historical_lyrics_regression.py"
       - "app.js"
       - "index.html"
       - "sw.js"
@@ -48,6 +54,7 @@ jobs:
           node --check app.js
           node --check sw.js
           node tools/lyric_cache_alias_test.js
+          python -m py_compile tools/lyric_audio_verify.py tools/youtube_audio_probe.py tools/historical_lyrics_regression.py tools/lyrics_health_check.py
 
       - name: Run static and provider checks
         id: check
