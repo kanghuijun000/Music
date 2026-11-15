@@ -92,6 +92,7 @@ def check_static() -> list[dict]:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     index = (ROOT / "index.html").read_text(encoding="utf-8")
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
+    verifier = (ROOT / "tools/lyric_audio_verify.py").read_text(encoding="utf-8")
     results = []
     checks = {
         "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
@@ -115,6 +116,7 @@ def check_static() -> list[dict]:
         "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
         "lyric-video description credits are available for identity matching": "snippet.description" in app and "video?.description" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
+        "audio regression rejects an un-applied lyric/video offset": "app_applied_offset_seconds" in verifier and "app_to_vocal_offset_error_seconds" in verifier and "offset_error<=1.5" in verifier,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
             "if(!candidates.some(item=>item._synced))" in app
