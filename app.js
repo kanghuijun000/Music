@@ -403,7 +403,7 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
  const finishWithTracks=async tracks=>{
   if(!isCurrent())return;
-  const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);recordLyricFlow("track_analysis_results_ready",{trackCount:Array.isArray(tracks)?tracks.length:0});
+  recordLyricFlow("track_analysis_results_ready",{trackCount:Array.isArray(tracks)?tracks.length:0});const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
    
   if(!isCurrent())return;
   if(!identifiedHandled){
@@ -1876,7 +1876,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  }
  lyricState.loading=false;
  hideDiagnostics();
- renderLyrics();recordLyricFlow("lyrics_data_ready",{requestId,provider:selected._source||"",syncedLineCount:lyricState.lines.length,hasPlain:Boolean(lyricState.plain)});
+ recordLyricFlow("lyrics_data_ready",{requestId,provider:selected._source||"",syncedLineCount:lyricState.lines.length,hasPlain:Boolean(lyricState.plain)});renderLyrics();
  
 }
 function updateProgress(){
