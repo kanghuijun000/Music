@@ -84,6 +84,16 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  let title=raw,artist="",artistKnown=false,queries=[],artistAliases=[];
+ // Buzz lyric uploads sometimes encode the album number before the song
+ // without an artist/title separator (for example: "[가사]버즈2집 비망록").
+ const buzzAlbumMatch=raw.match(/^(?:버즈|buzz)\s*\d+\s*집\s*(.+)$/i);
+ if(!artistKnown&&buzzAlbumMatch&&String(buzzAlbumMatch[1]||"").trim()){
+  title=String(buzzAlbumMatch[1]).trim();
+  artist="버즈";
+  artistAliases=["Buzz"];
+  artistKnown=true;
+  queries=[{title,artist},{title,artist:"Buzz"},{title,artist:""}];
+ }
  if(parts.length>1&&!generic){
   const first=parts[0],rest=parts.slice(1).join(" - ");
   if(trackSimilarity(channel,first)>=0.6){title=rest;artist=channel;artistKnown=true;}
@@ -100,6 +110,19 @@ function getLyricsIdentity(video,identifiedTrack=null){
   queries=[{title,artist:rest},{title:rest,artist:title},{title,artist:""},{title:rest,artist:""}];
  }else if(!generic&&isTopic){
   artist=channel;artistKnown=Boolean(channel);
+ }
+ // Quoted song names are common in curator titles such as
+ // "NewJeans 'Ditto' Lyrics". Only trust this form when a lyric label is present.
+ const quotedArtistTitle=raw.match(/^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:lyrics?|가사)?$/i);
+ if(!artistKnown&&hasExplicitLyricsLabel&&quotedArtistTitle){
+  const quotedArtist=String(quotedArtistTitle[1]||"").trim();
+  const quotedTitle=String(quotedArtistTitle[2]||"").trim();
+  if(quotedArtist&&quotedTitle&&trackText(quotedArtist)!==trackText(quotedTitle)){
+   title=quotedTitle;
+   artist=quotedArtist;
+   artistKnown=true;
+   queries=[{title,artist},{title,artist:""}];
+  }
  }
  // Explicitly labelled lyric uploads commonly use "Artist - Song".
 // A lyric-curator channel should not make both sides ambiguous; short-title
@@ -1892,23 +1915,33 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   try{
    const videoUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
    videoUrl.searchParams.set("v",video.id);
-   const videoData=await request(videoUrl, "영상 ID 검색");
+   const attempts=[(async()=>{
+    const data=await request(videoUrl,"영상 ID 검색");
+    if(data&&tryResult(data))return true;
+    throw new Error("영상 ID 검색에서 검증된 가사를 찾지 못했습니다.");
+   })()];
+   // Do not let a slow video-ID lookup block a known title/artist search.
+   // Try a few independently identified artist aliases concurrently.
+   const variants=[];
+   for(const variant of identity.queries.filter(item=>item.artist).slice(0,4)){
+    const key=trackText(variant.title)+"|"+trackText(variant.artist);
+    if(!variants.some(item=>item.key===key))variants.push({...variant,key});
+   }
+   for(const variant of variants){
+    const songUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
+    songUrl.searchParams.set("title",variant.title);
+    songUrl.searchParams.set("artist",variant.artist);
+    if(video.duration)songUrl.searchParams.set("duration",String(Math.round(Number(video.duration))));
+    attempts.push((async()=>{
+     const data=await request(songUrl,"곡·가수 검색 ("+variant.artist+")");
+     if(data&&tryResult(data,variant.artist))return true;
+     throw new Error("곡·가수 검색에서 검증된 가사를 찾지 못했습니다.");
+    })());
+   }
+   let matched=false;
+   try{await Promise.any(attempts);matched=true;}catch(_){}
+   if(matched)fallbackController.abort();
    if(requestId!==lyricLoadToken)return;
-   if(videoData&&!tryResult(videoData)){
-    record(provider,"LIRIQO_NO_USABLE_MATCH","영상 ID 결과에 곡 정보와 일치하는 표시 가능한 가사가 없습니다.");
-   }
-   if(!candidates.some(item=>item._source===provider)&&requestId===lyricLoadToken&&!fallbackController.signal.aborted){
-    const variant=identity.queries.find(item=>item.artist);
-    if(variant){
-     const songUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
-     songUrl.searchParams.set("title",variant.title);
-     songUrl.searchParams.set("artist",variant.artist);
-     if(video.duration)songUrl.searchParams.set("duration",String(Math.round(Number(video.duration))));
-     const songData=await request(songUrl,"곡·가수 검색");
-     if(requestId!==lyricLoadToken)return;
-     if(songData&&!tryResult(songData,variant.artist))record(provider,"LIRIQO_NO_USABLE_MATCH","곡·가수 검색 결과가 곡 정보 또는 가사 형식 검증을 통과하지 못했습니다.");
-    }
-   }
   }finally{
    clearTimeout(fallbackTimer);
    if(lyricFallbackAbortController===fallbackController)lyricFallbackAbortController=null;
