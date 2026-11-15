@@ -93,7 +93,7 @@ if (homeSweetHomeLyricIdentity.title !== "Home Sweet Home" || homeSweetHomeLyric
   throw new Error("Home Sweet Home lyric-upload artist/title parsing failed");
 }
 const homeSweetHomeOfficialIdentity = getLyricsIdentity({id:"home-sweet-home-official",title:"Home Sweet Home",channelTitle:"Car, the garden",description:"Provided to YouTube by FLUXUS\nHome Sweet Home · Car, the garden\nAPARTMENT"});
-if (homeSweetHomeOfficialIdentity.title !== "Home Sweet Home" || homeSweetHomeOfficialIdentity.artist !== "Car, the garden" || !homeSweetHomeOfficialIdentity.artistKnown || homeSweetHomeOfficialIdentity.artistAliases.includes("Car") || homeSweetHomeOfficialIdentity.artistAliases.includes("the garden")) {
+if (homeSweetHomeOfficialIdentity.title !== "Home Sweet Home" || homeSweetHomeOfficialIdentity.artist !== "Car, the garden" || !homeSweetHomeOfficialIdentity.artistKnown || homeSweetHomeOfficialIdentity.artistAliases.includes("Car") || homeSweetHomeOfficialIdentity.artistAliases.includes("the garden") || !homeSweetHomeOfficialIdentity.artistAliases.includes("카더가든")) {
   throw new Error("Home Sweet Home auto-generated song · artist credit parsing failed");
 }
 const homeSweetHomeTopicIdentity = getLyricsIdentity({id:"home-sweet-home-topic",title:"Home Sweet Home",channelTitle:"Car, the garden - Topic"});
