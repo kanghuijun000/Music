@@ -68,9 +68,9 @@ const alreadySpacedLines = [
   {time: 1.25, text: "안녕 오늘도"},
   {time: 3.5, text: "좋은 하루 보내"}
 ];
-const alreadySpaced = normalizeTimedLyricsSpacing(alreadySpacedLines, "안녕 오늘도\n좋은 하루 보내");
-if (alreadySpaced.unsafe || alreadySpaced.lines.length !== alreadySpacedLines.length ||
-    alreadySpaced.lines.some((line, index) => line.time !== alreadySpacedLines[index].time || line.text !== alreadySpacedLines[index].text)) {
+const idempotentSpacingResult = normalizeTimedLyricsSpacing(alreadySpacedLines, "안녕 오늘도\n좋은 하루 보내");
+if (idempotentSpacingResult.unsafe || idempotentSpacingResult.lines.length !== alreadySpacedLines.length ||
+    idempotentSpacingResult.lines.some((line, index) => line.time !== alreadySpacedLines[index].time || line.text !== alreadySpacedLines[index].text)) {
   throw new Error("already-correct Korean lyric spacing was modified");
 }
 const shortLegitimateLine = normalizeTimedLyricsSpacing([{time:0,text:"사랑해"}], "");
