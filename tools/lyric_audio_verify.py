@@ -61,6 +61,7 @@ def verify(audio_path,video_id,app_snapshot):
         artist_candidates.extend(re.findall(r"\(([^)]+)\)",expected_artist))
         artist_score=max((difflib.SequenceMatcher(None,norm(candidate),norm(app_artist)).ratio()
                           for candidate in artist_candidates if norm(candidate)),default=0.0)
+        identity_ok=bool(title_norm and app_title_norm and title_score>=0.90 and artist_score>=0.72)
         report.update(video_title=video_title,expected_title=expected_title,expected_artist=expected_artist,
                       app_track_title=app_title,app_track_artist=app_artist,
                       app_lyric_source=str(track.get("source") or ""),
