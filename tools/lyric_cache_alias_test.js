@@ -31,7 +31,7 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
 ];
-const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
 if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
 const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
@@ -93,6 +93,9 @@ if (homeSweetHomeLyricIdentity.title !== "Home Sweet Home" || homeSweetHomeLyric
   throw new Error("Home Sweet Home lyric-upload artist/title parsing failed");
 }
 const homeSweetHomeOfficialIdentity = getLyricsIdentity({id:"home-sweet-home-official",title:"Home Sweet Home",channelTitle:"Car, the garden",description:"Provided to YouTube by FLUXUS\nHome Sweet Home · Car, the garden\nAPARTMENT"});
+if (!artistIdentityMatches("Car, the garden", "카더가든")) {
+  throw new Error("Car, the garden Korean/English identity alias was not recognized");
+}
 if (homeSweetHomeOfficialIdentity.title !== "Home Sweet Home" || homeSweetHomeOfficialIdentity.artist !== "Car, the garden" || !homeSweetHomeOfficialIdentity.artistKnown || homeSweetHomeOfficialIdentity.artistAliases.includes("Car") || homeSweetHomeOfficialIdentity.artistAliases.includes("the garden") || !homeSweetHomeOfficialIdentity.artistAliases.includes("카더가든")) {
   throw new Error("Home Sweet Home auto-generated song · artist credit parsing failed");
 }
