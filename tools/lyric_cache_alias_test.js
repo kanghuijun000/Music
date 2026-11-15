@@ -27,8 +27,30 @@ const names = [
   "getLyricsIdentity",
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
+  "restoreTimedLineSpacing",
 ];
 const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const spacedLines = [
+  {time:0,text:"오래전그날"},
+  {time:3,text:"너와함께걷던길"},
+  {time:6,text:"기억하고있니"}
+];
+const spacedPlain = "오래전 그날\n너와 함께 걷던 길\n기억하고 있니";
+const restoredLines = restoreTimedLineSpacing(spacedLines, spacedPlain);
+if (restoredLines === spacedLines || restoredLines.map(x=>x.text).join("|") !== "오래전 그날|너와 함께 걷던 길|기억하고 있니") {
+  throw new Error("Korean spacing restoration from same-song plain lyrics failed");
+}
+if (restoredLines[0].time !== 0 || restoredLines[1].time !== 3 || restoredLines[2].time !== 6) {
+  throw new Error("Spacing restoration changed synced timestamps");
+}
+const unrelatedPlain = "전혀 다른 노래의 가사입니다\n아무런 연관이 없는 문장";
+if (restoreTimedLineSpacing(spacedLines, unrelatedPlain) !== spacedLines) {
+  throw new Error("Spacing restoration accepted unrelated lyrics");
+}
+const alreadySpaced = [{time:0,text:"이미 띄어쓰기가 있는 가사"}];
+if (restoreTimedLineSpacing(alreadySpaced, "이미 띄어쓰기가 있는 가사") !== alreadySpaced) {
+  throw new Error("Spacing restoration unnecessarily modified already-spaced lyrics");
+}
 const sourceVideo = {
   id: "source-video",
   title: "스탠딩 에그(Standing Egg) - 오래된 노래 [가사/Lyrics]",
