@@ -251,6 +251,11 @@ def main() -> int:
                 report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
                 report["app_lyric_offset_seconds"] = app_snapshot.get("lyricOffsetSeconds")
                 report["lyric_flow_events"] = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])[-30:]
+                static_issues = app_snapshot.get("staticValidation")
+                if isinstance(static_issues, list):
+                    blocking_issues = [issue for issue in static_issues if issue != "동기화 가사가 없고 일반 가사만 있습니다."]
+                    report["app_static_validation"] = static_issues
+                    report["app_static_validation_passed"] = not blocking_issues
                 report["player_playing_seen"] = playing_seen
                 report["player_time_advanced_seconds"] = round(last_time, 2)
                 report["player_state_changes"] = state_changes
