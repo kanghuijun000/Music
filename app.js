@@ -104,7 +104,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Explicitly labelled lyric uploads commonly use "Artist - Song".
 // A lyric-curator channel should not make both sides ambiguous; short-title
 // validation below still requires exact artist AND duration matches.
-if(!artistKnown&&hasExplicitLyricsLabel&&parts.length===2){
+if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2){
  const [artistCandidate,songCandidate]=parts;
  if(artistCandidate&&songCandidate&&trackText(artistCandidate)!==trackText(songCandidate)){
   title=songCandidate;
