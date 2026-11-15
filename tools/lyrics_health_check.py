@@ -124,6 +124,7 @@ def check_static() -> list[dict]:
         "YouTube search results retain video descriptions for artist identification": 'description:String(v.snippet.description||"")' in app,
         "QA snapshot exposes provider-level lyric diagnostics": "lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId" in app,
         "QA snapshot validates loaded lyric timestamps and lines": "staticValidation:auditValidateLoadedLyrics()" in app,
+        "loaded lyric audit checks verified Korean spacing": "normalizeTimedLyricsSpacing(lines,lyricState.plain||\"\")" in app and "한국어 가사 띄어쓰기를 검증할 수 없습니다." in app,
         "plain-lyrics fallback remains valid when audio verification is unavailable": "renderer.get(\"plain_lyrics_present\")" in probe and 'report["verification_status"] = "INCONCLUSIVE"' in probe,
         "comma-containing artist names are not split into false aliases": "never arbitrary comma fragments" in app and 'creditedAliases.push("카더가든")' in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
