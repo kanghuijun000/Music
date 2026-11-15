@@ -9,6 +9,7 @@ def norm(value):
     text=re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", text)
     text=re.sub(r"\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b", " ", text, flags=re.I)
     text=re.sub(r"가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터", " ", text, flags=re.I)
+    text=re.sub(r"vevo$", "", text, flags=re.I)
     return re.sub(r"[^0-9a-z가-힣]", "", text)
 
 def fetch_json(url):
