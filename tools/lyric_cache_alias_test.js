@@ -28,6 +28,7 @@ const names = [
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
   "restoreTimedLineSpacing",
+  "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
 ];
 const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"]];\n` + names.map(extractFunction).join("\n") + String.raw`
@@ -49,6 +50,23 @@ if (restoredLines === spacedLines || restoredLines.map(x=>x.text).join("|") !== 
 }
 if (restoredLines[0].time !== 0 || restoredLines[1].time !== 3 || restoredLines[2].time !== 6) {
   throw new Error("Spacing restoration changed synced timestamps");
+}
+const freshCandidate = normalizeTimedLyricsSpacing(spacedLines, spacedPlain);
+if (freshCandidate.unsafe || freshCandidate.lines.map(x=>x.text).join("|") !== "오래전 그날|너와 함께 걷던 길|기억하고 있니") {
+  throw new Error("Fresh provider candidate did not receive verified Korean spacing restoration");
+}
+const malformedCandidate = [
+  {time:0,text:"오래된노래를다시불러"},
+  {time:3,text:"너와함께걷던길을걸어"},
+  {time:6,text:"기억속에남아있는그날"}
+];
+const rejectedCandidate = normalizeTimedLyricsSpacing(malformedCandidate, "");
+if (!rejectedCandidate.unsafe || rejectedCandidate.lines.length !== 0) {
+  throw new Error("Unverified unspaced Korean synced lyrics were not blocked");
+}
+const shortLegitimateLine = normalizeTimedLyricsSpacing([{time:0,text:"사랑해"}], "");
+if (shortLegitimateLine.unsafe || shortLegitimateLine.lines.length !== 1) {
+  throw new Error("A short Korean lyric line was incorrectly blocked");
 }
 const unrelatedPlain = "전혀 다른 노래의 가사입니다\n아무런 연관이 없는 문장";
 if (restoreTimedLineSpacing(spacedLines, unrelatedPlain) !== spacedLines) {
