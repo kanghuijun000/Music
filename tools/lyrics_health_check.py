@@ -50,9 +50,19 @@ def title_match(actual: object, expected: str) -> bool:
     a, e = norm(actual), norm(expected)
     return bool(a and e and (a == e or a.startswith(e) or e.startswith(a)))
 
+ARTIST_ALIAS_GROUPS = (
+    frozenset((norm("버즈"), norm("buzz"))),
+    frozenset((norm("카더가든"), norm("car the garden"))),
+    frozenset((norm("너드커넥션"), norm("nerd connection"))),
+)
+
 def artist_match(actual: object, expected: str) -> bool:
     a, e = norm(actual), norm(expected)
-    return bool(a and e and (a == e or e in a or a in e))
+    if not a or not e:
+        return False
+    if any(a in aliases and e in aliases for aliases in ARTIST_ALIAS_GROUPS):
+        return True
+    return a == e or e in a or a in e
 
 def identity_match(actual_title: object, actual_artist: object, expected_title: str, expected_artist: str) -> bool:
     return title_match(actual_title, expected_title) and artist_match(actual_artist, expected_artist)
