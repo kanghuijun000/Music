@@ -183,68 +183,66 @@ if(leadingParentheticalArtist&&!artistKnown){
  // Some lyric-curator uploads use the channel name as the YouTube artist.
  // Recover credited performers only from a description line whose track title
  // independently matches this video's cleaned title.
- if(!artistKnown&&video?.description){
+ if(video?.description){
   const descriptionLines=String(video.description).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
   // YouTube auto-generated music descriptions use "Song · Artist", while
   // curator descriptions commonly use "Artist - Song". Accept either order
   // only when exactly one side independently matches the selected video title.
-  const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
-   .map(line=>line.match(/^(.{2,180}?)\s(?:[-–—]|[·•])\s(.{2,180})$/))
-   .find(match=>{
-    if(!match)return false;
-    const leftTitle=trackSimilarity(cleanVideoTitle(match[1]),raw)>=0.92;
-    const rightTitle=trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92;
-    const titleSide=leftTitle?match[1]:match[2];
-    return leftTitle!==rightTitle&&trackText(titleSide)!==trackText(channel);
-   });
-  if(credit){
-   const left=String(credit[1]||"").trim();
-   const right=String(credit[2]||"").trim();
-   const titleIsLeft=trackSimilarity(cleanVideoTitle(left),raw)>=0.92;
-   const creditedArtist=titleIsLeft?right:left;
-   const creditedTitle=cleanVideoTitle(titleIsLeft?left:right);
-   if(creditedArtist&&creditedTitle){
-    title=creditedTitle;
-    artist=creditedArtist;
-    // Keep the full credited artist intact: commas can be part of an
-    // artist name (for example, "Car, the garden"). Expand only explicit
-    // parenthetical alternate spellings, never arbitrary comma fragments.
-    const creditedAliases=[
-     creditedArtist,
-     ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
-    ];
-    // The artist's Korean and international spellings are both used by lyric providers.
-    if(trackText(creditedArtist)==="car the garden")creditedAliases.push("카더가든");
-    if(trackText(creditedArtist)==="카더가든")creditedAliases.push("Car, the garden");
-    artistAliases=[...new Set(creditedAliases.filter(Boolean))];
-    artistKnown=true;
-    queries=[
-     {title:creditedTitle,artist:creditedArtist},
-     ...artistAliases.map(name=>({title:creditedTitle,artist:name})),
-     {title:creditedTitle,artist:""}
-    ];
-   }
-  }
-
   if(!artistKnown){
-   const originalVideoCredit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
-    .map(line=>line.match(/(?:Original\s*Music\s*Video)\s*[:：]\s*[•·]?\s*(.{2,120}?)\s*[-–—]\s*(.{2,180})/i))
+   const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+    .map(line=>line.match(/^(.{2,180}?)\s(?:[-–—]|[·•])\s(.{2,180})$/))
     .find(match=>{
      if(!match)return false;
-     const titleParts=raw.split(/\s*[-–—]\s*/).map(part=>part.trim()).filter(Boolean);
-     const videoTrack=titleParts.length>1?titleParts.slice(1).join(" - "):raw;
-     return trackSimilarity(cleanVideoTitle(match[2]),videoTrack)>=0.92;
+     const leftTitle=trackSimilarity(cleanVideoTitle(match[1]),raw)>=0.92;
+     const rightTitle=trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92;
+     const titleSide=leftTitle?match[1]:match[2];
+     return leftTitle!==rightTitle&&trackText(titleSide)!==trackText(channel);
     });
-   if(originalVideoCredit){
-    const creditedArtist=String(originalVideoCredit[1]||"").trim();
-    const creditedTitle=cleanVideoTitle(originalVideoCredit[2]);
+   if(credit){
+    const left=String(credit[1]||"").trim();
+    const right=String(credit[2]||"").trim();
+    const titleIsLeft=trackSimilarity(cleanVideoTitle(left),raw)>=0.92;
+    const creditedArtist=titleIsLeft?right:left;
+    const creditedTitle=cleanVideoTitle(titleIsLeft?left:right);
     if(creditedArtist&&creditedTitle){
      title=creditedTitle;
      artist=creditedArtist;
-     artistAliases=[creditedArtist];
+     const creditedAliases=[
+      creditedArtist,
+      ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
+     ];
+     if(trackText(creditedArtist)==="car the garden")creditedAliases.push("카더가든");
+     if(trackText(creditedArtist)==="카더가든")creditedAliases.push("Car, the garden");
+     artistAliases=[...new Set(creditedAliases.filter(Boolean))];
      artistKnown=true;
-     queries=[{title:creditedTitle,artist:creditedArtist},{title:creditedTitle,artist:""}];
+     queries=[
+      {title:creditedTitle,artist:creditedArtist},
+      ...artistAliases.map(name=>({title:creditedTitle,artist:name})),
+      {title:creditedTitle,artist:""}
+     ];
     }
+   }
+  }
+  // A lyric-curator description may name the original music video as
+  // "OriginalMusicVideo: Artist - Song". Trust it only when the song side
+  // independently matches the selected video's title suffix.
+  const originalVideoCredit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+   .map(line=>line.match(/(?:Original\s*Music\s*Video)\s*[:：]\s*[•·]?\s*(.{2,120}?)\s*[-–—]\s*(.{2,180})/i))
+   .find(match=>{
+    if(!match)return false;
+    const titleParts=raw.split(/\s*[-–—]\s*/).map(part=>part.trim()).filter(Boolean);
+    const videoTrack=titleParts.length>1?titleParts.slice(1).join(" - "):raw;
+    return trackSimilarity(cleanVideoTitle(match[2]),videoTrack)>=0.92;
+   });
+  if(originalVideoCredit){
+   const creditedArtist=String(originalVideoCredit[1]||"").trim();
+   const creditedTitle=cleanVideoTitle(originalVideoCredit[2]);
+   if(creditedArtist&&creditedTitle&&(!artistKnown||trackSimilarity(artist,creditedArtist)<0.82)){
+    title=creditedTitle;
+    artist=creditedArtist;
+    artistAliases=[creditedArtist];
+    artistKnown=true;
+    queries=[{title:creditedTitle,artist:creditedArtist},{title:creditedTitle,artist:""}];
    }
   }
  }
