@@ -23,6 +23,8 @@ BASE_FIXTURES = [
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
     {"title": "Home Sweet Home", "artist": "카더가든", "duration": 206, "kind": "regression"},
+    {"title": "Counting Stars", "artist": "OneRepublic", "duration": 0, "kind": "regression"},
+    {"title": "Sold Out", "artist": "Hawk Nelson", "duration": 0, "kind": "regression"},
     {"title": "조용히 완전히 영원히", "artist": "너드커넥션", "duration": 189, "kind": "baseline"},
     {"title": "TICK TOCK (Feat. ZICO) (Prod. by ZICO, Crush)", "artist": "김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁", "duration": 230, "kind": "strict-match"},
 ]
