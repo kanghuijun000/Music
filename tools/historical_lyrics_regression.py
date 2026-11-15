@@ -52,10 +52,13 @@ RANDOM_POOL = [
     {"name": "TICK TOCK — SMTM12 (Mnet official video)", "video_id": "0sxLgAVPWVs", "audio_check": True, "seconds": 45},
     {"name": "사건의 지평선 — Younha (official M/V)", "video_id": "BBdC1rl5sKY", "audio_check": True, "seconds": 45},
     {"name": "Perfect — Ed Sheeran (official music video)", "video_id": "2Vv-BfVoq4g", "audio_check": True, "seconds": 45},
+    {"name": "Dynamite — BTS (official music video)", "video_id": "gdZLi9oWNZg", "audio_check": False, "seconds": 25},
+    {"name": "Ditto — NewJeans (performance video)", "video_id": "Km71Rr9K-Bw", "audio_check": False, "seconds": 25},
+    {"name": "Blinding Lights — The Weeknd (official video)", "video_id": "4NRXx6U8ABQ", "audio_check": False, "seconds": 25},
 ]
 # Deterministic random sample: identical songs on every commit, so commit-to-commit
 # differences cannot be explained by a changing test set.
-TESTS = FIXED + random.Random("Music-lyrics-regression-2026-11-15").sample(RANDOM_POOL, min(5, len(RANDOM_POOL)))
+TESTS = FIXED + random.Random("Music-lyrics-regression-2026-11-15").sample(RANDOM_POOL, len(RANDOM_POOL))
 
 def run(cmd, *, timeout=1200):
     return subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, timeout=timeout)
