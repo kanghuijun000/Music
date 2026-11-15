@@ -1330,8 +1330,18 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const cached=identifiedTrack?findIdentifiedLyricCache(video,identifiedTrack):
   (validVideoCache||findSharedLyricCache(video));
  if(cached&&hasUsableCachedLyrics(cached)&&!usePuter){
-  lyricState.lines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
-  lyricState.plain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
+  const cachedPlain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
+  const cachedLines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
+  const spacingRecoveredLines=restoreTimedLineSpacing(cachedLines,cachedPlain);
+  const cacheSpacingRecovered=spacingRecoveredLines!==cachedLines;
+  lyricState.lines=spacingRecoveredLines;
+  lyricState.plain=cachedPlain;
+  if(cacheSpacingRecovered){
+   cached.lines=spacingRecoveredLines;
+   storeLyric(video.id,cached);
+   for(const key of getSongLyricCacheKeys(video,cached))storeLyric(key,cached);
+   recordLyricFlow("cached_lyrics_spacing_recovered",{requestId,track:cached.trackName||"",lineCount:spacingRecoveredLines.length});
+  }
   lyricState.wordSynced=Boolean(cached.wordSynced);
   currentLyricsTrack={title:cached.trackName||"",artist:cached.artistName||"",duration:Number(cached.duration)||0};
   lyricTimingBasis=cached.timingBasis==="video"?"video":"catalog";
