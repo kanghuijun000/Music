@@ -1887,7 +1887,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      matchConfidence:0,_liriqoProvider:item.upstreamProvider||item.provider||item.lyricsSource||"",
      _sameVideoSource:String(data.videoId||"")===String(video.id)},
      queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
-    if(valid)return true;
+    if(valid)return Boolean(valid._synced);
    }
    return false;
   };
