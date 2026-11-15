@@ -183,14 +183,24 @@ if(leadingParentheticalArtist&&!artistKnown){
  // independently matches this video's cleaned title.
  if(!artistKnown&&video?.description){
   const descriptionLines=String(video.description).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  // YouTube auto-generated music descriptions use "Song · Artist", while
+  // curator descriptions commonly use "Artist - Song". Accept either order
+  // only when exactly one side independently matches the selected video title.
   const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
-   .map(line=>line.match(/^(.{2,180}?)\s[-–—]\s(.{2,180})$/))
-   // Lyric uploads often repeat feat./producer/album text in the description.
-   // Compare the cleaned song title, not the full promotional title string.
-   .find(match=>match&&trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92&&trackText(match[1])!==trackText(channel));
+   .map(line=>line.match(/^(.{2,180}?)\s(?:[-–—]|[·•])\s(.{2,180})$/))
+   .find(match=>{
+    if(!match)return false;
+    const leftTitle=trackSimilarity(cleanVideoTitle(match[1]),raw)>=0.92;
+    const rightTitle=trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92;
+    const titleSide=leftTitle?match[1]:match[2];
+    return leftTitle!==rightTitle&&trackText(titleSide)!==trackText(channel);
+   });
   if(credit){
-   const creditedArtist=String(credit[1]||"").trim();
-   const creditedTitle=cleanVideoTitle(credit[2]);
+   const left=String(credit[1]||"").trim();
+   const right=String(credit[2]||"").trim();
+   const titleIsLeft=trackSimilarity(cleanVideoTitle(left),raw)>=0.92;
+   const creditedArtist=titleIsLeft?right:left;
+   const creditedTitle=cleanVideoTitle(titleIsLeft?left:right);
    if(creditedArtist&&creditedTitle){
     title=creditedTitle;
     artist=creditedArtist;
