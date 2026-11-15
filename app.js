@@ -927,7 +927,7 @@ function renderLyrics(){
  if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
- if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&timelineReady&&(index>=0||lyricPreviewRenderedToken===lyricLoadToken))return;
+ if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&(index>=0?timelineReady:lyricPreviewRenderedToken===lyricLoadToken))return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
   if(index<0)lyricPreviewRenderedToken=lyricLoadToken;
   if(!lyricFlowAudit.renderedRequests.includes(lyricLoadToken)){
