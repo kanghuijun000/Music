@@ -33,6 +33,9 @@ COMMITS = [
 FIXED = [
     {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM"},
     {"name": "비망록 — Buzz", "query": "버즈 비망록 가사"},
+    {"name": "사랑인걸 — Moses", "query": "모세 사랑인걸 가사"},
+    {"name": "좋은 밤 좋은 꿈 — Nerd Connection", "query": "너드커넥션 좋은 밤 좋은 꿈 가사 웅키"},
+    {"name": "TICK TOCK — SMTM12", "query": "TICK TOCK Feat ZICO Prod ZICO Crush 쇼미더머니 12 알파 가사"},
 ]
 RANDOM_POOL = [
     {"name": "밤편지 — IU", "query": "아이유 밤편지 가사"},
@@ -55,10 +58,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True, help="Historical commit SHA")
     args = parser.parse_args()
-    match = next(((sha, label) for sha, label in COMMITS if sha.startswith(args.commit)), None)
-    if not match:
-        raise SystemExit("Commit is not in the approved historical regression list")
-    sha, label = match
+    if args.commit.upper() == "HEAD":
+        sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        label = "current-main"
+    else:
+        match = next(((sha, label) for sha, label in COMMITS if sha.startswith(args.commit)), None)
+        if not match:
+            raise SystemExit("Commit is not in the approved historical regression list, or use HEAD for the checked-out commit")
+        sha, label = match
     report = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "commit": sha,
