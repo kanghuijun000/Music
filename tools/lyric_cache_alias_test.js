@@ -28,8 +28,15 @@ const names = [
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
   "restoreTimedLineSpacing",
+  "preserveTimedTextSpacing",
 ];
 const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
+if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
+const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
+if (ttmlNoSpace !== "오래된노래를다시불러") throw new Error("TTML source text was unexpectedly modified");
+const ttmlMismatch = preserveTimedTextSpacing("다른 가사", "오래된노래");
+if (ttmlMismatch !== "오래된노래") throw new Error("TTML spacing helper accepted mismatched text");
 const spacedLines = [
   {time:0,text:"오래전그날"},
   {time:3,text:"너와함께걷던길"},
