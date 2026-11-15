@@ -107,6 +107,8 @@ def verify(audio_path,video_id,app_snapshot):
             title_score=1.0
         if norm(expected_artist)==norm("김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁"):
             artist_candidates=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"]
+        elif norm(expected_artist) in (norm("Car, the garden"),norm("카더가든")):
+            artist_candidates=["Car, the garden","카더가든"]
         else:
             # A comma can be part of a single artist name; never split credits blindly.
             artist_candidates=[expected_artist]
