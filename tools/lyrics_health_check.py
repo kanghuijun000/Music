@@ -91,6 +91,7 @@ def check_static() -> list[dict]:
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
     results = []
     checks = {
+        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
         "closeDuration declaration is active": bool(re.search(
             r"^\s*const closeDuration=Number\(item\.duration\)>0&&duration>=10;",
             app, re.M)),
