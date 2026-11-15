@@ -281,6 +281,18 @@ def main() -> int:
                 and report["lyric_verification"].get("overall") == "PASS"
                 and renderer_ok
             )
+            if report["probe_passed"]:
+                report["verification_status"] = "PASS"
+            elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
+                # A non-embeddable video or silent CI audio sink cannot verify
+                # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
+                report["verification_status"] = "INCONCLUSIVE"
+                report["inconclusive_reason"] = (
+                    "Synced lyrics loaded, but YouTube playback/audio was unavailable; "
+                    "vocal synchronization was not verified."
+                )
+            else:
+                report["verification_status"] = "FAIL"
     except Exception as exc:
         report["probe_passed"] = False
         report["error"] = f"{type(exc).__name__}: {exc}"
