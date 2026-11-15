@@ -108,7 +108,7 @@ def check_static() -> list[dict]:
     probe = (ROOT / "tools/youtube_audio_probe.py").read_text(encoding="utf-8")
     results = []
     checks = {
-        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
+        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&(parts.length===2||parts.length===1))" in app,
         "shared song lyric cache checks verified artist aliases from both uploads": "function cachedArtistIdentityNames(cached)" in app and "identity.artistAliases" in app and "cachedArtistIdentityNames(cached)" in app,
         "video-specific offsets are never reused across different uploads": 'if(item.timingBasis==="video"&&sourceKey!==targetVideoId)return null;' in app,
         "quoted lyric-video titles resolve artist and song": "quotedArtistTitle=raw.match" in app,
