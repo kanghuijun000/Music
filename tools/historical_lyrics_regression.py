@@ -150,6 +150,7 @@ def main():
         "vocal_sync_passed": sum(1 for x in results if (x.get("lyric_verification") or {}).get("vocal_sync_verified")),
         "vocal_sync_inconclusive": sum(1 for x in results if x.get("verification_status") == "INCONCLUSIVE"),
         "vocal_sync_failed": sum(1 for x in results if x.get("verification_status") == "FAIL"),
+        "timing_verification_failures": sum(1 for x in results if x.get("verification_status") == "FAIL"),
         "youtube_embed_blocked": sum(1 for x in results if x.get("youtube_player_error_code") in (101, 150)),
         "player_started": sum(1 for x in results if x.get("player_playing_seen")),
         "youtube_or_environment_inconclusive": sum(1 for x in results if not (x.get("audio") or {}).get("audio_detected")),
@@ -157,7 +158,7 @@ def main():
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present"))]
+    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
     return 0 if len(results) == len(TESTS) and not retrieval_failures else 1
 
 if __name__ == "__main__":
