@@ -143,6 +143,19 @@ const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2�
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
 }
+
+const buzzTargetVideo = {id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"};
+const correctBuzzCache = {
+  trackName:"비망록",artistName:"Buzz",videoMetadata:buzzTargetVideo,
+  lines:[{time:0,text:"검증용 가사"},{time:3,text:"다음 줄"}]
+};
+if (!sharedLyricCacheMatches(correctBuzzCache,buzzTargetVideo)) {
+  throw new Error("Previously working Buzz memoir track no longer matches its own verified cache");
+}
+const wrongBuzzTitleCache = {...correctBuzzCache,trackName:"스물의 노래"};
+if (sharedLyricCacheMatches(wrongBuzzTitleCache,buzzTargetVideo)) {
+  throw new Error("Buzz memoir accepted lyrics from the different song 스물의 노래");
+}
 const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto' Lyrics (뉴진스 Ditto 가사) (Color Coded Lyrics)",channelTitle:"Jaeguchi"});
 if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {
   throw new Error("Quoted artist/title lyric-video parsing failed");
