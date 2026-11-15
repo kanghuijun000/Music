@@ -3,6 +3,17 @@ const STORAGE_KEY="musiq_youtube_api_key_v1";
 const LYRIC_API="https://lrclib.net/api";
 const lyricState={lines:[],plain:"",lastIndex:-1,lastWordIndex:-1,wordSynced:false,loading:false};
 const playbackAudit={active:false,videoId:"",samples:0,missingTicks:0,mismatchTicks:0,transitions:[],marks:[],lastRenderedIndex:-1,lastUiUpdate:0,startedAt:0,invalid:[]};
+const lyricFlowAudit={videoId:"",startedAt:0,events:[],renderedRequests:[]};
+function resetLyricFlowAudit(videoId){lyricFlowAudit.videoId=String(videoId||"");lyricFlowAudit.startedAt=Date.now();lyricFlowAudit.events=[];lyricFlowAudit.renderedRequests=[];}
+function recordLyricFlow(stage,details={}){
+ if(!lyricFlowAudit.videoId||lyricFlowAudit.videoId!==currentVideoId)return;
+ let playerTime=null;try{const value=Number(ytPlayer?.getCurrentTime?.());if(Number.isFinite(value))playerTime=Number(value.toFixed(3));}catch(_){}
+ lyricFlowAudit.events.push({stage,at:new Date().toISOString(),elapsedMs:Date.now()-lyricFlowAudit.startedAt,playerTime,
+  loading:Boolean(lyricState.loading),lineCount:lyricState.lines.length,offsetSeconds:Number(lyricOffsetSeconds)||0,
+  timingBasis:lyricTimingBasis,...details});
+ if(lyricFlowAudit.events.length>60)lyricFlowAudit.events.shift();
+}
+
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 const lyricCache=new Map();
@@ -356,7 +367,8 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   Math.abs(Number(previous.track.duration)-Number(identified.duration))<=Math.max(15,Number(identified.duration)*0.12);
  const sameTrack=previous?.track&&trackSimilarity(previous.track.title,identified.title)>=0.92&&
   trackSimilarity(previous.track.artist,identified.artist)>=0.82&&durationClose;
- currentIdentifiedTrack=identified;
+ currentIdentifiedTrack=identified;recordLyricFlow("audio_track_identified",{title:identified.title,artist:identified.artist,hasExistingLyrics:hasLyrics,sameTrack:Boolean(sameTrack)});
+  
  loadAlbumArtwork(video,identified);
  // Apply the fingerprint timestamp even when the existing lyrics already match.
  // Video-bound lyrics are normalized by applyTrackOffset before being reused.
@@ -366,7 +378,8 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
   setLyricsStatus("음원 확인 · "+identified.artist+" — "+identified.title);
   return true;
  }
- showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");
+ showLyricsMessage("음원으로 "+identified.artist+" — "+identified.title+"을 확인했어요. 가사를 다시 검색하고 있어요…");recordLyricFlow("identified_lyrics_search_started",{title:identified.title,artist:identified.artist});
+  
  await loadLyrics(video,false,identified);
  if(!isCurrent()||currentVideoId!==video.id)return;
  const found=Boolean(lyricState.lines.length||String(lyricState.plain||"").trim());
@@ -384,12 +397,14 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  return true;
 }
 async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resolve()){
- const token=++trackAnalysisToken,videoId=String(video?.id||"");if(!videoId)return;
+ const token=++trackAnalysisToken,videoId=String(video?.id||"");if(!videoId)return;recordLyricFlow("track_analysis_started",{cacheStatus:String(readTrackAnalysisCache()[videoId]?.status||"none")});
+  
  const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
  const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
  const finishWithTracks=async tracks=>{
   if(!isCurrent())return;
-  const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
+  const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);recordLyricFlow("track_analysis_results_ready",{trackCount:Array.isArray(tracks)?tracks.length:0});
+   
   if(!isCurrent())return;
   if(!identifiedHandled){
    const match=selectTrackStart(tracks,video);
@@ -459,7 +474,8 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
    continue;
   }
   if(job.status==="completed"){
-   const tracks=Array.isArray(job.tracks)?job.tracks:[];
+   const tracks=Array.isArray(job.tracks)?job.tracks:[];recordLyricFlow("track_analysis_completed",{trackCount:tracks.length,identified:Boolean(selectIdentifiedTrack(tracks,video))});
+   
    const reliableTrack=Boolean(selectIdentifiedTrack(tracks,video)||selectTrackStart(tracks,video));
    const updated=readTrackAnalysisCache();
    updated[videoId]=reliableTrack?{status:"completed",tracks,savedAt:Date.now()}:{status:"failed",savedAt:Date.now(),reason:"no_confident_track"};
@@ -912,6 +928,10 @@ function renderLyrics(){
  const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&timelineReady)return;
  lyricState.lastIndex=index;lyricState.lastWordIndex=wordIndex;
+  if(!lyricFlowAudit.renderedRequests.includes(lyricLoadToken)){
+   lyricFlowAudit.renderedRequests.push(lyricLoadToken);
+   recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:Number(lyricState.lines[0]?.time)||0,currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
+  }
  el.lyricsView.replaceChildren();
  const start=index<0?0:Math.max(0,index-1),end=index<0?Math.min(lyricState.lines.length,3):Math.min(lyricState.lines.length,index+2);
  for(let i=start;i<end;i++){
@@ -994,7 +1014,8 @@ function samplePlaybackAudit(){
 function getPlaybackAuditReport(){
  const delays=playbackAudit.transitions.map(item=>item.uiDelayMs),vocalOffsets=playbackAudit.marks.map(item=>item.offsetMs);
  return {generatedAt:new Date().toISOString(),videoId:currentVideoId,videoTitle:String(el.nowTitle?.textContent||""),videoChannel:String(el.nowChannel?.textContent||""),
-  lyricTrack:currentLyricsTrack?{title:currentLyricsTrack.title,artist:currentLyricsTrack.artist,duration:currentLyricsTrack.duration,source:currentLyricsTrack.source,upstreamProvider:currentLyricsTrack.upstreamProvider}:null,
+  lyricTrack:currentLyricsTrack?{title:currentLyricsTrack.title,artist:currentLyricsTrack.artist,duration:currentLyricsTrack.duration,source:currentLyricsTrack.source,upstreamProvider:currentLyricsTrack.upstreamProvider}:null,lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice():[],startedAt:lyricFlowAudit.startedAt||null},
+   
   timingBasis:lyricTimingBasis,lyricOffsetSeconds,syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
   playerState:ytPlayer?.getPlayerState?.()??null,playerTime:Number(ytPlayer?.getCurrentTime?.()||0),samples:playbackAudit.samples,
   missingTicks:playbackAudit.missingTicks,mismatchTicks:playbackAudit.mismatchTicks,uiTransitionCount:playbackAudit.transitions.length,
@@ -1030,7 +1051,8 @@ async function puterAIAlternateSearch(track,artist,channel,duration,normalize,is
  finally{clearTimeout(timeout);}
 }
 async function loadLyrics(video,usePuter=false,identifiedTrack=null){
- const requestId=++lyricLoadToken;
+ const requestId=++lyricLoadToken;recordLyricFlow("lyrics_search_started",{requestId,identifiedSearch:Boolean(identifiedTrack),usePuter:Boolean(usePuter)});
+  
  if(lyricAbortController)lyricAbortController.abort(new Error("다른 곡으로 전환했어요."));
  if(lyricFallbackAbortController)lyricFallbackAbortController.abort(new Error("다른 곡으로 전환했어요."));
  lyricFallbackAbortController=null;
@@ -1133,7 +1155,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   return;
  }
  if(cached&&!usePuter)record("로컬 캐시","CACHE_EMPTY","저장된 항목에 표시 가능한 가사가 없어 새로 검색합니다.");
- lyricState.loading=true;lyricState.lines=[];lyricState.plain="";
+ lyricState.loading=true;lyricState.lines=[];lyricState.plain="";recordLyricFlow("lyrics_search_loading",{requestId});
+  
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
  showLyricsMessage("곡 정보를 확인하고 여러 가사 제공처를 검색하고 있어요…");
  const headers={"X-User-Agent":"Music/1.1 (https://kanghuijun000.github.io/)"};
@@ -1311,7 +1334,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(valid){
    valid._source=provider;candidates.push(valid);
    if(valid._synced&&Number(valid._score)>=220&&!firstVerifiedCandidateNotified){
-    firstVerifiedCandidateNotified=true;
+    firstVerifiedCandidateNotified=true;recordLyricFlow("first_verified_synced_candidate",{requestId,provider,score:Number(valid._score)||0});
+     
     notifyFirstVerifiedCandidate(valid);
    }
   }
@@ -1621,7 +1645,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    }
   }));
  })());
- const allJobs=Promise.allSettled(jobs);
+ const allJobs=Promise.allSettled(jobs);allJobs.then(()=>recordLyricFlow("provider_searches_settled",{requestId,candidateCount:candidates.length}));
+  
  let searchDeadlineTimer;
  const deadline=new Promise(resolve=>{searchDeadlineTimer=setTimeout(()=>resolve("deadline"),13000);});
  const outcome=await Promise.race([
@@ -1641,8 +1666,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   await allJobs;
  }
  if(requestId!==lyricLoadToken)return;
- if(!candidates.some(item=>item._synced)){
-  const provider="LiriQo";
+ if(!candidates.some(item=>item._synced)){recordLyricFlow("provider_search_race_finished",{requestId,outcome,candidateCount:candidates.length});
+  
+  const provider="LiriQo";recordLyricFlow("liriqo_fallback_started",{requestId,candidateCount:candidates.length});
+   
   const fallbackController=new AbortController();
   lyricFallbackAbortController=fallbackController;
   const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),7500);
@@ -1849,7 +1876,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  }
  lyricState.loading=false;
  hideDiagnostics();
- renderLyrics();
+ renderLyrics();recordLyricFlow("lyrics_data_ready",{requestId,provider:selected._source||"",syncedLineCount:lyricState.lines.length,hasPlain:Boolean(lyricState.plain)});
+ 
 }
 function updateProgress(){
  if(!ytPlayer||typeof ytPlayer.getCurrentTime!=="function")return;
@@ -1936,7 +1964,7 @@ window.addEventListener("pageshow",()=>{refreshMediaSessionFromPlayer();updatePr
 function onYouTubeIframeAPIReady(){ytPlayer=new YT.Player("playerFrame",{width:"200",height:"200",videoId:"",playerVars:{autoplay:0,controls:0,playsinline:1,rel:0,fs:0,iv_load_policy:3,disablekb:1},events:{onReady:()=>{ytReady=true;ytPlayerError=null;el.playbackState.textContent="재생 준비 완료";if(currentVideoId)ytPlayer.loadVideoById(currentVideoId);},onStateChange:event=>{if(event.data===YT.PlayerState.PLAYING){el.playbackState.textContent="재생 중";updateMediaSession("playing");if(activePlaylistId)renderPlaylistDetail();clearInterval(progressTimer);progressTimer=setInterval(updateProgress,100);clearInterval(lyricTimer);lyricTimer=setInterval(renderLyrics,50);}else if(event.data===YT.PlayerState.PAUSED){clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;el.playbackState.textContent="일시정지";updateMediaSession("paused");if(activePlaylistId)renderPlaylistDetail();updateProgress();}else if(event.data===YT.PlayerState.ENDED){clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;el.playbackState.textContent="재생 완료";updateMediaSession("none");updateProgress();handlePlaylistEnded();}else if(event.data===YT.PlayerState.BUFFERING){el.playbackState.textContent="불러오는 중…";}},onError:event=>{ytPlayerError=Number(event.data)||0;clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;contentTimelineReady=false;el.playPauseButton.disabled=true;el.progressBar.disabled=true;el.playbackState.textContent="재생할 수 없는 영상";const reason=event.data===101||event.data===150?"영상 소유자가 외부 플레이어 재생을 허용하지 않아요.":event.data===100?"영상이 삭제되었거나 비공개예요.":"YouTube 플레이어에서 재생 오류가 발생했어요.";showToast(reason+" 다른 검색 결과를 선택해 주세요.");}}});}
 window.onYouTubeIframeAPIReady=onYouTubeIframeAPIReady;
 const ytScript=document.createElement("script");ytScript.src="https://www.youtube.com/iframe_api";ytScript.async=true;document.head.appendChild(ytScript);
-function setPlayer(video){if(!playlistInternalSwitch){activePlaylistId="";activePlaylistIndex=-1;}ytPlayerError=null;currentVideoId=video.id;resetPlaybackAudit();currentIdentifiedTrack=null;currentLyricsTrack=null;if(el.lyricsAttribution){el.lyricsAttribution.textContent="";el.lyricsAttribution.hidden=true;}clearAlbumArtwork();lyricOffsetSeconds=0;lyricTimingBasis="catalog";trackAnalysisToken++;clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;seeking=false;selectedVideoDuration=Number(video.duration)||0;contentTimelineReady=false;updateMediaMetadata(video);updateMediaSession("none");el.nowTitle.textContent=video.title;el.nowChannel.textContent=video.channelTitle;el.currentTime.textContent="0:00";el.totalTime.textContent=formatTime(video.duration);el.progressBar.value="0";el.progressBar.max=String(Math.max(1,Math.floor((video.duration||0)*10)));el.progressBar.disabled=true;el.playPauseButton.disabled=true;el.playbackState.textContent="YouTube 플레이어 연결 중…";if(ytReady&&ytPlayer)ytPlayer.loadVideoById(video.id);renderResults(lastResults);const inferred=getLyricsIdentity(video);if(inferred.artistKnown)loadAlbumArtwork(video,{title:inferred.title,artist:inferred.artist});const lyricsPromise=loadLyrics(video);lyricsPromise.then(()=>{if(currentVideoId===video.id&&currentLyricsTrack?.title&&currentLyricsTrack?.artist)loadAlbumArtwork(video,currentLyricsTrack);}).catch(error=>console.warn("Artwork metadata follow-up skipped:",error?.message||error));startTrackOffsetAnalysis(video,lyricsPromise);}
+function setPlayer(video){if(!playlistInternalSwitch){activePlaylistId="";activePlaylistIndex=-1;}ytPlayerError=null;currentVideoId=video.id;resetPlaybackAudit();resetLyricFlowAudit(video.id);currentIdentifiedTrack=null;currentLyricsTrack=null;if(el.lyricsAttribution){el.lyricsAttribution.textContent="";el.lyricsAttribution.hidden=true;}clearAlbumArtwork();lyricOffsetSeconds=0;lyricTimingBasis="catalog";trackAnalysisToken++;clearInterval(progressTimer);progressTimer=null;clearInterval(lyricTimer);lyricTimer=null;seeking=false;selectedVideoDuration=Number(video.duration)||0;contentTimelineReady=false;updateMediaMetadata(video);updateMediaSession("none");el.nowTitle.textContent=video.title;el.nowChannel.textContent=video.channelTitle;el.currentTime.textContent="0:00";el.totalTime.textContent=formatTime(video.duration);el.progressBar.value="0";el.progressBar.max=String(Math.max(1,Math.floor((video.duration||0)*10)));el.progressBar.disabled=true;el.playPauseButton.disabled=true;el.playbackState.textContent="YouTube 플레이어 연결 중…";if(ytReady&&ytPlayer)ytPlayer.loadVideoById(video.id);renderResults(lastResults);const inferred=getLyricsIdentity(video);if(inferred.artistKnown)loadAlbumArtwork(video,{title:inferred.title,artist:inferred.artist});const lyricsPromise=loadLyrics(video);lyricsPromise.then(()=>{if(currentVideoId===video.id&&currentLyricsTrack?.title&&currentLyricsTrack?.artist)loadAlbumArtwork(video,currentLyricsTrack);}).catch(error=>console.warn("Artwork metadata follow-up skipped:",error?.message||error));startTrackOffsetAnalysis(video,lyricsPromise);}
 function renderResults(items){el.resultsList.replaceChildren();el.messageState.hidden=items.length>0;if(!items.length)return;const fragment=document.createDocumentFragment();items.forEach((video,index)=>{const row=document.createElement("article"),image=document.createElement("img"),info=document.createElement("div"),title=document.createElement("div"),channel=document.createElement("div"),badge=document.createElement("div"),play=document.createElement("button");row.className="track"+(video.id===currentVideoId?" active":"");image.className="track-thumb";image.src=video.thumbnail;image.alt="";image.loading=index>5?"lazy":"eager";info.className="track-info";title.className="track-title";title.textContent=video.title;channel.className="track-channel";channel.textContent=video.channelTitle;badge.className="track-badge";badge.textContent="음악";info.append(title,channel,badge);play.type="button";play.className="play-track";play.setAttribute("aria-label",video.title+" 재생");play.innerHTML='<svg viewBox="0 0 24 24"><path d="M7 4.8c0-.8.9-1.3 1.6-.9l10.2 7.2c.6.4.6 1.3 0 1.8L8.6 20.1c-.7.5-1.6 0-1.6-.9V4.8Z"/></svg>';play.addEventListener("click",()=>setPlayer(video));row.addEventListener("click",event=>{if(!event.target.closest("button"))setPlayer(video);});row.append(image,info,play);fragment.append(row);});el.resultsList.append(fragment);}
 async function youtubeRequest(endpoint,params,signal){const url=new URL(API_BASE+"/"+endpoint);Object.entries({...params,key:apiKey}).forEach(([key,value])=>url.searchParams.set(key,value));let response;try{response=await fetch(url,{signal});}catch(error){if(signal?.aborted)throw new Error(signal.reason?.message||"검색 요청이 취소됐어요.");throw new Error("Google API에 연결하지 못했어요. ("+(error?.message||"네트워크 오류")+")");}let data={};try{data=await response.json();}catch(_){}if(!response.ok){const apiError=data?.error||{},reason=apiError.errors?.[0]?.reason||"reason 정보 없음",message=apiError.message||response.statusText||"Google 오류",status=response.status;let hint="";if(reason==="keyInvalid"||reason==="keyExpired")hint="Google Cloud에서 키가 유효한지 확인하세요.";else if(reason==="accessNotConfigured")hint="YouTube Data API v3를 활성화해야 합니다.";else if(reason==="quotaExceeded"||reason==="dailyLimitExceeded")hint="YouTube Data API 할당량을 초과했습니다.";else if(/referer|referrer|API_KEY_HTTP_REFERRER_BLOCKED/i.test(reason+" "+message))hint="GitHub Pages 도메인을 웹사이트 제한에 등록해야 합니다.";throw new Error("요청 단계: "+endpoint+". HTTP "+status+". Google 오류 코드: "+reason+". 설명: "+message+(hint?" 해결 단서: "+hint:""));}return data;}
 function getVideoDurationSeconds(video){
