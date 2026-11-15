@@ -71,7 +71,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
     const key=trackText(query.title)+"|"+trackText(query.artist);
     if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:query.title,artist:query.artist||""});
    }
-   return {raw:title+" - "+artist,title,artist,artistKnown:true,isTopic:false,channel:artist,generic:false,
+   const artistAliases=trackText(artist)==="car the garden"?["카더가든"]:
+    trackText(artist)==="카더가든"?["Car, the garden"]:[];
+   return {raw:title+" - "+artist,title,artist,artistAliases,artistKnown:true,isTopic:false,channel:artist,generic:false,
     titles,queries:uniqueQueries,identified:true};
   }
  }
