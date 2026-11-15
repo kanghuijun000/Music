@@ -1452,7 +1452,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const restored=restoreTimedLineSpacing(source,plainText);
   const unspacedLongKorean=restored.filter(item=>{
    const value=String(item?.text||"");
-   return /[가-힣]/u.test(value)&&!/[\\s]/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
+   return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
   }).length;
   const unsafe=unspacedLongKorean>=2;
   return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
@@ -1504,11 +1504,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    }
    if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)&&!exactVideoIdentityWithoutArtist){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   }
-  const plain=String(item.plainLyrics||item.plain||"").split(/\\r?\\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
+  const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
   let lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
-  const spacing=normalizeTimedLyricsSpacing(lines,plain.join("\\n"));
+  const spacing=normalizeTimedLyricsSpacing(lines,plain.join("\n"));
   lines=spacing.lines;
   if(spacing.unsafe){
    record(provider,"KOREAN_SPACING_UNVERIFIED","띄어쓰기를 확인할 원문이 없어 잘못된 한국어 싱크 가사를 제외하고 일반 가사만 유지합니다.");
