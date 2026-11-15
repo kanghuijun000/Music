@@ -40,7 +40,7 @@ function trackText(value){return String(value||"").toLocaleLowerCase().normalize
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
  // Verified artist-name aliases allow the same catalog track to be shared
  // across Korean/English channel metadata without relaxing song matching.
- const ARTIST_IDENTITY_ALIASES=[["버즈","buzz"],["카더가든","car the garden"]];
+ const ARTIST_IDENTITY_ALIASES=[["버즈","buzz"],["카더가든","car the garden"],["너드커넥션","nerd connection"]];
  function canonicalArtistIdentity(value){
   const normalized=trackText(value);
   if(!normalized)return "";
