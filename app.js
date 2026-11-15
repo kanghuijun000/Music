@@ -146,8 +146,19 @@ if(leadingParentheticalArtist&&!artistKnown){
    if(creditedArtist&&creditedTitle){
     title=creditedTitle;
     artist=creditedArtist;
+    // The credited performer field can contain several artists. Keep the
+    // full credit as the primary query, but recognize each credited name
+    // (including parenthetical romanized aliases) during strict validation.
+    const creditedNames=creditedArtist.split(/\s*,\s*/).filter(Boolean);
+    artistAliases=[...new Set(creditedNames.flatMap(name=>[
+     name,...[...name.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
+    ]).filter(Boolean))];
     artistKnown=true;
-    queries=[{title:creditedTitle,artist:creditedArtist},{title:creditedTitle,artist:""}];
+    queries=[
+     {title:creditedTitle,artist:creditedArtist},
+     ...artistAliases.map(name=>({title:creditedTitle,artist:name})),
+     {title:creditedTitle,artist:""}
+    ];
    }
   }
  }
