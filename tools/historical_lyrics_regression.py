@@ -64,7 +64,7 @@ def main():
     args = parser.parse_args()
     if args.commit.upper() == "HEAD":
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        label = "current-main"
+        label = "current-app"
     else:
         match = next(((sha, label) for sha, label in COMMITS if sha.startswith(args.commit)), None)
         if not match:
@@ -166,7 +166,7 @@ def main():
         "diagnostic_event_count": sum(len(x.get("lyric_flow_events") or []) for x in results),
         "static_validation_failed": sum(1 for x in results if x.get("app_static_validation_passed") is False),
         "player_started": sum(1 for x in results if x.get("player_playing_seen")),
-        "youtube_or_environment_inconclusive": sum(1 for x in results if not (x.get("audio") or {}).get("audio_detected")),
+        "youtube_or_environment_inconclusive": sum(1 for x in results if x.get("audio_check", True) and not (x.get("audio") or {}).get("audio_detected")),
     }
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
