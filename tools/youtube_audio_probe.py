@@ -199,20 +199,20 @@ def main() -> int:
                     def serve_snapshot(route):
                         from urllib.parse import urlparse, unquote
                         request_path = unquote(urlparse(route.request.url).path)
-                        relative = request_path.split("/Music/", 1)[-1] or "index.html"
+                        relative = request_path.lstrip("/") or "index.html"
                         candidate = (app_root / relative).resolve()
                         if candidate.is_file() and app_root in candidate.parents:
                             route.fulfill(path=str(candidate))
                         else:
                             route.continue_()
-                    page.route("https://kanghuijun000.github.io/Music/**", serve_snapshot)
+                    page.route("https://kanghuijun000.github.io/**", serve_snapshot)
                 browser_errors = []
                 network_errors = []
                 page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
                 page.on("requestfailed", lambda request: network_errors.append({
                     "url": request.url[:220], "failure": str(request.failure or "")[:180]
                 }) if "youtube" in request.url else None)
-                page.goto("https://kanghuijun000.github.io/Music/?qa=1&qa_version=124",
+                page.goto("https://kanghuijun000.github.io/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_function(
                     "window.__musicQa && window.__musicQa.snapshot().playerReady",
