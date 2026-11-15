@@ -36,7 +36,7 @@ COMMITS = [
 FIXED = [
     {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM"},
     {"name": "Counting Stars — OneRepublic (timing regression)", "video_id": "5vilULw-9Gg"},
-    {"name": "Sold Out — Hawk Nelson (timing regression)", "video_id": "GspDybPhOeY"},
+    {"name": "Sold Out — Hawk Nelson (timing regression)", "video_id": "GspDybPhOeY", "seconds": 70},
     {"name": "비망록 — Buzz", "query": "버즈 비망록 가사"},
     {"name": "사랑인걸 — Moses", "query": "모세 사랑인걸 가사"},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection", "query": "너드커넥션 좋은 밤 좋은 꿈 가사 웅키"},
@@ -101,7 +101,7 @@ def main():
         with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
             tar.extractall(snapshot, filter="data")
         for test in TESTS:
-            command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", "45", "--app-root", str(snapshot)]
+            command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", str(test.get("seconds", 45)), "--app-root", str(snapshot)]
             if test.get("video_id"):
                 command += ["--video-id", test["video_id"]]
             else:
