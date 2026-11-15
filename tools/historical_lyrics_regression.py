@@ -131,6 +131,8 @@ def main():
                     "app_lyric_timing_basis": detail.get("app_lyric_timing_basis"),
                     "app_lyric_offset_seconds": detail.get("app_lyric_offset_seconds"),
                     "lyric_flow_events": detail.get("lyric_flow_events", []),
+                    "app_static_validation": detail.get("app_static_validation"),
+                    "app_static_validation_passed": detail.get("app_static_validation_passed"),
                     "verification_status": detail.get("verification_status", "MISSING"),
                     "player_playing_seen": detail.get("player_playing_seen", False),
                     "player_time_advanced_seconds": detail.get("player_time_advanced_seconds", 0),
@@ -161,13 +163,14 @@ def main():
         "timing_verification_failures": sum(1 for x in results if x.get("verification_status") == "FAIL"),
         "youtube_embed_blocked": sum(1 for x in results if x.get("youtube_player_error_code") in (101, 150)),
         "diagnostic_event_count": sum(len(x.get("lyric_flow_events") or []) for x in results),
+        "static_validation_failed": sum(1 for x in results if x.get("app_static_validation_passed") is False),
         "player_started": sum(1 for x in results if x.get("player_playing_seen")),
         "youtube_or_environment_inconclusive": sum(1 for x in results if not (x.get("audio") or {}).get("audio_detected")),
     }
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
+    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or x.get("app_static_validation_passed") is False or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
     return 0 if len(results) == len(TESTS) and not retrieval_failures else 1
 
 if __name__ == "__main__":
