@@ -1329,11 +1329,13 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const validVideoCache=videoCached&&videoLyricCacheMatches(videoCached,video)?videoCached:null;
  const cached=identifiedTrack?findIdentifiedLyricCache(video,identifiedTrack):
   (validVideoCache||findSharedLyricCache(video));
- if(cached&&hasUsableCachedLyrics(cached)&&!usePuter){
-  const cachedPlain=String(cached.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
-  const cachedLines=(cached.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
-  const spacingRecoveredLines=restoreTimedLineSpacing(cachedLines,cachedPlain);
-  const cacheSpacingRecovered=spacingRecoveredLines!==cachedLines;
+ const cachedPlain=String(cached?.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
+ const cachedLines=(cached?.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
+ const spacingRecoveredLines=restoreTimedLineSpacing(cachedLines,cachedPlain);
+ const cacheSpacingRecovered=spacingRecoveredLines!==cachedLines;
+ const cacheHasUnspacedKorean=cachedLines.some(item=>/[가-힣]/u.test(String(item.text||""))&&!/\s/u.test(String(item.text||"")));
+ const cacheSpacingRepairFailed=Boolean(cached&&cacheHasUnspacedKorean&&!cacheSpacingRecovered);
+ if(cached&&hasUsableCachedLyrics(cached)&&!usePuter&&!cacheSpacingRepairFailed){
   lyricState.lines=spacingRecoveredLines;
   lyricState.plain=cachedPlain;
   if(cacheSpacingRecovered){
@@ -1350,7 +1352,12 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   renderLyrics();
   return;
  }
- if(cached&&!usePuter)record("로컬 캐시","CACHE_EMPTY","저장된 항목에 표시 가능한 가사가 없어 새로 검색합니다.");
+ if(cacheSpacingRepairFailed){
+  recordLyricFlow("cached_lyrics_spacing_repair_failed",{requestId,track:cached.trackName||"",lineCount:cachedLines.length,plainHasHangulSpacing:/[가-힣].*\s.*[가-힣]/u.test(cachedPlain)});
+  record("로컬 캐시","CACHE_SPACING_REPAIR_FAILED","저장된 한국어 싱크 가사의 띄어쓰기를 원문에서 복구하지 못해 제공처를 다시 검색합니다.");
+ }else if(cached&&!usePuter){
+  record("로컬 캐시","CACHE_EMPTY","저장된 항목에 표시 가능한 가사가 없어 새로 검색합니다.");
+ }
  lyricState.loading=true;lyricState.lines=[];lyricState.plain="";recordLyricFlow("lyrics_search_loading",{requestId});
   
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;lyricState.wordSynced=false;
