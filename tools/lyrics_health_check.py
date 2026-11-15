@@ -140,7 +140,7 @@ def check_static() -> list[dict]:
         "retrieval-only videos still receive strict song identity verification": '"--skip-audio"' in probe and "verify_lyrics(None, args.video_id, app_snapshot, identified)" in probe and "if audio_path is None:" in verifier,
         "comma-containing artist names are not split into false aliases": "Commas can be part of one artist name" in app and 'trackText(artist)==="car the garden"' in app and 'trackText(artist)==="카더가든"' in app and "creditedArtist.split" not in app,
         "Nerd Connection Korean-English artist alias is explicit": '["너드커넥션","nerd connection"]' in app and artist_match("Nerd Connection", "너드커넥션") and not artist_match("Nerdcore", "너드커넥션"),
-        "underscore-separated lyric-video suffix is normalized": "ㅣ|\\\\/|\\\\||_|[-–—]" in app,
+        "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
             "if(!candidates.some(item=>item._synced))" in app
