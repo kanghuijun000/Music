@@ -92,6 +92,7 @@ def check_static() -> list[dict]:
     results = []
     checks = {
         "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
+        "shared song lyric cache checks verified artist aliases from both uploads": "function cachedArtistIdentityNames(cached)" in app and "identity.artistAliases" in app and "cachedArtistIdentityNames(cached)" in app,
         "closeDuration declaration is active": bool(re.search(
             r"^\s*const closeDuration=Number\(item\.duration\)>0&&duration>=10;",
             app, re.M)),
