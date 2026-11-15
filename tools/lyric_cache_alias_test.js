@@ -41,6 +41,14 @@ const targetVideo = {
   channelTitle: "Standing Egg - Topic",
   duration: 272
 };
+const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
+if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
+  throw new Error("Buzz album-prefix title parsing failed");
+}
+const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto' Lyrics (뉴진스 Ditto 가사) (Color Coded Lyrics)",channelTitle:"Jaeguchi"});
+if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {
+  throw new Error("Quoted artist/title lyric-video parsing failed");
+}
 const identity = getLyricsIdentity(sourceVideo);
 if (identity.title !== "오래된 노래") throw new Error("Source title parsing failed");
 if (identity.artist !== "스탠딩 에그") throw new Error("Source artist parsing failed");
