@@ -316,7 +316,7 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
   lyricTimingBasis="catalog";lyricOffsetSeconds=0;
   lyricState.lines=normalizedLines;lyricState.plain=String(cached.plain||"");
   lyricState.wordSynced=Boolean(cached.wordSynced);lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
-  storeLyricsForVideo(cached.videoMetadata,normalized,true);
+  for(const key of getSongLyricCacheKeys(cached.videoMetadata,normalized))storeLyric(key,normalized);
   recordLyricFlow("video_synced_lyrics_promoted_to_song_cache",{title:normalized.trackName,artist:normalized.artistName,lineCount:normalizedLines.length,sourceVideoId:videoId,trackStartOffset:offset});
   renderLyrics();
   return true;
