@@ -131,6 +131,7 @@ def main() -> int:
     parser.add_argument("--seconds", type=int, default=35)
     parser.add_argument("--query", default=os.getenv("MUSIC_TEST_QUERY", ""))
     parser.add_argument("--app-root", default="", help="Serve this historical app snapshot while keeping the GitHub Pages origin")
+    parser.add_argument("--skip-audio", action="store_true", help="Verify lyric retrieval only for a video that cannot be used for audio sync testing")
     args = parser.parse_args()
     if args.query:
         search_url = "https://www.youtube.com/results?" + __import__("urllib.parse").parse.urlencode({"search_query": args.query})
@@ -216,12 +217,13 @@ def main() -> int:
                     timeout=60000,
                 )
                 # Start capture before selecting the video so the recording begins at video time zero.
-                ffmpeg = subprocess.Popen([
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "pulse", "-i", "music_probe.monitor",
-                    "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
-                    "-c:a", "pcm_s16le", str(audio_path),
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                if not args.skip_audio:
+                    ffmpeg = subprocess.Popen([
+                        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "pulse", "-i", "music_probe.monitor",
+                        "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
+                        "-c:a", "pcm_s16le", str(audio_path),
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
                 page.evaluate("(video) => window.__musicQa.setVideo(video)", app_video)
                 deadline = time.monotonic() + args.seconds
                 last_time = 0.0
@@ -280,35 +282,44 @@ def main() -> int:
                 except subprocess.TimeoutExpired:
                     ffmpeg.terminate()
                     ffmpeg.wait(timeout=5)
-            report["audio"] = inspect_audio(audio_path)
-            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot, identified)
-            report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
-            report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
             renderer = report.get("app_renderer") or {}
-            renderer_ok = bool(renderer.get("sample_count", 0) >= 5 and (renderer.get("mismatch_ratio") or 0) <= 0.05)
-            report["probe_passed"] = bool(
-                report["player_playing_seen"]
-                and report["player_time_advanced_seconds"] >= 5
-                and report["audio"].get("audio_detected")
-                and report["lyric_verification"].get("overall") == "PASS"
-                and renderer_ok
-            )
-            if report["probe_passed"]:
-                report["verification_status"] = "PASS"
-            elif renderer.get("plain_lyrics_present") and renderer.get("timed_line_count", 0) < 2:
-                # Plain lyrics are an intentional fallback, not a failed sync test.
+            if args.skip_audio:
+                report["audio"] = {"audio_detected": False, "skipped": True}
+                report["lyric_verification"] = verify_lyrics(None, args.video_id, app_snapshot, identified)
+                report["lyric_content_verified"] = False
+                report["vocal_sync_verified"] = False
+                report["probe_passed"] = False
                 report["verification_status"] = "INCONCLUSIVE"
-                report["inconclusive_reason"] = "Plain lyrics loaded without timed lines; vocal synchronization is not applicable."
-            elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
-                # A non-embeddable video or silent CI audio sink cannot verify
-                # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
-                report["verification_status"] = "INCONCLUSIVE"
-                report["inconclusive_reason"] = (
-                    "Synced lyrics loaded, but YouTube playback/audio was unavailable; "
-                    "vocal synchronization was not verified."
-                )
+                report["inconclusive_reason"] = "Audio verification intentionally skipped for this retrieval-only video fixture."
             else:
-                report["verification_status"] = "FAIL"
+                report["audio"] = inspect_audio(audio_path)
+                report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot, identified)
+                report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
+                report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
+                renderer_ok = bool(renderer.get("sample_count", 0) >= 5 and (renderer.get("mismatch_ratio") or 0) <= 0.05)
+                report["probe_passed"] = bool(
+                    report["player_playing_seen"]
+                    and report["player_time_advanced_seconds"] >= 5
+                    and report["audio"].get("audio_detected")
+                    and report["lyric_verification"].get("overall") == "PASS"
+                    and renderer_ok
+                )
+                if report["probe_passed"]:
+                    report["verification_status"] = "PASS"
+                elif renderer.get("plain_lyrics_present") and renderer.get("timed_line_count", 0) < 2:
+                    # Plain lyrics are an intentional fallback, not a failed sync test.
+                    report["verification_status"] = "INCONCLUSIVE"
+                    report["inconclusive_reason"] = "Plain lyrics loaded without timed lines; vocal synchronization is not applicable."
+                elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
+                    # A non-embeddable video or silent CI audio sink cannot verify
+                    # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
+                    report["verification_status"] = "INCONCLUSIVE"
+                    report["inconclusive_reason"] = (
+                        "Synced lyrics loaded, but YouTube playback/audio was unavailable; "
+                        "vocal synchronization was not verified."
+                    )
+                else:
+                    report["verification_status"] = "FAIL"
     except Exception as exc:
         report["probe_passed"] = False
         report["error"] = f"{type(exc).__name__}: {exc}"
