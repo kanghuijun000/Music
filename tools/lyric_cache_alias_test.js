@@ -28,7 +28,7 @@ const names = [
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
 ];
-const code = names.map(extractFunction).join("\n") + String.raw`
+const code = "const ARTIST_IDENTITY_ALIASES = [[\"버즈\", \"buzz\"]];\\n" + names.map(extractFunction).join("\\n") + String.raw`
 const sourceVideo = {
   id: "source-video",
   title: "스탠딩 에그(Standing Egg) - 오래된 노래 [가사/Lyrics]",
