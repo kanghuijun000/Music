@@ -122,6 +122,7 @@ def check_static() -> list[dict]:
         "audio regression rejects an un-applied lyric/video offset": "app_applied_offset_seconds" in verifier and "app_to_vocal_offset_error_seconds" in verifier and "offset_error<=1.5" in verifier,
         "official YouTube descriptions reach the app identity parser": "fetch_video_description(video_id)" in verifier and '"description": description' in probe and "video_title, expected_title, expected_artist, channel, description = identified" in probe,
         "YouTube search results retain video descriptions for artist identification": 'description:String(v.snippet.description||"")' in app,
+        "QA snapshot exposes provider-level lyric diagnostics": "lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId" in app,
         "plain-lyrics fallback remains valid when audio verification is unavailable": "renderer.get(\"plain_lyrics_present\")" in probe and 'report["verification_status"] = "INCONCLUSIVE"' in probe,
         "comma-containing artist names are not split into false aliases": "never arbitrary comma fragments" in app and 'creditedAliases.push("카더가든")' in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
