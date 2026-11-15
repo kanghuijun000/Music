@@ -57,7 +57,7 @@ function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)retu
 function getLyricsIdentity(video,identifiedTrack=null){
  const cleanVideoTitle=value=>String(value||"")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*(?:ㅣ|\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s*(?:ㅣ|\/|\||_|[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
   .replace(/\s+/g," ").trim();
  if(identifiedTrack){
   const title=String(identifiedTrack.title||identifiedTrack.trackName||"").trim();
