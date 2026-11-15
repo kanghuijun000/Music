@@ -28,6 +28,22 @@ function readTrackAnalysisCache(){try{const value=JSON.parse(localStorage.getIte
 function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).sort((a,b)=>(Number(b[1]?.savedAt)||0)-(Number(a[1]?.savedAt)||0));localStorage.setItem(TRACK_ANALYSIS_CACHE_KEY,JSON.stringify(Object.fromEntries(entries.slice(0,TRACK_ANALYSIS_CACHE_LIMIT))));}catch(error){console.warn("Track timing cache could not be saved:",error);}}
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
+ // Verified artist-name aliases allow the same catalog track to be shared
+ // across Korean/English channel metadata without relaxing song matching.
+ const ARTIST_IDENTITY_ALIASES=[["버즈","buzz"]];
+ function canonicalArtistIdentity(value){
+  const normalized=trackText(value);
+  if(!normalized)return "";
+  for(const pair of ARTIST_IDENTITY_ALIASES){
+   const aliases=pair.map(trackText);
+   if(aliases.includes(normalized))return aliases[0];
+  }
+  return normalized;
+ }
+ function artistIdentityMatches(a,b,threshold=0.90){
+  const left=canonicalArtistIdentity(a),right=canonicalArtistIdentity(b);
+  return Boolean(left&&right&&(left===right||trackSimilarity(left,right)>=threshold));
+ }
 function getLyricsIdentity(video,identifiedTrack=null){
  const cleanVideoTitle=value=>String(value||"")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
@@ -162,7 +178,8 @@ function getSongLyricCacheKeys(video,metadata=null){
  const add=(prefix,title,artist="")=>{
   const t=lyricCacheNormalize(title),a=lyricCacheNormalize(artist);
   if(!t)return;
-  const key=prefix==="title"?"song-title:"+t:"song:"+t+"|"+a;
+  const canonicalArtist=prefix==="title"?"":canonicalArtistIdentity(artist)||a;
+  const key=prefix==="title"?"song-title:"+t:"song:"+t+"|"+canonicalArtist;
   if(!keys.includes(key))keys.push(key);
  };
  if(metadata?.acoustidId){
@@ -182,7 +199,7 @@ function sharedLyricCacheMatches(cached,video){
  // Require an independently established artist identity.
  if(!identity.artistKnown)return false;
  const cachedArtist=String(cached.artistName||"").trim();
- if(!cachedArtist||trackSimilarity(identity.artist,cachedArtist)<0.90)return false;
+ if(!cachedArtist||!artistIdentityMatches(identity.artist,cachedArtist,0.90))return false;
  return true;
 }
 function readAllStoredLyricEntries(){
@@ -226,7 +243,7 @@ function findIdentifiedLyricCache(video,identifiedTrack){
   // A fingerprint cache key is useful for discovery, but title and artist
   // must still independently confirm the exact song before lyrics are reused.
   const titleMatches=trackSimilarity(cached.trackName,metadata.trackName)>=0.92;
-  const artistMatches=trackSimilarity(cached.artistName,metadata.artistName)>=0.82;
+  const artistMatches=artistIdentityMatches(cached.artistName,metadata.artistName,0.82);
   if(titleMatches&&artistMatches){
    const prepared=prepareSharedCacheForVideo(cached,key,video.id);if(prepared)return prepared;
   }
@@ -234,7 +251,7 @@ function findIdentifiedLyricCache(video,identifiedTrack){
  let best=null,bestScore=0;
  for(const [key,cached] of entries){
   if(!hasUsableCachedLyrics(cached)||!cached.trackName||!cached.artistName)continue;
-  const titleScore=trackSimilarity(cached.trackName,metadata.trackName),artistScore=trackSimilarity(cached.artistName,metadata.artistName);
+  const titleScore=trackSimilarity(cached.trackName,metadata.trackName),artistScore=artistIdentityMatches(cached.artistName,metadata.artistName,0.82)?1:0;
   if(titleScore<0.92||artistScore<0.82)continue;
   const score=titleScore*0.6+artistScore*0.4;
   if(score>bestScore){bestScore=score;best=prepareSharedCacheForVideo(cached,key,video.id);}
