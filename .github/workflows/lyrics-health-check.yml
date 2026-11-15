@@ -54,7 +54,8 @@ jobs:
           node --check app.js
           node --check sw.js
           node tools/lyric_cache_alias_test.js
-          python -m py_compile tools/lyric_audio_verify.py tools/youtube_audio_probe.py tools/historical_lyrics_regression.py tools/lyrics_health_check.py
+          python -m py_compile tools/lyric_audio_verify.py tools/lyric_audio_verify_test.py tools/youtube_audio_probe.py tools/historical_lyrics_regression.py tools/lyrics_health_check.py
+          python tools/lyric_audio_verify_test.py
 
       - name: Run static and provider checks
         id: check
