@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare the live Music app's rendered lyric source with transient player audio."""
 from __future__ import annotations
-import difflib, json, re, sys, urllib.parse, urllib.request
+import array, difflib, json, math, re, sys, urllib.parse, urllib.request, wave
 from pathlib import Path
 
 def norm(value):
@@ -78,9 +78,39 @@ def verify(audio_path,video_id,app_snapshot):
             report["reason"]="The app did not load enough synced lyric lines for audio verification"
             return report
 
+        # Decode the captured 16 kHz WAV ourselves and pass PCM samples to
+        # faster-whisper. This avoids PyAV's file-opening metadata_errors
+        # incompatibility in some GitHub runner images.
+        with wave.open(str(audio_path),"rb") as wav:
+            channels=wav.getnchannels()
+            sample_width=wav.getsampwidth()
+            sample_rate=wav.getframerate()
+            raw=wav.readframes(wav.getnframes())
+        if sample_width!=2 or sample_rate!=16000:
+            raise ValueError("Expected 16-bit, 16 kHz verification audio")
+        samples=array.array("h")
+        samples.frombytes(raw)
+        if sys.byteorder!="little":
+            samples.byteswap()
+        if channels>1:
+            mono=array.array("h")
+            for index in range(0,len(samples),channels):
+                frame=samples[index:index+channels]
+                if frame: mono.append(round(sum(frame)/len(frame)))
+            samples=mono
+        if not samples:
+            report["reason"]="No captured audio samples; vocal synchronization cannot be verified"
+            return report
+        audio_rms=math.sqrt(sum(int(value)*int(value) for value in samples)/len(samples))/32768
+        report["captured_audio_rms"]=round(audio_rms,6)
+        if audio_rms<0.002:
+            report["reason"]="No audible audio was captured; lyric content loaded but vocal synchronization is unverified"
+            return report
+        import numpy as np
+        audio=np.asarray(samples,dtype=np.float32)/32768.0
         from faster_whisper import WhisperModel
         model=WhisperModel("small",device="cpu",compute_type="int8")
-        segments,info=model.transcribe(str(audio_path),language=None,beam_size=5,
+        segments,info=model.transcribe(audio,language=None,beam_size=5,
                                       vad_filter=True,word_timestamps=True)
         words=[]
         for segment in segments:
