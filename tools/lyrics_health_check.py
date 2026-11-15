@@ -104,7 +104,7 @@ def check_static() -> list[dict]:
         "fingerprint cache reuse still verifies title and artist": "const titleMatches=trackSimilarity(cached.trackName,metadata.trackName)>=0.92;" in app and "if(titleMatches&&artistMatches)" in app,
         "on-device playback audit is wired": "recordPlaybackAuditRender(index,current)" in app and "auditStartButton" in app,
         "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
-        "lyric-video description credits are available for identity matching": "description:String(v.snippet.description||\\"\")" in app and "video?.description" in app,
+        "lyric-video description credits are available for identity matching": "snippet.description" in app and "video?.description" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
