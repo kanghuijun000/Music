@@ -1214,6 +1214,43 @@ function resetPlaybackAudit(){
  if(el.auditCopyButton)el.auditCopyButton.disabled=true;
  auditSetStatus(currentVideoId?"재생 후 검증을 시작하면 가사 표시와 타임스탬프를 측정합니다.":"곡을 선택하면 검증할 수 있습니다.");
 }
+function restoreTimedLineSpacing(lines,plainText){
+ if(!Array.isArray(lines)||!lines.length||typeof plainText!=="string"||!plainText.trim())return lines;
+ const source=plainText.replace(/\r/g,"").trim();
+ let compact="",positions=[];
+ for(let i=0;i<source.length;i++){
+  if(!/\s/u.test(source[i])){compact+=source[i];positions.push(i);}
+ }
+ if(compact.length<12)return lines;
+ let cursor=0,eligibleChars=0,matchedChars=0,eligibleLines=0,matchedLines=0;
+ const output=lines.map(line=>{
+  const original=String(line?.text||"");
+  if(!/[가-힣]/u.test(original)||/\s/u.test(original))return line;
+  const key=original.replace(/\s+/gu,"");
+  if(!key)return line;
+  eligibleChars+=key.length;eligibleLines++;
+  const at=compact.indexOf(key,cursor);
+  if(at<0)return line;
+  const start=positions[at],end=positions[at+key.length-1]+1;
+  const restored=source.slice(start,end).trim();
+  if(!restored||restored.replace(/\s+/gu,"")!==key)return line;
+  cursor=at+key.length;matchedChars+=key.length;matchedLines++;
+  return {...line,text:restored};
+ });
+ if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
+ return output;
+}
+function normalizeTimedLyricsSpacing(lines,plainText){
+ const source=Array.isArray(lines)?lines:[];
+ const restored=restoreTimedLineSpacing(source,plainText);
+ const unspacedLongKorean=restored.filter(item=>{
+  const value=String(item?.text||"");
+  return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
+ }).length;
+ const unsafe=unspacedLongKorean>=2;
+ return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
+}
+
 function auditValidateLoadedLyrics(){
  const lines=lyricState.lines,problems=[];
  if(!lines.length)problems.push(lyricState.plain?"동기화 가사가 없고 일반 가사만 있습니다.":"표시할 가사가 없습니다.");
@@ -1484,42 +1521,6 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    .filter(line=>line&&!isCreditMetadata(line)&&!/^[\[(](?:ar|ti|al|by|length|re|ve|offset)\s*[:=]/i.test(line));
   const text=lines.join("\n");
   return lines.length>=2&&text.length>=12?text:"";
- }
- function restoreTimedLineSpacing(lines,plainText){
-  if(!Array.isArray(lines)||!lines.length||typeof plainText!=="string"||!plainText.trim())return lines;
-  const source=plainText.replace(/\r/g,"").trim();
-  let compact="",positions=[];
-  for(let i=0;i<source.length;i++){
-   if(!/\s/u.test(source[i])){compact+=source[i];positions.push(i);}
-  }
-  if(compact.length<12)return lines;
-  let cursor=0,eligibleChars=0,matchedChars=0,eligibleLines=0,matchedLines=0;
-  const output=lines.map(line=>{
-   const original=String(line?.text||"");
-   if(!/[가-힣]/u.test(original)||/\s/u.test(original))return line;
-   const key=original.replace(/\s+/gu,"");
-   if(!key)return line;
-   eligibleChars+=key.length;eligibleLines++;
-   const at=compact.indexOf(key,cursor);
-   if(at<0)return line;
-   const start=positions[at],end=positions[at+key.length-1]+1;
-   const restored=source.slice(start,end).trim();
-   if(!restored||restored.replace(/\s+/gu,"")!==key)return line;
-   cursor=at+key.length;matchedChars+=key.length;matchedLines++;
-   return {...line,text:restored};
-  });
-  if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
-  return output;
- }
- function normalizeTimedLyricsSpacing(lines,plainText){
-  const source=Array.isArray(lines)?lines:[];
-  const restored=restoreTimedLineSpacing(source,plainText);
-  const unspacedLongKorean=restored.filter(item=>{
-   const value=String(item?.text||"");
-   return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
-  }).length;
-  const unsafe=unspacedLongKorean>=2;
-  return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
  }
  function validate(item,extraArtists=[],extraTitles=[],provider="가사 제공처"){
   if(!item){record(provider,"EMPTY_RESPONSE","응답 데이터가 비어 있습니다.");return null;}
