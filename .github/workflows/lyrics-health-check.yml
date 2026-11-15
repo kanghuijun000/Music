@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/lyrics-health-check.yml"
       - "tools/lyrics_health_check.py"
+      - "tools/lyric_cache_alias_test.js"
       - "app.js"
       - "index.html"
       - "sw.js"
@@ -33,10 +34,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check JavaScript syntax
+      - name: Check JavaScript syntax and cross-upload cache aliases
         run: |
           node --check app.js
           node --check sw.js
+          node tools/lyric_cache_alias_test.js
 
       - name: Run static and provider checks
         id: check
