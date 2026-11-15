@@ -1,6 +1,16 @@
 name: Current Music Lyrics Regression
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/current-lyrics-regression.yml"
+      - "tools/historical_lyrics_regression.py"
+      - "tools/youtube_audio_probe.py"
+      - "tools/lyric_audio_verify.py"
+      - "app.js"
+      - "index.html"
+      - "sw.js"
   push:
     branches: [main]
     paths:
