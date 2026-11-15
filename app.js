@@ -257,26 +257,39 @@ function getSongLyricCacheKeys(video,metadata=null){
  for(const title of [...identity.titles,metadata?.trackName||metadata?.title||""])add("title",title);
  return keys;
 }
+function cachedArtistIdentityNames(cached){
+ const names=[String(cached?.artistName||"").trim()];
+ // Preserve alternate spellings discovered in the source video's explicit
+ // "Artist (alias) - Song" title, so other uploads of that same song can
+ // safely reuse catalog-timed lyrics across Korean/English artist names.
+ if(cached?.videoMetadata){
+  const sourceIdentity=getLyricsIdentity(cached.videoMetadata);
+  names.push(sourceIdentity.artist,...(sourceIdentity.artistAliases||[]));
+ }
+ return [...new Set(names.map(value=>String(value||"").trim()).filter(Boolean))];
+}
 function sharedLyricCacheMatches(cached,video){
  if(!cached||!cached.trackName)return false;
  const identity=getLyricsIdentity(video);
  const titleScore=Math.max(0,...identity.titles.map(title=>trackSimilarity(title,cached.trackName)));
  if(titleScore<0.92)return false;
  // Shared lyrics must never be reused from title guesses alone.
- // Require an independently established artist identity.
+ // Require independently established artist identities on both uploads.
  if(!identity.artistKnown)return false;
- const cachedArtist=String(cached.artistName||"").trim();
- if(!cachedArtist)return false;
+ const targetArtists=[identity.artist,...(identity.artistAliases||[])].filter(Boolean);
+ const cachedArtists=cachedArtistIdentityNames(cached);
+ if(!cachedArtists.length)return false;
  const isCanonicalTickTock=trackSimilarity(identity.title,"TICK TOCK")>=0.99&&
   trackText(identity.artist)===trackText("김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁");
  if(isCanonicalTickTock){
   const credited=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
-  const normalizedCached=trackText(cachedArtist);
-  return credited.some(name=>normalizedCached===trackText(name)||normalizedCached.includes(trackText(name)))||
-   trackSimilarity(cachedArtist,"김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁")>=0.90;
+  return cachedArtists.some(cachedArtist=>{
+   const normalizedCached=trackText(cachedArtist);
+   return credited.some(name=>normalizedCached===trackText(name)||normalizedCached.includes(trackText(name)))||
+    trackSimilarity(cachedArtist,"김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁")>=0.90;
+  });
  }
- if(!artistIdentityMatches(identity.artist,cachedArtist,0.90))return false;
- return true;
+ return targetArtists.some(target=>cachedArtists.some(candidate=>artistIdentityMatches(target,candidate,0.90)));
 }
 function readAllStoredLyricEntries(){
  const entries=new Map(lyricCache);
@@ -305,7 +318,9 @@ function findSharedLyricCache(video){
  let best=null,bestScore=0;
  for(const [key,cached] of entries){
   if(cached?.source==="Unison shared text"||!hasUsableCachedLyrics(cached)||!sharedLyricCacheMatches(cached,video))continue;
-  const score=trackSimilarity(cached.trackName,identity.title)*0.65+trackSimilarity(cached.artistName,identity.artist)*0.35;
+  const targetArtists=[identity.artist,...(identity.artistAliases||[])].filter(Boolean);
+  const artistSimilarity=Math.max(0,...cachedArtistIdentityNames(cached).flatMap(candidate=>targetArtists.map(target=>trackSimilarity(candidate,target))));
+  const score=trackSimilarity(cached.trackName,identity.title)*0.65+artistSimilarity*0.35;
   if(score>bestScore){bestScore=score;best=prepareSharedCacheForVideo(cached,key,video.id);}
  }
  return best;
@@ -319,7 +334,8 @@ function findIdentifiedLyricCache(video,identifiedTrack){
   // A fingerprint cache key is useful for discovery, but title and artist
   // must still independently confirm the exact song before lyrics are reused.
   const titleMatches=trackSimilarity(cached.trackName,metadata.trackName)>=0.92;
-  const artistMatches=artistIdentityMatches(cached.artistName,metadata.artistName,0.82);
+  const expectedArtists=[metadata.artistName,...getLyricsIdentity(video).artistAliases||[],getLyricsIdentity(video).artist].filter(Boolean);
+  const artistMatches=cachedArtistIdentityNames(cached).some(candidate=>expectedArtists.some(expected=>artistIdentityMatches(candidate,expected,0.82)));
   if(titleMatches&&artistMatches){
    const prepared=prepareSharedCacheForVideo(cached,key,video.id);if(prepared)return prepared;
   }
@@ -327,7 +343,9 @@ function findIdentifiedLyricCache(video,identifiedTrack){
  let best=null,bestScore=0;
  for(const [key,cached] of entries){
   if(!hasUsableCachedLyrics(cached)||!cached.trackName||!cached.artistName)continue;
-  const titleScore=trackSimilarity(cached.trackName,metadata.trackName),artistScore=artistIdentityMatches(cached.artistName,metadata.artistName,0.82)?1:0;
+  const titleScore=trackSimilarity(cached.trackName,metadata.trackName);
+  const expectedArtists=[metadata.artistName,...getLyricsIdentity(video).artistAliases||[],getLyricsIdentity(video).artist].filter(Boolean);
+  const artistScore=cachedArtistIdentityNames(cached).some(candidate=>expectedArtists.some(expected=>artistIdentityMatches(candidate,expected,0.82)))?1:0;
   if(titleScore<0.92||artistScore<0.82)continue;
   const score=titleScore*0.6+artistScore*0.4;
   if(score>bestScore){bestScore=score;best=prepareSharedCacheForVideo(cached,key,video.id);}
