@@ -29,6 +29,9 @@ COMMITS = [
     ("38fcf9ff8d2d78c7d05393a82a33ed81340d07f3", "tick-tock-artist-identification"),
     ("3338a3863eaa6d62c58c1ad5c10d112a04876c16", "tick-tock-canonical-cache"),
     ("766ea974e912bb4aca07179e8d8026bdd682fe68", "tick-tock-regex-correction"),
+    ("ff08c106ce746b764f5f5e77eaa78e96c3df8fc2", "before-korean-spacing-guard"),
+    ("a14f3e2e00a8612e8924d5f88b5e6580aae94972", "after-korean-spacing-guard"),
+    ("680e1bba3b68a8175e3a752cd6ad7cb9f4d5b972", "after-smooth-lyric-transition"),
 ]
 FIXED = [
     {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM"},
