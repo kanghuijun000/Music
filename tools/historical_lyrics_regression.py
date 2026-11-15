@@ -43,13 +43,13 @@ FIXED = [
     {"name": "Home Sweet Home — Car, the garden (lyric upload)", "video_id": "9ZAmRR6mDpU", "audio_check": False, "seconds": 25},
     {"name": "Home Sweet Home — Car, the garden (official audio)", "video_id": "MV9kclfajk8", "audio_check": True, "seconds": 45},
     {"name": "TICK TOCK — SMTM12 (original lyric upload)", "video_id": "Nx9pNz6-Wns", "audio_check": False, "seconds": 25},
+    {"name": "Sold Out — Hawk Nelson (alternate lyric video)", "video_id": "aW0xVc4CsL8", "audio_check": True, "seconds": 70},
 ]
 RANDOM_POOL = [
     {"name": "Counting Stars — OneRepublic (official music video)", "video_id": "hT_nvWreIhg", "audio_check": True, "seconds": 45},
     {"name": "TICK TOCK — SMTM12 (Mnet official video)", "video_id": "0sxLgAVPWVs", "audio_check": True, "seconds": 45},
     {"name": "사건의 지평선 — Younha (official M/V)", "video_id": "BBdC1rl5sKY", "audio_check": True, "seconds": 45},
     {"name": "Perfect — Ed Sheeran (official music video)", "video_id": "2Vv-BfVoq4g", "audio_check": True, "seconds": 45},
-    {"name": "Blinding Lights — The Weeknd (official video)", "video_id": "4NRXx6U8ABQ", "audio_check": True, "seconds": 45},
 ]
 # Deterministic random sample: identical songs on every commit, so commit-to-commit
 # differences cannot be explained by a changing test set.
