@@ -69,7 +69,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Artist (alternate name) - Song is a common Korean lyric-video title format.
  // Keep the parenthetical text as an artist alias, never as a possible song title.
  const identityTitleSource=originalTitle.replace(/\s*\[[^\]]*\]\s*$/,"").trim();
- const hasExplicitLyricsLabel=/\[[^\]]*(?:가사|lyrics?)[^\]]*\]\s*$/i.test(originalTitle);
+ const hasExplicitLyricsLabel=/(?:\[[^\]]*(?:가사|lyrics?)[^\]]*\]|\([^)]*(?:가사|lyrics?)[^)]*\))\s*$/i.test(originalTitle);
  const leadingParentheticalArtist=identityTitleSource.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
  const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g)]
   .map(match=>String(match[1]||"").trim())
