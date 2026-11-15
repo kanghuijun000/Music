@@ -151,7 +151,7 @@ if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.leng
 if(leadingParentheticalArtist&&!artistKnown){
   const candidateArtist=String(leadingParentheticalArtist[1]||"").trim();
   const parentheticalName=String(leadingParentheticalArtist[2]||"").trim();
-  const songTitle=String(leadingParentheticalArtist[3]||"").trim();
+  const songTitle=cleanVideoTitle(leadingParentheticalArtist[3]);
   if(candidateArtist&&parentheticalName&&songTitle){
    title=songTitle;
    artist=candidateArtist;
