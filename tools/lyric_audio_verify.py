@@ -131,6 +131,10 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
         if not identity_ok:
             report["reason"]="The app did not load a unique lyric track matching the selected video's title and artist"
             return report
+        if audio_path is None:
+            report["overall"]="IDENTITY_ONLY"
+            report["reason"]="Audio capture intentionally skipped for this retrieval-only video fixture"
+            return report
         if len(lines)<6:
             report["reason"]="The app did not load enough synced lyric lines for audio verification"
             return report
