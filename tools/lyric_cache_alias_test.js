@@ -88,6 +88,15 @@ const targetVideo = {
   channelTitle: "Standing Egg - Topic",
   duration: 272
 };
+const homeSweetHomeLyricIdentity = getLyricsIdentity({id:"home-sweet-home-lyrics",title:"카더가든 - Home Sweet Home(가사.lyrics)",channelTitle:"한구PLAYLIST"});
+if (homeSweetHomeLyricIdentity.title !== "Home Sweet Home" || homeSweetHomeLyricIdentity.artist !== "카더가든" || !homeSweetHomeLyricIdentity.artistKnown) {
+  throw new Error("Home Sweet Home lyric-upload artist/title parsing failed");
+}
+const homeSweetHomeTopicIdentity = getLyricsIdentity({id:"home-sweet-home-topic",title:"Home Sweet Home",channelTitle:"Car, the garden - Topic"});
+if (homeSweetHomeTopicIdentity.title !== "Home Sweet Home" || homeSweetHomeTopicIdentity.artist !== "Car, the garden" || !homeSweetHomeTopicIdentity.artistKnown) {
+  throw new Error("Home Sweet Home Topic-channel identity parsing failed");
+}
+
 const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
