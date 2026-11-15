@@ -19,23 +19,23 @@ def identify(video_id):
     author=str(meta.get("author_name",""))
     cleaned=title
     # Remove lyric labels at either edge before parsing artist/title.
-    cleaned=re.sub(r"^\\s*[\\[【(（][^\\]】)）]*(?:가사|lyrics?)[^\\]】)）]*[\\]】)）]\\s*","",cleaned,flags=re.I)
-    cleaned=re.sub(r"\\s*[\\[【(（][^\\]】)）]*(?:가사|lyrics?)[^\\]】)）]*[\\]】)）]\\s*$","",cleaned,flags=re.I)
-    cleaned=re.sub(r"\\s*[|｜/]\\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
-    match=re.match(r"^(.+?)\\s*[-–—]\\s*(.+)$",cleaned)
+    cleaned=re.sub(r"^\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*","",cleaned,flags=re.I)
+    cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*$","",cleaned,flags=re.I)
+    cleaned=re.sub(r"\s*[|｜/]\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
+    match=re.match(r"^(.+?)\s*[-–—]\s*(.+)$",cleaned)
     if match:
         artist=match.group(1).strip()
         track=match.group(2).strip()
     else:
         # Some curator uploads prepend Buzz's album number without a separator.
-        buzz=re.match(r"^(버즈|buzz)\\s*(?:\\d+집\\s*)?(.+)$",cleaned,flags=re.I)
+        buzz=re.match(r"^(버즈|buzz)\s*(?:\d+집\s*)?(.+)$",cleaned,flags=re.I)
         if buzz:
             artist="버즈"
             track=buzz.group(2).strip()
         else:
             artist=author.replace(" - Topic","").strip()
             track=cleaned
-    track=re.sub(r"\\s*\\([^)]*(?:official|lyrics?|가사|audio|video)[^)]*\\)","",track,flags=re.I).strip()
+    track=re.sub(r"\s*\([^)]*(?:official|lyrics?|가사|audio|video)[^)]*\)","",track,flags=re.I).strip()
     return title,track,artist,author
 
 def verify(audio_path,video_id,app_snapshot):
@@ -57,8 +57,8 @@ def verify(audio_path,video_id,app_snapshot):
         title_score=difflib.SequenceMatcher(None,title_norm,app_title_norm).ratio()
         if title_norm and app_title_norm.endswith(title_norm):
             title_score=1.0
-        artist_candidates=[re.sub(r"\\([^)]*\\)","",expected_artist)]
-        artist_candidates.extend(re.findall(r"\\(([^)]+)\\)",expected_artist))
+        artist_candidates=[re.sub(r"\([^)]*\)","",expected_artist)]
+        artist_candidates.extend(re.findall(r"\(([^)]+)\)",expected_artist))
         artist_score=max((difflib.SequenceMatcher(None,norm(candidate),norm(app_artist)).ratio()
                           for candidate in artist_candidates if norm(candidate)),default=0.0)
         report.update(video_title=video_title,expected_title=expected_title,expected_artist=expected_artist,
