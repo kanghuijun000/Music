@@ -57,11 +57,9 @@ jobs:
         run: |
           xvfb-run -a python - <<'PY'
           import os, random, re, subprocess, sys
+          # Temporary deterministic regression probe for the exact user-reported video.
           pool = [
-              ("OneRepublic - Counting Stars", "5vilULw-9Gg"),
-              ("Coldplay - Yellow", "yKNxeF4KMsY"),
-              ("NewJeans - Ditto", "pSUydWEqKwE"),
-              ("BTS - Dynamite", "gdZLi9oWNZg"),
+              ("스탠딩 에그 - 오래된 노래 (user-reported video)", "LMyH5WT7JEM"),
           ]
           video_id = os.getenv("INPUT_VIDEO_ID", "").strip()
           label = ""
