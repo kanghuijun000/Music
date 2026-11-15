@@ -43,7 +43,7 @@ RANDOM_POOL = [
     {"name": "Ditto — NewJeans", "query": "NewJeans Ditto lyrics"},
     {"name": "Blinding Lights — The Weeknd", "query": "The Weeknd Blinding Lights lyrics"},
     {"name": "Yellow — Coldplay", "query": "Coldplay Yellow lyrics"},
-    {"name": "Perfect — Ed Sheeran", "query": "Ed Sheeran Perfect lyrics"},
+    {"name": "Perfect — Ed Sheeran", "video_id": "kPhpHvnnn0Q"},
     {"name": "사건의 지평선 — Younha", "query": "윤하 사건의 지평선 가사"},
     {"name": "Dynamite — BTS", "query": "BTS Dynamite lyrics"},
 ]
