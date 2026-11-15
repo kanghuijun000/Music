@@ -167,7 +167,8 @@ def main() -> int:
             audio_path = Path(temp) / "probe.wav"
 
             from lyric_audio_verify import identify, verify as verify_lyrics
-            video_title, expected_title, expected_artist, channel, description = identify(args.video_id)
+            identified = identify(args.video_id)
+            video_title, expected_title, expected_artist, channel, description = identified
             app_video = {
                 "id": args.video_id,
                 "title": video_title,
@@ -270,7 +271,7 @@ def main() -> int:
                     ffmpeg.terminate()
                     ffmpeg.wait(timeout=5)
             report["audio"] = inspect_audio(audio_path)
-            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot)
+            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot, identified)
             report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
             report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
             renderer = report.get("app_renderer") or {}
