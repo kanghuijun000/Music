@@ -34,7 +34,7 @@ permissions:
 
 concurrency:
   group: lyrics-health-check
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   health-check:
