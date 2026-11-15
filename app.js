@@ -274,6 +274,7 @@ if(leadingParentheticalArtist&&!artistKnown){
  // treating both sides as titles can accept lyrics for the artist name itself.
  const uniqueTitles=[...new Set([title,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
+ // Commas can be part of one artist name; add only known whole-name aliases.
  if(trackText(artist)==="car the garden")artistAliases.push("카더가든");
  if(trackText(artist)==="카더가든")artistAliases.push("Car, the garden");
  artistAliases=[...new Set(artistAliases.filter(Boolean))];
