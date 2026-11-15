@@ -28,7 +28,7 @@ permissions:
 
 concurrency:
   group: current-music-lyrics-regression
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   current-main:
