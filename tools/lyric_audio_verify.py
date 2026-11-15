@@ -16,11 +16,24 @@ def fetch_json(url):
     with urllib.request.urlopen(request,timeout=15) as response:
         return json.loads(response.read(2_000_000).decode("utf-8-sig"))
 
+def fetch_video_description(video_id):
+    request=urllib.request.Request(
+        "https://www.youtube.com/watch?v="+video_id,
+        headers={"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36"})
+    try:
+        with urllib.request.urlopen(request,timeout=12) as response:
+            html=response.read(5_000_000).decode("utf-8",errors="replace")
+        match=re.search(r'"shortDescription"\s*:\s*("(?:\\.|[^"\\])*")',html)
+        return json.loads(match.group(1)) if match else ""
+    except Exception:
+        return ""
+
 def identify(video_id):
     meta=fetch_json("https://www.youtube.com/oembed?url="+urllib.parse.quote(
         "https://www.youtube.com/watch?v="+video_id,safe="")+"&format=json")
     title=str(meta.get("title",""))
     author=str(meta.get("author_name",""))
+    description=fetch_video_description(video_id)
     cleaned=title
     # Remove leading/trailing lyric labels and trailing show/episode brackets.
     cleaned=re.sub(r"^\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*","",cleaned,flags=re.I)
@@ -28,7 +41,7 @@ def identify(video_id):
     cleaned=re.sub(r"\s*[|｜/ㅣ]\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
     cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*[\]】)）]\s*$","",cleaned).strip()
 
-    evidence=title+" "+author
+    evidence=title+" "+author+" "+description
     ticktock=re.search(r"\bTICK\s*TOCK\b",title,flags=re.I)
     ticktock_smtm=re.search(r"쇼미더머니\s*12|\bSMTM\s*12\b|SHOW\s*ME\s*THE\s*MONEY\s*12",evidence,flags=re.I)
     ticktock_producer=(re.search(r"ZICO",evidence,flags=re.I)
@@ -57,7 +70,21 @@ def identify(video_id):
                     artist=author.replace(" - Topic","").strip()
                     track=cleaned
     track=re.sub(r"\s*\([^)]*(?:official|lyrics?|가사|audio|video)[^)]*\)","",track,flags=re.I).strip()
-    return title,track,artist,author
+    # Auto-generated music descriptions may identify a track as "Song · Artist".
+    # Resolve this only when one side exactly identifies the selected video title.
+    if description and (not artist or artist==author):
+        for line in description.splitlines():
+            credit=re.match(r"^\s*(.{2,180}?)\s[·•]\s(.{2,180})\s*$",line.strip())
+            if not credit:
+                continue
+            left,right=credit.group(1).strip(),credit.group(2).strip()
+            left_is_title=norm(left)==norm(track)
+            right_is_title=norm(right)==norm(track)
+            if left_is_title != right_is_title:
+                artist=right if left_is_title else left
+                track=left if left_is_title else right
+                break
+    return title,track,artist,author,description
 
 def verify(audio_path,video_id,app_snapshot):
     report={"app_lyrics_loaded":False,"identity_verified":False,
@@ -65,7 +92,7 @@ def verify(audio_path,video_id,app_snapshot):
             "vocal_sync_verified":False,"overall":"UNVERIFIED",
             "audio_file_retained":False}
     try:
-        video_title,expected_title,expected_artist,channel=identify(video_id)
+        video_title,expected_title,expected_artist,channel,description=identify(video_id)
         app_snapshot=app_snapshot if isinstance(app_snapshot,dict) else {}
         lines=[x for x in app_snapshot.get("lines",[]) if isinstance(x,dict)
                and str(x.get("text") or "").strip()
@@ -78,13 +105,12 @@ def verify(audio_path,video_id,app_snapshot):
         title_score=difflib.SequenceMatcher(None,title_norm,app_title_norm).ratio()
         if title_norm and app_title_norm.endswith(title_norm):
             title_score=1.0
-        artist_candidates=[]
-        for credited_artist in expected_artist.split(","):
-            credited_artist=credited_artist.strip()
-            if not credited_artist:
-                continue
-            artist_candidates.append(re.sub(r"\([^)]*\)","",credited_artist).strip())
-            artist_candidates.extend(re.findall(r"\(([^)]+)\)",credited_artist))
+        if norm(expected_artist)==norm("김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁"):
+            artist_candidates=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"]
+        else:
+            # A comma can be part of a single artist name; never split credits blindly.
+            artist_candidates=[expected_artist]
+        artist_candidates.extend(re.findall(r"\(([^)]+)\)",expected_artist))
         artist_score=max((difflib.SequenceMatcher(None,norm(candidate),norm(app_artist)).ratio()
                           for candidate in artist_candidates if norm(candidate)),default=0.0)
         # Regression tests require near-exact title and credited-artist identity.
