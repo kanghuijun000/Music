@@ -107,15 +107,20 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
         if title_norm and app_title_norm.endswith(title_norm):
             title_score=1.0
         if norm(expected_artist)==norm("김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁"):
-            artist_candidates=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"]
+            # Keep the full credited collaboration as an exact identity, while
+            # also allowing a provider to name one credited performer.
+            artist_candidates=[expected_artist,"김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"]
         elif norm(expected_artist) in (norm("Car, the garden"),norm("카더가든")):
             artist_candidates=["Car, the garden","카더가든"]
         else:
             # A comma can be part of a single artist name; never split credits blindly.
             artist_candidates=[expected_artist]
         artist_candidates.extend(re.findall(r"\(([^)]+)\)",expected_artist))
-        artist_score=max((difflib.SequenceMatcher(None,norm(candidate),norm(app_artist)).ratio()
-                          for candidate in artist_candidates if norm(candidate)),default=0.0)
+        app_artist_norm=norm(app_artist)
+        candidate_artist_norms={norm(candidate) for candidate in artist_candidates if norm(candidate)}
+        artist_score=(1.0 if app_artist_norm and app_artist_norm in candidate_artist_norms else
+                      max((difflib.SequenceMatcher(None,norm(candidate),app_artist_norm).ratio()
+                           for candidate in artist_candidates if norm(candidate)),default=0.0))
         # Regression tests require near-exact title and credited-artist identity.
         # Artist aliases and multi-performer credits are expanded above before scoring.
         identity_ok=bool(title_norm and app_title_norm and title_score>=0.92 and artist_score>=0.90)
