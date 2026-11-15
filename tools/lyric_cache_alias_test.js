@@ -130,6 +130,15 @@ if (soldOutOriginalVideoIdentity.title !== "Sold Out" || soldOutOriginalVideoIde
     !soldOutOriginalVideoIdentity.artistKnown || !soldOutOriginalVideoIdentity.queries.some(query => query.artist === "Hawk Nelson")) {
   throw new Error("Sold Out original-video credit did not identify Hawk Nelson and the track");
 }
+const quietConnectionIdentity = getLyricsIdentity({
+  id: "quiet-connection-video",
+  title: "너드커넥션(Nerd Connection) - 조용히 완전히 영원히(Silently Completely Eternally) _ Official Lyrics Video",
+  channelTitle: "Your Summer"
+});
+if (quietConnectionIdentity.title !== "조용히 완전히 영원히" ||
+    !artistIdentityMatches(quietConnectionIdentity.artist, "Nerd Connection")) {
+  throw new Error("Underscore-separated lyric-video suffix broke Nerd Connection track identity");
+}
 const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
