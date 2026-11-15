@@ -167,11 +167,12 @@ def main() -> int:
             audio_path = Path(temp) / "probe.wav"
 
             from lyric_audio_verify import identify, verify as verify_lyrics
-            video_title, expected_title, expected_artist, channel = identify(args.video_id)
+            video_title, expected_title, expected_artist, channel, description = identify(args.video_id)
             app_video = {
                 "id": args.video_id,
                 "title": video_title,
                 "channelTitle": channel,
+                "description": description,
                 "duration": 0,
                 "thumbnail": f"https://i.ytimg.com/vi/{args.video_id}/hqdefault.jpg",
             }
