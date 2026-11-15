@@ -661,48 +661,17 @@ async function loadAlbumArtwork(video,preferredTrack=null){
 
 const HISTORY_KEY="music_recent_searches_v1";
 const HISTORY_LIMIT=8;
-let recentSearches=loadRecentSearches();
-function loadRecentSearches(){
- try{
-  const saved=JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");
-  return Array.isArray(saved)?saved.filter(item=>typeof item==="string"&&item.trim()).slice(0,HISTORY_LIMIT):[];
- }catch(_){return [];}
-}
-function saveRecentSearch(query){
- const value=String(query||"").trim();
- if(!value)return;
- recentSearches=[value,...recentSearches.filter(item=>item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,HISTORY_LIMIT);
- try{localStorage.setItem(HISTORY_KEY,JSON.stringify(recentSearches));}catch(error){console.warn("Recent searches could not be saved:",error);}
- renderRecentSearches();
-}
-function renderRecentSearches(){
- const panel=document.getElementById("recentSearches");
- if(!panel)return;
- panel.replaceChildren();
- if(!recentSearches.length){panel.hidden=true;return;}
- const heading=document.createElement("div");
- heading.className="recent-heading";
- const label=document.createElement("span");
- label.textContent="최근 검색";
- const clear=document.createElement("button");
- clear.type="button";clear.className="recent-clear";clear.textContent="전체 삭제";
- clear.addEventListener("click",event=>{event.stopPropagation();recentSearches=[];try{localStorage.removeItem(HISTORY_KEY);}catch(_){}renderRecentSearches();el.searchInput.focus();});
- heading.append(label,clear);panel.append(heading);
- recentSearches.forEach(query=>{
-  const row=document.createElement("div");row.className="recent-row";
-  const choose=document.createElement("button");choose.type="button";choose.className="recent-query";
-  const icon=document.createElement("span");icon.className="recent-clock";icon.textContent="↺";
-  const text=document.createElement("span");text.className="recent-query-text";text.textContent=query;
-  choose.append(icon,text);
-  choose.addEventListener("click",()=>{el.searchInput.value=query;hideRecentSearches();searchMusic(query);});
-  const remove=document.createElement("button");remove.type="button";remove.className="recent-remove";remove.textContent="×";remove.setAttribute("aria-label",query+" 기록 삭제");
-  remove.addEventListener("click",event=>{event.stopPropagation();recentSearches=recentSearches.filter(item=>item!==query);try{localStorage.setItem(HISTORY_KEY,JSON.stringify(recentSearches));}catch(_){}renderRecentSearches();});
-  row.append(choose,remove);panel.append(row);
- });
- panel.hidden=false;
-}
-function showRecentSearches(){if(recentSearches.length)renderRecentSearches();}
-function hideRecentSearches(){const panel=document.getElementById("recentSearches");if(panel)panel.hidden=true;}
+let recentSearches=loadRecentSearches(),youtubeSuggestions=[],suggestionTimer=null,suggestionScript=null,suggestionRequestToken=0,activeSearchRow=-1;
+function loadRecentSearches(){try{const saved=JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");return Array.isArray(saved)?saved.filter(item=>typeof item==="string"&&item.trim()).slice(0,HISTORY_LIMIT):[];}catch(_){return [];}}
+function saveRecentSearch(query){const value=String(query||"").trim();if(!value)return;recentSearches=[value,...recentSearches.filter(item=>item.toLocaleLowerCase()!==value.toLocaleLowerCase())].slice(0,HISTORY_LIMIT);try{localStorage.setItem(HISTORY_KEY,JSON.stringify(recentSearches));}catch(error){console.warn("Recent searches could not be saved:",error);}renderRecentSearches(el.searchInput.value);}
+function makeSearchIcon(kind){const icon=document.createElement("span");icon.className=kind==="recent"?"recent-clock":"recent-search-icon";icon.setAttribute("aria-hidden","true");icon.innerHTML=kind==="recent"?'<svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 1 0 2.7-6.4L3 7"/><path d="M3 3v4h4M12 7v5l3 2"/></svg>':'<svg viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>';return icon;}
+function makeSearchArrow(){const arrow=document.createElement("span");arrow.className="recent-insert-icon";arrow.setAttribute("aria-hidden","true");arrow.innerHTML='<svg viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg>';return arrow;}
+function selectSearchQuery(query){const value=String(query||"").trim();if(!value)return;el.searchInput.value=value;saveRecentSearch(value);hideRecentSearches();searchMusic(value);}
+function createSearchRow(query,kind){const row=document.createElement("button");row.type="button";row.className="recent-row";row.setAttribute("role","option");row.setAttribute("aria-selected","false");row.dataset.query=query;row.append(makeSearchIcon(kind));const label=document.createElement("span");label.className="recent-query-text";label.textContent=query;row.append(label,makeSearchArrow());row.addEventListener("click",()=>selectSearchQuery(query));return row;}
+function renderRecentSearches(query=""){const panel=document.getElementById("recentSearches");if(!panel)return;panel.replaceChildren();const clean=String(query||"").trim().toLocaleLowerCase();const history=recentSearches.filter(item=>!clean||item.toLocaleLowerCase().includes(clean));const suggestions=youtubeSuggestions.filter(item=>item.toLocaleLowerCase()!==clean&&!recentSearches.some(old=>old.toLocaleLowerCase()===item.toLocaleLowerCase())).slice(0,7);if(!history.length&&!suggestions.length){panel.hidden=true;return;}if(history.length){const heading=document.createElement("div");heading.className="recent-heading";const label=document.createElement("span");label.textContent="최근 검색";const clear=document.createElement("button");clear.type="button";clear.className="recent-clear";clear.textContent="전체 삭제";clear.addEventListener("click",event=>{event.stopPropagation();recentSearches=[];try{localStorage.removeItem(HISTORY_KEY);}catch(_){}renderRecentSearches(el.searchInput.value);el.searchInput.focus();});heading.append(label,clear);panel.append(heading);history.forEach(value=>panel.append(createSearchRow(value,"recent")));}if(suggestions.length){const heading=document.createElement("div");heading.className="recent-heading suggestion-heading";const label=document.createElement("span");label.textContent="검색어 자동완성";heading.append(label);panel.append(heading);suggestions.forEach(value=>panel.append(createSearchRow(value,"suggestion")));}panel.hidden=false;activeSearchRow=-1;}
+function requestYoutubeSuggestions(query){const clean=String(query||"").trim();const token=++suggestionRequestToken;if(suggestionTimer)clearTimeout(suggestionTimer);if(suggestionScript){suggestionScript.remove();suggestionScript=null;}youtubeSuggestions=[];if(!clean){renderRecentSearches(clean);return;}renderRecentSearches(clean);suggestionTimer=setTimeout(()=>{const url=new URL("https://suggestqueries.google.com/complete/search");url.searchParams.set("client","youtube");url.searchParams.set("ds","yt");url.searchParams.set("hl","ko");url.searchParams.set("gl","KR");url.searchParams.set("q",clean);const googleRoot=window.google||(window.google={});const autocomplete=googleRoot.ac||(googleRoot.ac={});const previousHandler=autocomplete.h;let finished=false;const finish=()=>{if(finished)return;finished=true;if(autocomplete.h===receive){if(previousHandler===undefined)delete autocomplete.h;else autocomplete.h=previousHandler;}if(suggestionScript){suggestionScript.remove();suggestionScript=null;}};const receive=data=>{if(token!==suggestionRequestToken||String(data?.[0]||"").trim().toLocaleLowerCase()!==clean.toLocaleLowerCase())return;const values=Array.isArray(data?.[1])?data[1].map(item=>Array.isArray(item)?item[0]:item).filter(item=>typeof item==="string"&&item.trim()):[];youtubeSuggestions=[...new Set(values)].slice(0,8);finish();renderRecentSearches(el.searchInput.value);};autocomplete.h=receive;const script=document.createElement("script");suggestionScript=script;script.src=url.toString();script.async=true;script.onerror=finish;script.onload=()=>setTimeout(()=>{if(token===suggestionRequestToken)finish();},80);document.head.appendChild(script);setTimeout(()=>{if(token===suggestionRequestToken)finish();},3500);},240);}
+function showRecentSearches(){renderRecentSearches(el.searchInput.value);}
+function hideRecentSearches(){const panel=document.getElementById("recentSearches");if(panel)panel.hidden=true;activeSearchRow=-1;}
 function updateConnectionStatus(){const ready=Boolean(apiKey);el.connectionStatus.classList.toggle("ready",ready);el.connectionStatus.innerHTML=ready?"<i></i> 검색 연결됨":"<i></i> API 미설정";}
 function showToast(message){let toast=document.querySelector(".toast");if(!toast){toast=document.createElement("div");toast.className="toast";toast.setAttribute("role","status");document.body.appendChild(toast);}toast.textContent=message;toast.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove("show"),2600);}
 function openSettings(){el.apiKeyInput.value=apiKey;el.settingsDialog.showModal();}
@@ -1984,9 +1953,10 @@ async function searchMusic(query){
  }
 }
 el.searchForm.addEventListener("submit",event=>{event.preventDefault();const query=el.searchInput.value.trim();if(query)saveRecentSearch(query);hideRecentSearches();searchMusic(query);});
+el.searchInput.addEventListener("input",()=>requestYoutubeSuggestions(el.searchInput.value));
 el.searchInput.addEventListener("focus",showRecentSearches);
 el.searchInput.addEventListener("click",showRecentSearches);
-el.searchInput.addEventListener("keydown",event=>{if(event.key==="Escape")hideRecentSearches();});
+el.searchInput.addEventListener("keydown",event=>{if(event.key==="Escape"){hideRecentSearches();return;}if(event.key==="ArrowDown"||event.key==="ArrowUp"){const rows=[...document.querySelectorAll("#recentSearches .recent-row")];if(!rows.length)return;event.preventDefault();activeSearchRow=event.key==="ArrowDown"?(activeSearchRow+1)%rows.length:(activeSearchRow<=0?rows.length-1:activeSearchRow-1);rows.forEach((row,index)=>{row.classList.toggle("keyboard-active",index===activeSearchRow);row.setAttribute("aria-selected",index===activeSearchRow?"true":"false");});return;}if(event.key==="Enter"&&activeSearchRow>=0){const row=document.querySelectorAll("#recentSearches .recent-row")[activeSearchRow];if(row){event.preventDefault();selectSearchQuery(row.dataset.query);}}});
 document.addEventListener("click",event=>{if(!event.target.closest(".search-area"))hideRecentSearches();});
 renderRecentSearches();
 document.querySelectorAll("[data-query]").forEach(button=>button.addEventListener("click",()=>{el.searchInput.value=button.dataset.query;searchMusic(button.dataset.query);}));
