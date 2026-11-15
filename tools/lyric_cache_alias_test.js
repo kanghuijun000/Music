@@ -31,7 +31,7 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
 ];
-const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
 if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
 const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
@@ -64,6 +64,15 @@ const rejectedCandidate = normalizeTimedLyricsSpacing(malformedCandidate, "");
 if (!rejectedCandidate.unsafe || rejectedCandidate.lines.length !== 0) {
   throw new Error("Unverified unspaced Korean synced lyrics were not blocked");
 }
+const alreadySpacedLines = [
+  {time: 1.25, text: "안녕 오늘도"},
+  {time: 3.5, text: "좋은 하루 보내"}
+];
+const idempotentSpacingResult = normalizeTimedLyricsSpacing(alreadySpacedLines, "안녕 오늘도\n좋은 하루 보내");
+if (idempotentSpacingResult.unsafe || idempotentSpacingResult.lines.length !== alreadySpacedLines.length ||
+    idempotentSpacingResult.lines.some((line, index) => line.time !== alreadySpacedLines[index].time || line.text !== alreadySpacedLines[index].text)) {
+  throw new Error("already-correct Korean lyric spacing was modified");
+}
 const shortLegitimateLine = normalizeTimedLyricsSpacing([{time:0,text:"사랑해"}], "");
 if (shortLegitimateLine.unsafe || shortLegitimateLine.lines.length !== 1) {
   throw new Error("A short Korean lyric line was incorrectly blocked");
@@ -88,9 +97,98 @@ const targetVideo = {
   channelTitle: "Standing Egg - Topic",
   duration: 272
 };
+const homeSweetHomeLyricIdentity = getLyricsIdentity({id:"home-sweet-home-lyrics",title:"카더가든 - Home Sweet Home(가사.lyrics)",channelTitle:"한구PLAYLIST"});
+if (homeSweetHomeLyricIdentity.title !== "Home Sweet Home" || homeSweetHomeLyricIdentity.artist !== "카더가든" || !homeSweetHomeLyricIdentity.artistKnown || !homeSweetHomeLyricIdentity.queries.some(query=>query.artist==="Car, the garden")) {
+  throw new Error("Home Sweet Home lyric-upload artist/title parsing failed");
+}
+const homeSweetHomeOfficialIdentity = getLyricsIdentity({id:"home-sweet-home-official",title:"Home Sweet Home",channelTitle:"Car, the garden",description:"Provided to YouTube by FLUXUS\nHome Sweet Home · Car, the garden\nAPARTMENT"});
+const homeSweetHomeIdentifiedIdentity = getLyricsIdentity({id:"home-sweet-home-identified",title:"Home Sweet Home"}, {title:"Home Sweet Home",artist:"Car, the garden"});
+if (!(homeSweetHomeIdentifiedIdentity.artistAliases || []).includes("카더가든") || !homeSweetHomeIdentifiedIdentity.queries.some(query=>query.artist==="카더가든")) {
+  throw new Error("Audio-identified Car, the garden track lost its Korean alias");
+}
+if (!artistIdentityMatches("Car, the garden", "카더가든")) {
+  throw new Error("Car, the garden Korean/English identity alias was not recognized");
+}
+if (!artistIdentityMatches("너드커넥션", "Nerd Connection") || artistIdentityMatches("너드커넥션", "Nerdcore")) {
+  throw new Error("Nerd Connection Korean/English identity alias was not recognized strictly");
+}
+if (homeSweetHomeOfficialIdentity.title !== "Home Sweet Home" || homeSweetHomeOfficialIdentity.artist !== "Car, the garden" || !homeSweetHomeOfficialIdentity.artistKnown || homeSweetHomeOfficialIdentity.artistAliases.includes("Car") || homeSweetHomeOfficialIdentity.artistAliases.includes("the garden") || !homeSweetHomeOfficialIdentity.artistAliases.includes("카더가든") || !homeSweetHomeOfficialIdentity.queries.some(query=>query.artist==="카더가든")) {
+  throw new Error("Home Sweet Home auto-generated song · artist credit parsing failed");
+}
+const homeSweetHomeTopicIdentity = getLyricsIdentity({id:"home-sweet-home-topic",title:"Home Sweet Home",channelTitle:"Car, the garden - Topic"});
+if (homeSweetHomeTopicIdentity.title !== "Home Sweet Home" || homeSweetHomeTopicIdentity.artist !== "Car, the garden" || !homeSweetHomeTopicIdentity.artistKnown) {
+  throw new Error("Home Sweet Home Topic-channel identity parsing failed");
+}
+
+const soldOutOriginalVideoIdentity = getLyricsIdentity({
+  id: "sold-out-original-video",
+  title: "Hawk Nelson- Sold Out (Lyrics Video)",
+  channelTitle: "Music Terminal",
+  description: "OriginalMusicVideo: • Hawk Nelson - Sold Out (Official Lyric Video)"
+});
+if (soldOutOriginalVideoIdentity.title !== "Sold Out" || soldOutOriginalVideoIdentity.artist !== "Hawk Nelson" ||
+    !soldOutOriginalVideoIdentity.artistKnown || !soldOutOriginalVideoIdentity.queries.some(query => query.artist === "Hawk Nelson")) {
+  throw new Error("Sold Out original-video credit did not identify Hawk Nelson and the track");
+}
+const quietConnectionIdentity = getLyricsIdentity({
+  id: "quiet-connection-video",
+  title: "너드커넥션(Nerd Connection) - 조용히 완전히 영원히(Silently Completely Eternally) _ Official Lyrics Video",
+  channelTitle: "Your Summer"
+});
+if (quietConnectionIdentity.title !== "조용히 완전히 영원히" ||
+    !artistIdentityMatches(quietConnectionIdentity.artist, "Nerd Connection")) {
+  throw new Error("Underscore-separated lyric-video suffix broke Nerd Connection track identity");
+}
+const compactSoldOutIdentity = getLyricsIdentity({
+  id: "sold-out-compact-hyphen",
+  title: "Hawk Nelson- Sold Out (Lyrics Video)",
+  channelTitle: "Music Terminal"
+});
+if (compactSoldOutIdentity.title !== "Sold Out" || compactSoldOutIdentity.artist !== "Hawk Nelson" ||
+    !compactSoldOutIdentity.artistKnown) {
+  throw new Error("Compact hyphen in Hawk Nelson lyric-video title was not parsed");
+}
+const younhaMvIdentity = getLyricsIdentity({
+  id: "younha-official-mv",
+  title: "윤하(YOUNHA) - 사건의 지평선 M/V",
+  channelTitle: "YOUNHA"
+});
+if (younhaMvIdentity.title !== "사건의 지평선" || younhaMvIdentity.artist !== "윤하" ||
+    !(younhaMvIdentity.artistAliases || []).includes("YOUNHA")) {
+  throw new Error("Official M/V suffix leaked into the YOUNHA song title");
+}
+const dynamiteOfficialIdentity = getLyricsIdentity({
+  id: "bts-dynamite-official",
+  title: "BTS (방탄소년단) 'Dynamite' Official MV",
+  channelTitle: "HYBE LABELS"
+});
+if (dynamiteOfficialIdentity.title !== "Dynamite" || dynamiteOfficialIdentity.artist !== "BTS") {
+  throw new Error("Quoted artist/title parsing failed for an official music video");
+}
+const dittoPerformanceIdentity = getLyricsIdentity({
+  id: "newjeans-ditto-performance",
+  title: "NewJeans (뉴진스) 'Ditto' Performance Video",
+  channelTitle: "HYBE LABELS"
+});
+if (dittoPerformanceIdentity.title !== "Ditto" || dittoPerformanceIdentity.artist !== "NewJeans") {
+  throw new Error("Quoted artist/title parsing failed for a performance video");
+}
 const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
+}
+
+const buzzTargetVideo = {id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"};
+const correctBuzzCache = {
+  trackName:"비망록",artistName:"Buzz",videoMetadata:buzzTargetVideo,
+  lines:[{time:0,text:"검증용 가사"},{time:3,text:"다음 줄"}]
+};
+if (!sharedLyricCacheMatches(correctBuzzCache,buzzTargetVideo)) {
+  throw new Error("Previously working Buzz memoir track no longer matches its own verified cache");
+}
+const wrongBuzzTitleCache = {...correctBuzzCache,trackName:"스물의 노래"};
+if (sharedLyricCacheMatches(wrongBuzzTitleCache,buzzTargetVideo)) {
+  throw new Error("Buzz memoir accepted lyrics from the different song 스물의 노래");
 }
 const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto' Lyrics (뉴진스 Ditto 가사) (Color Coded Lyrics)",channelTitle:"Jaeguchi"});
 if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {

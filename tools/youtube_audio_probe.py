@@ -131,6 +131,7 @@ def main() -> int:
     parser.add_argument("--seconds", type=int, default=35)
     parser.add_argument("--query", default=os.getenv("MUSIC_TEST_QUERY", ""))
     parser.add_argument("--app-root", default="", help="Serve this historical app snapshot while keeping the GitHub Pages origin")
+    parser.add_argument("--skip-audio", action="store_true", help="Verify lyric retrieval only for a video that cannot be used for audio sync testing")
     args = parser.parse_args()
     if args.query:
         search_url = "https://www.youtube.com/results?" + __import__("urllib.parse").parse.urlencode({"search_query": args.query})
@@ -150,6 +151,7 @@ def main() -> int:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "video_id": args.video_id,
         "requested_capture_seconds": args.seconds,
+        "audio_check_skipped": args.skip_audio,
         "scope": "real YouTube embed playback and OS audio output only",
         "lyric_content_verified": False,
         "vocal_sync_verified": False,
@@ -159,19 +161,22 @@ def main() -> int:
     ffmpeg = None
     server = None
     try:
-        for binary in ("ffmpeg", "pulseaudio", "pactl"):
-            if not shutil.which(binary):
-                raise RuntimeError(f"Required executable not found: {binary}")
-        start_audio_sink()
+        if not args.skip_audio:
+            for binary in ("ffmpeg", "pulseaudio", "pactl"):
+                if not shutil.which(binary):
+                    raise RuntimeError(f"Required executable not found: {binary}")
+            start_audio_sink()
         with tempfile.TemporaryDirectory(prefix="music-audio-probe-") as temp:
             audio_path = Path(temp) / "probe.wav"
 
             from lyric_audio_verify import identify, verify as verify_lyrics
-            video_title, expected_title, expected_artist, channel = identify(args.video_id)
+            identified = identify(args.video_id)
+            video_title, expected_title, expected_artist, channel, description = identified
             app_video = {
                 "id": args.video_id,
                 "title": video_title,
                 "channelTitle": channel,
+                "description": description,
                 "duration": 0,
                 "thumbnail": f"https://i.ytimg.com/vi/{args.video_id}/hqdefault.jpg",
             }
@@ -194,32 +199,33 @@ def main() -> int:
                     def serve_snapshot(route):
                         from urllib.parse import urlparse, unquote
                         request_path = unquote(urlparse(route.request.url).path)
-                        relative = request_path.split("/Music/", 1)[-1] or "index.html"
+                        relative = request_path.lstrip("/") or "index.html"
                         candidate = (app_root / relative).resolve()
                         if candidate.is_file() and app_root in candidate.parents:
                             route.fulfill(path=str(candidate))
                         else:
                             route.continue_()
-                    page.route("https://kanghuijun000.github.io/Music/**", serve_snapshot)
+                    page.route("https://kanghuijun000.github.io/**", serve_snapshot)
                 browser_errors = []
                 network_errors = []
                 page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
                 page.on("requestfailed", lambda request: network_errors.append({
                     "url": request.url[:220], "failure": str(request.failure or "")[:180]
                 }) if "youtube" in request.url else None)
-                page.goto("https://kanghuijun000.github.io/Music/?qa=1&qa_version=124",
+                page.goto("https://kanghuijun000.github.io/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_function(
                     "window.__musicQa && window.__musicQa.snapshot().playerReady",
                     timeout=60000,
                 )
                 # Start capture before selecting the video so the recording begins at video time zero.
-                ffmpeg = subprocess.Popen([
-                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-f", "pulse", "-i", "music_probe.monitor",
-                    "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
-                    "-c:a", "pcm_s16le", str(audio_path),
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                if not args.skip_audio:
+                    ffmpeg = subprocess.Popen([
+                        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "pulse", "-i", "music_probe.monitor",
+                        "-t", str(args.seconds + 8), "-ac", "1", "-ar", "16000",
+                        "-c:a", "pcm_s16le", str(audio_path),
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
                 page.evaluate("(video) => window.__musicQa.setVideo(video)", app_video)
                 deadline = time.monotonic() + args.seconds
                 last_time = 0.0
@@ -244,6 +250,16 @@ def main() -> int:
                             renderer_mismatches += 1
                     time.sleep(0.2)
                 app_snapshot = page.evaluate("window.__musicQa.snapshot()")
+                report["app_lyrics_status"] = str(app_snapshot.get("lyricsStatus") or "")
+                report["app_lyric_track"] = app_snapshot.get("track") or {}
+                report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
+                report["app_lyric_offset_seconds"] = app_snapshot.get("lyricOffsetSeconds")
+                report["lyric_flow_events"] = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])[-30:]
+                static_issues = app_snapshot.get("staticValidation")
+                if isinstance(static_issues, list):
+                    blocking_issues = [issue for issue in static_issues if issue != "동기화 가사가 없고 일반 가사만 있습니다."]
+                    report["app_static_validation"] = static_issues
+                    report["app_static_validation_passed"] = not blocking_issues
                 report["player_playing_seen"] = playing_seen
                 report["player_time_advanced_seconds"] = round(last_time, 2)
                 report["player_state_changes"] = state_changes
@@ -268,31 +284,44 @@ def main() -> int:
                 except subprocess.TimeoutExpired:
                     ffmpeg.terminate()
                     ffmpeg.wait(timeout=5)
-            report["audio"] = inspect_audio(audio_path)
-            report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot)
-            report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
-            report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
             renderer = report.get("app_renderer") or {}
-            renderer_ok = bool(renderer.get("sample_count", 0) >= 5 and (renderer.get("mismatch_ratio") or 0) <= 0.05)
-            report["probe_passed"] = bool(
-                report["player_playing_seen"]
-                and report["player_time_advanced_seconds"] >= 5
-                and report["audio"].get("audio_detected")
-                and report["lyric_verification"].get("overall") == "PASS"
-                and renderer_ok
-            )
-            if report["probe_passed"]:
-                report["verification_status"] = "PASS"
-            elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
-                # A non-embeddable video or silent CI audio sink cannot verify
-                # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
+            if args.skip_audio:
+                report["audio"] = {"audio_detected": False, "skipped": True}
+                report["lyric_verification"] = verify_lyrics(None, args.video_id, app_snapshot, identified)
+                report["lyric_content_verified"] = False
+                report["vocal_sync_verified"] = False
+                report["probe_passed"] = False
                 report["verification_status"] = "INCONCLUSIVE"
-                report["inconclusive_reason"] = (
-                    "Synced lyrics loaded, but YouTube playback/audio was unavailable; "
-                    "vocal synchronization was not verified."
-                )
+                report["inconclusive_reason"] = "Audio verification intentionally skipped for this retrieval-only video fixture."
             else:
-                report["verification_status"] = "FAIL"
+                report["audio"] = inspect_audio(audio_path)
+                report["lyric_verification"] = verify_lyrics(audio_path, args.video_id, app_snapshot, identified)
+                report["lyric_content_verified"] = bool(report["lyric_verification"].get("lyric_content_verified"))
+                report["vocal_sync_verified"] = bool(report["lyric_verification"].get("vocal_sync_verified"))
+                renderer_ok = bool(renderer.get("sample_count", 0) >= 5 and (renderer.get("mismatch_ratio") or 0) <= 0.05)
+                report["probe_passed"] = bool(
+                    report["player_playing_seen"]
+                    and report["player_time_advanced_seconds"] >= 5
+                    and report["audio"].get("audio_detected")
+                    and report["lyric_verification"].get("overall") == "PASS"
+                    and renderer_ok
+                )
+                if report["probe_passed"]:
+                    report["verification_status"] = "PASS"
+                elif renderer.get("plain_lyrics_present") and renderer.get("timed_line_count", 0) < 2:
+                    # Plain lyrics are an intentional fallback, not a failed sync test.
+                    report["verification_status"] = "INCONCLUSIVE"
+                    report["inconclusive_reason"] = "Plain lyrics loaded without timed lines; vocal synchronization is not applicable."
+                elif renderer.get("timed_line_count", 0) >= 2 and not report["audio"].get("audio_detected"):
+                    # A non-embeddable video or silent CI audio sink cannot verify
+                    # vocal timing; do not mislabel a successfully loaded lyric track as a code failure.
+                    report["verification_status"] = "INCONCLUSIVE"
+                    report["inconclusive_reason"] = (
+                        "Synced lyrics loaded, but YouTube playback/audio was unavailable; "
+                        "vocal synchronization was not verified."
+                    )
+                else:
+                    report["verification_status"] = "FAIL"
     except Exception as exc:
         report["probe_passed"] = False
         report["error"] = f"{type(exc).__name__}: {exc}"

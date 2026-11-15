@@ -22,6 +22,9 @@ BASE_FIXTURES = [
     {"title": "밤편지", "artist": "아이유", "duration": 0, "kind": "regression"},
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
+    {"title": "Home Sweet Home", "artist": "카더가든", "duration": 206, "kind": "regression"},
+    {"title": "Counting Stars", "artist": "OneRepublic", "duration": 0, "kind": "regression"},
+    {"title": "Sold Out", "artist": "Hawk Nelson", "duration": 0, "kind": "regression"},
     {"title": "조용히 완전히 영원히", "artist": "너드커넥션", "duration": 189, "kind": "baseline"},
     {"title": "TICK TOCK (Feat. ZICO) (Prod. by ZICO, Crush)", "artist": "김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁", "duration": 230, "kind": "strict-match"},
 ]
@@ -47,9 +50,19 @@ def title_match(actual: object, expected: str) -> bool:
     a, e = norm(actual), norm(expected)
     return bool(a and e and (a == e or a.startswith(e) or e.startswith(a)))
 
+ARTIST_ALIAS_GROUPS = (
+    frozenset((norm("버즈"), norm("buzz"))),
+    frozenset((norm("카더가든"), norm("car the garden"))),
+    frozenset((norm("너드커넥션"), norm("nerd connection"))),
+)
+
 def artist_match(actual: object, expected: str) -> bool:
     a, e = norm(actual), norm(expected)
-    return bool(a and e and (a == e or e in a or a in e))
+    if not a or not e:
+        return False
+    if any(a in aliases and e in aliases for aliases in ARTIST_ALIAS_GROUPS):
+        return True
+    return a == e or e in a or a in e
 
 def identity_match(actual_title: object, actual_artist: object, expected_title: str, expected_artist: str) -> bool:
     return title_match(actual_title, expected_title) and artist_match(actual_artist, expected_artist)
@@ -91,9 +104,11 @@ def check_static() -> list[dict]:
     app = (ROOT / "app.js").read_text(encoding="utf-8")
     index = (ROOT / "index.html").read_text(encoding="utf-8")
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
+    verifier = (ROOT / "tools/lyric_audio_verify.py").read_text(encoding="utf-8")
+    probe = (ROOT / "tools/youtube_audio_probe.py").read_text(encoding="utf-8")
     results = []
     checks = {
-        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2)" in app,
+        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&(parts.length===2||parts.length===1))" in app,
         "shared song lyric cache checks verified artist aliases from both uploads": "function cachedArtistIdentityNames(cached)" in app and "identity.artistAliases" in app and "cachedArtistIdentityNames(cached)" in app,
         "video-specific offsets are never reused across different uploads": 'if(item.timingBasis==="video"&&sourceKey!==targetVideoId)return null;' in app,
         "quoted lyric-video titles resolve artist and song": "quotedArtistTitle=raw.match" in app,
@@ -114,6 +129,18 @@ def check_static() -> list[dict]:
         "timed lyric renderer wiring is present": "function renderLyrics(" in app and "lyricState.lines" in app,
         "lyric-video description credits are available for identity matching": "snippet.description" in app and "video?.description" in app,
         "manual vocal-start timing check is available": "auditMarkButton" in app and "medianUserMarkedOffsetMs" in app,
+        "audio regression rejects an un-applied lyric/video offset": "app_applied_offset_seconds" in verifier and "app_to_vocal_offset_error_seconds" in verifier and "offset_error<=1.5" in verifier,
+        "official YouTube descriptions reach the app identity parser": "fetch_video_description(video_id)" in verifier and '"description": description' in probe and "video_title, expected_title, expected_artist, channel, description = identified" in probe,
+        "YouTube search results retain video descriptions for artist identification": 'description:String(v.snippet.description||"")' in app,
+        "QA snapshot exposes provider-level lyric diagnostics": "lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId" in app,
+        "QA snapshot validates loaded lyric timestamps and lines": "staticValidation:auditValidateLoadedLyrics()" in app,
+        "loaded lyric audit checks verified Korean spacing": "normalizeTimedLyricsSpacing(lines,lyricState.plain||\"\")" in app and "한국어 가사 띄어쓰기를 검증할 수 없습니다." in app,
+        "spacing validator is shared at top level before the QA audit": 0 <= app.find("function normalizeTimedLyricsSpacing") < app.find("function auditValidateLoadedLyrics") and app.count("function normalizeTimedLyricsSpacing") == 1,
+        "plain-lyrics fallback remains valid when audio verification is unavailable": "renderer.get(\"plain_lyrics_present\")" in probe and 'report["verification_status"] = "INCONCLUSIVE"' in probe,
+        "retrieval-only videos still receive strict song identity verification": '"--skip-audio"' in probe and "verify_lyrics(None, args.video_id, app_snapshot, identified)" in probe and "if audio_path is None:" in verifier,
+        "comma-containing artist names are not split into false aliases": "Commas can be part of one artist name" in app and 'trackText(artist)==="car the garden"' in app and 'trackText(artist)==="카더가든"' in app and "creditedArtist.split" not in app,
+        "Nerd Connection Korean-English artist alias is explicit": '["너드커넥션","nerd connection"]' in app and artist_match("Nerd Connection", "너드커넥션") and not artist_match("Nerdcore", "너드커넥션"),
+        "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
             "if(!candidates.some(item=>item._synced))" in app

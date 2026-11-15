@@ -1,6 +1,16 @@
 name: Current Music Lyrics Regression
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/current-lyrics-regression.yml"
+      - "tools/historical_lyrics_regression.py"
+      - "tools/youtube_audio_probe.py"
+      - "tools/lyric_audio_verify.py"
+      - "app.js"
+      - "index.html"
+      - "sw.js"
   push:
     branches: [main]
     paths:
@@ -18,11 +28,11 @@ permissions:
 
 concurrency:
   group: current-music-lyrics-regression
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   current-main:
-    name: "10-song regression — current main"
+    name: "19-video regression — current app"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -30,6 +40,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,8 +55,13 @@ jobs:
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
 
-      - name: Test current app against ten fixed and random songs
-        run: xvfb-run -a python tools/historical_lyrics_regression.py --commit HEAD
+      - name: Test current app against nineteen fixed and random video fixtures
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          ACTUAL_SOURCE_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SOURCE_SHA" = "$EXPECTED_SOURCE_SHA"
+          xvfb-run -a python tools/historical_lyrics_regression.py --commit HEAD
 
       - name: Upload current regression report
         if: always()

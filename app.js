@@ -40,7 +40,7 @@ function trackText(value){return String(value||"").toLocaleLowerCase().normalize
 function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)return 0;if(x===y)return 1;if(x.includes(y)||y.includes(x))return Math.min(x.length,y.length)/Math.max(x.length,y.length);const xs=new Set(x.split(" ")),ys=new Set(y.split(" "));return [...xs].filter(v=>ys.has(v)).length/Math.max(xs.size,ys.size);}
  // Verified artist-name aliases allow the same catalog track to be shared
  // across Korean/English channel metadata without relaxing song matching.
- const ARTIST_IDENTITY_ALIASES=[["버즈","buzz"]];
+ const ARTIST_IDENTITY_ALIASES=[["버즈","buzz"],["카더가든","car the garden"],["너드커넥션","nerd connection"]];
  function canonicalArtistIdentity(value){
   const normalized=trackText(value);
   if(!normalized)return "";
@@ -57,7 +57,8 @@ function trackSimilarity(a,b){const x=trackText(a),y=trackText(b);if(!x||!y)retu
 function getLyricsIdentity(video,identifiedTrack=null){
  const cleanVideoTitle=value=>String(value||"")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
-  .replace(/\s*(?:ㅣ|\/|\||[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s*(?:ㅣ|\/|\||_|[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s+(?:official\s+)?(?:m\/v|mv|performance\s+video)$/i," ")
   .replace(/\s+/g," ").trim();
  if(identifiedTrack){
   const title=String(identifiedTrack.title||identifiedTrack.trackName||"").trim();
@@ -65,13 +66,15 @@ function getLyricsIdentity(video,identifiedTrack=null){
   if(title&&artist){
    const videoTitle=cleanVideoTitle(video?.title);
    const titles=[...new Set([title,...(videoTitle&&trackSimilarity(videoTitle,title)>=0.55?[videoTitle]:[])])];
-   const queries=[{title,artist},{title,artist:""}];
+   const artistAliases=trackText(artist)==="car the garden"?["카더가든"]:
+    trackText(artist)==="카더가든"?["Car, the garden"]:[];
+   const queries=[{title,artist},...artistAliases.map(name=>({title,artist:name})),{title,artist:""}];
    const uniqueQueries=[];
    for(const query of queries){
     const key=trackText(query.title)+"|"+trackText(query.artist);
     if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:query.title,artist:query.artist||""});
    }
-   return {raw:title+" - "+artist,title,artist,artistKnown:true,isTopic:false,channel:artist,generic:false,
+   return {raw:title+" - "+artist,title,artist,artistAliases,artistKnown:true,isTopic:false,channel:artist,generic:false,
     titles,queries:uniqueQueries,identified:true};
   }
  }
@@ -91,7 +94,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channelRaw=String(video?.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
- const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
+ const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").replace(/\s*VEVO$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  let title=raw,artist="",artistKnown=false,queries=[],artistAliases=[];
  // Buzz lyric uploads sometimes encode the album number before the song
@@ -123,8 +126,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }
  // Quoted song names are common in curator titles such as
  // "NewJeans 'Ditto' Lyrics". Only trust this form when a lyric label is present.
- const quotedArtistTitle=raw.match(/^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:lyrics?|가사)?$/i);
- if(!artistKnown&&hasExplicitLyricsLabel&&quotedArtistTitle){
+ const quotedArtistTitle=raw.match(/^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:(?:lyrics?|가사)|(?:official\s*(?:mv|music\s*video)|performance\s*video|mv))?$/i);
+ const hasOfficialVideoLabel=/\b(?:official\s*(?:mv|music\s*video)|performance\s*video|mv)\b/i.test(originalTitle);
+ if(!artistKnown&&(hasExplicitLyricsLabel||hasOfficialVideoLabel)&&quotedArtistTitle){
   const quotedArtist=String(quotedArtistTitle[1]||"").trim();
   const quotedTitle=String(quotedArtistTitle[2]||"").trim();
   if(quotedArtist&&quotedTitle&&trackText(quotedArtist)!==trackText(quotedTitle)){
@@ -137,8 +141,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Explicitly labelled lyric uploads commonly use "Artist - Song".
 // A lyric-curator channel should not make both sides ambiguous; short-title
 // validation below still requires exact artist AND duration matches.
-if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2){
- const [artistCandidate,songCandidate]=parts;
+if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&(parts.length===2||parts.length===1)){
+ const compactParts=parts.length===2?parts:raw.match(/^(.{2,100}?)\s*[-–—]\s*(.{2,140})$/)?.slice(1)||[];
+ const [artistCandidate,songCandidate]=compactParts.map(value=>String(value||"").trim());
  if(artistCandidate&&songCandidate&&trackText(artistCandidate)!==trackText(songCandidate)){
   title=songCandidate;
   artist=artistCandidate;
@@ -149,7 +154,7 @@ if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.leng
 if(leadingParentheticalArtist&&!artistKnown){
   const candidateArtist=String(leadingParentheticalArtist[1]||"").trim();
   const parentheticalName=String(leadingParentheticalArtist[2]||"").trim();
-  const songTitle=String(leadingParentheticalArtist[3]||"").trim();
+  const songTitle=cleanVideoTitle(leadingParentheticalArtist[3]);
   if(candidateArtist&&parentheticalName&&songTitle){
    title=songTitle;
    artist=candidateArtist;
@@ -167,7 +172,7 @@ if(leadingParentheticalArtist&&!artistKnown){
  // contains featured/producers, not the primary performers, and curator
  // channels do not reliably identify the artist. Scope narrowly to its
  // album/title/producer signature to avoid other songs named "Tick Tock".
- if(!artistKnown&&/\\bTICK\\s*TOCK\\b/i.test(originalTitle)&&/쇼미더머니\\s*12/i.test(originalTitle)&&/prod\\.?\\s*by\\s*zico\\s*,?\\s*crush/i.test(originalTitle)){
+ if(!artistKnown&&/\bTICK\s*TOCK\b/i.test(originalTitle)&&/쇼미더머니\s*12/i.test(originalTitle)&&/prod\.?\s*by\s*zico\s*,?\s*crush/i.test(originalTitle)){
   title="TICK TOCK";
   artist="김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁";
   artistAliases=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
@@ -181,32 +186,66 @@ if(leadingParentheticalArtist&&!artistKnown){
  // Some lyric-curator uploads use the channel name as the YouTube artist.
  // Recover credited performers only from a description line whose track title
  // independently matches this video's cleaned title.
- if(!artistKnown&&video?.description){
+ if(video?.description){
   const descriptionLines=String(video.description).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
-  const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
-   .map(line=>line.match(/^(.{2,180}?)\s[-–—]\s(.{2,180})$/))
-   // Lyric uploads often repeat feat./producer/album text in the description.
-   // Compare the cleaned song title, not the full promotional title string.
-   .find(match=>match&&trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92&&trackText(match[1])!==trackText(channel));
-  if(credit){
-   const creditedArtist=String(credit[1]||"").trim();
-   const creditedTitle=cleanVideoTitle(credit[2]);
-   if(creditedArtist&&creditedTitle){
+  // YouTube auto-generated music descriptions use "Song · Artist", while
+  // curator descriptions commonly use "Artist - Song". Accept either order
+  // only when exactly one side independently matches the selected video title.
+  if(!artistKnown){
+   const credit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+    .map(line=>line.match(/^(.{2,180}?)\s(?:[-–—]|[·•])\s(.{2,180})$/))
+    .find(match=>{
+     if(!match)return false;
+     const leftTitle=trackSimilarity(cleanVideoTitle(match[1]),raw)>=0.92;
+     const rightTitle=trackSimilarity(cleanVideoTitle(match[2]),raw)>=0.92;
+     const titleSide=leftTitle?match[1]:match[2];
+     return leftTitle!==rightTitle&&trackText(titleSide)!==trackText(channel);
+    });
+   if(credit){
+    const left=String(credit[1]||"").trim();
+    const right=String(credit[2]||"").trim();
+    const titleIsLeft=trackSimilarity(cleanVideoTitle(left),raw)>=0.92;
+    const creditedArtist=titleIsLeft?right:left;
+    const creditedTitle=cleanVideoTitle(titleIsLeft?left:right);
+    if(creditedArtist&&creditedTitle){
+     title=creditedTitle;
+     artist=creditedArtist;
+     const creditedAliases=[
+      creditedArtist,
+      ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
+     ];
+     if(trackText(creditedArtist)==="car the garden")creditedAliases.push("카더가든");
+     if(trackText(creditedArtist)==="카더가든")creditedAliases.push("Car, the garden");
+     artistAliases=[...new Set(creditedAliases.filter(Boolean))];
+     artistKnown=true;
+     queries=[
+      {title:creditedTitle,artist:creditedArtist},
+      ...artistAliases.map(name=>({title:creditedTitle,artist:name})),
+      {title:creditedTitle,artist:""}
+     ];
+    }
+   }
+  }
+  // A lyric-curator description may name the original music video as
+  // "OriginalMusicVideo: Artist - Song". Trust it only when the song side
+  // independently matches the selected video's title suffix.
+  const originalVideoCredit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+   .map(line=>line.match(/(?:Original\s*Music\s*Video)\s*[:：]\s*[•·]?\s*(.{2,120}?)\s*[-–—]\s*(.{2,180})/i))
+   .find(match=>{
+    if(!match)return false;
+    const titleParts=raw.split(/\s*[-–—]\s*/).map(part=>part.trim()).filter(Boolean);
+    const videoTrack=titleParts.length>1?titleParts.slice(1).join(" - "):raw;
+    return trackSimilarity(cleanVideoTitle(match[2]),videoTrack)>=0.92;
+   });
+  if(originalVideoCredit){
+   const creditedArtist=String(originalVideoCredit[1]||"").trim();
+   const creditedTitle=cleanVideoTitle(originalVideoCredit[2]);
+   if(creditedArtist&&creditedTitle&&(!artistKnown||trackSimilarity(artist,creditedArtist)<0.82)){
     title=creditedTitle;
     artist=creditedArtist;
-    // The credited performer field can contain several artists. Keep the
-    // full credit as the primary query, but recognize each credited name
-    // (including parenthetical romanized aliases) during strict validation.
-    const creditedNames=creditedArtist.split(/\s*,\s*/).filter(Boolean);
-    artistAliases=[...new Set(creditedNames.flatMap(name=>[
-     name,...[...name.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
-    ]).filter(Boolean))];
+    artistAliases=[creditedArtist];
     artistKnown=true;
-    queries=[
-     {title:creditedTitle,artist:creditedArtist},
-     ...artistAliases.map(name=>({title:creditedTitle,artist:name})),
-     {title:creditedTitle,artist:""}
-    ];
+    queries=[{title:creditedTitle,artist:creditedArtist},{title:creditedTitle,artist:""}];
    }
   }
  }
@@ -238,6 +277,15 @@ if(leadingParentheticalArtist&&!artistKnown){
  // treating both sides as titles can accept lyrics for the artist name itself.
  const uniqueTitles=[...new Set([title,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
+ // Commas can be part of one artist name; add only known whole-name aliases.
+ if(trackText(artist)==="car the garden")artistAliases.push("카더가든");
+ if(trackText(artist)==="카더가든")artistAliases.push("Car, the garden");
+ artistAliases=[...new Set(artistAliases.filter(Boolean))];
+ if(artistKnown){
+  for(const alias of artistAliases){
+   if(!queries.some(item=>trackText(item.artist)===trackText(alias)))queries.push({title,artist:alias});
+  }
+ }
  const baseQueries=queries.slice();
  const aliasQueries=titleAliases.flatMap(alias=>artistKnown
   ?[{title:alias,artist},{title:alias,artist:""}]
@@ -1169,6 +1217,43 @@ function resetPlaybackAudit(){
  if(el.auditCopyButton)el.auditCopyButton.disabled=true;
  auditSetStatus(currentVideoId?"재생 후 검증을 시작하면 가사 표시와 타임스탬프를 측정합니다.":"곡을 선택하면 검증할 수 있습니다.");
 }
+function restoreTimedLineSpacing(lines,plainText){
+ if(!Array.isArray(lines)||!lines.length||typeof plainText!=="string"||!plainText.trim())return lines;
+ const source=plainText.replace(/\r/g,"").trim();
+ let compact="",positions=[];
+ for(let i=0;i<source.length;i++){
+  if(!/\s/u.test(source[i])){compact+=source[i];positions.push(i);}
+ }
+ if(compact.length<12)return lines;
+ let cursor=0,eligibleChars=0,matchedChars=0,eligibleLines=0,matchedLines=0;
+ const output=lines.map(line=>{
+  const original=String(line?.text||"");
+  if(!/[가-힣]/u.test(original)||/\s/u.test(original))return line;
+  const key=original.replace(/\s+/gu,"");
+  if(!key)return line;
+  eligibleChars+=key.length;eligibleLines++;
+  const at=compact.indexOf(key,cursor);
+  if(at<0)return line;
+  const start=positions[at],end=positions[at+key.length-1]+1;
+  const restored=source.slice(start,end).trim();
+  if(!restored||restored.replace(/\s+/gu,"")!==key)return line;
+  cursor=at+key.length;matchedChars+=key.length;matchedLines++;
+  return {...line,text:restored};
+ });
+ if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
+ return output;
+}
+function normalizeTimedLyricsSpacing(lines,plainText){
+ const source=Array.isArray(lines)?lines:[];
+ const restored=restoreTimedLineSpacing(source,plainText);
+ const unspacedLongKorean=restored.filter(item=>{
+  const value=String(item?.text||"");
+  return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
+ }).length;
+ const unsafe=unspacedLongKorean>=2;
+ return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
+}
+
 function auditValidateLoadedLyrics(){
  const lines=lyricState.lines,problems=[];
  if(!lines.length)problems.push(lyricState.plain?"동기화 가사가 없고 일반 가사만 있습니다.":"표시할 가사가 없습니다.");
@@ -1180,6 +1265,9 @@ function auditValidateLoadedLyrics(){
   const duration=Number(ytPlayer?.getDuration?.())||Number(selectedVideoDuration)||0;
   if(duration&&lines.some(line=>Number(line.time)>duration+90))problems.push("영상 길이보다 지나치게 늦은 가사 타임스탬프가 있습니다.");
   if(lines.some(line=>!String(line.text||"").trim()))problems.push("내용이 비어 있는 가사 줄이 있습니다.");
+  const spacingCheck=normalizeTimedLyricsSpacing(lines,lyricState.plain||"");
+  if(spacingCheck.unsafe)problems.push("한국어 가사 띄어쓰기를 검증할 수 없습니다.");
+  else if((spacingCheck.lines||[]).length===lines.length&&spacingCheck.lines.some((line,index)=>String(line.text||"")!==String(lines[index].text||"")))problems.push("띄어쓰기 복구 결과가 실제 화면 가사에 반영되지 않았습니다.");
  }
  return problems;
 }
@@ -1436,42 +1524,6 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    .filter(line=>line&&!isCreditMetadata(line)&&!/^[\[(](?:ar|ti|al|by|length|re|ve|offset)\s*[:=]/i.test(line));
   const text=lines.join("\n");
   return lines.length>=2&&text.length>=12?text:"";
- }
- function restoreTimedLineSpacing(lines,plainText){
-  if(!Array.isArray(lines)||!lines.length||typeof plainText!=="string"||!plainText.trim())return lines;
-  const source=plainText.replace(/\r/g,"").trim();
-  let compact="",positions=[];
-  for(let i=0;i<source.length;i++){
-   if(!/\s/u.test(source[i])){compact+=source[i];positions.push(i);}
-  }
-  if(compact.length<12)return lines;
-  let cursor=0,eligibleChars=0,matchedChars=0,eligibleLines=0,matchedLines=0;
-  const output=lines.map(line=>{
-   const original=String(line?.text||"");
-   if(!/[가-힣]/u.test(original)||/\s/u.test(original))return line;
-   const key=original.replace(/\s+/gu,"");
-   if(!key)return line;
-   eligibleChars+=key.length;eligibleLines++;
-   const at=compact.indexOf(key,cursor);
-   if(at<0)return line;
-   const start=positions[at],end=positions[at+key.length-1]+1;
-   const restored=source.slice(start,end).trim();
-   if(!restored||restored.replace(/\s+/gu,"")!==key)return line;
-   cursor=at+key.length;matchedChars+=key.length;matchedLines++;
-   return {...line,text:restored};
-  });
-  if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
-  return output;
- }
- function normalizeTimedLyricsSpacing(lines,plainText){
-  const source=Array.isArray(lines)?lines:[];
-  const restored=restoreTimedLineSpacing(source,plainText);
-  const unspacedLongKorean=restored.filter(item=>{
-   const value=String(item?.text||"");
-   return /[가-힣]/u.test(value)&&!/\s/u.test(value)&&value.replace(/[^가-힣]/gu,"").length>=8;
-  }).length;
-  const unsafe=unspacedLongKorean>=2;
-  return {lines:unsafe?[]:restored,restored:restored!==source,unsafe};
  }
  function validate(item,extraArtists=[],extraTitles=[],provider="가사 제공처"){
   if(!item){record(provider,"EMPTY_RESPONSE","응답 데이터가 비어 있습니다.");return null;}
@@ -2424,7 +2476,9 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
       source:currentLyricsTrack.source||"",upstreamProvider:currentLyricsTrack.upstreamProvider||""}:null,
     renderedIndex,renderedText:renderedIndex>=0?String(lyricState.lines[renderedIndex]?.text||""):"",
     expectedIndex:playerTime>=0?auditExpectedLineIndex(playerTime):-1,
-    lyricsStatus:String(el.lyricsStatus?.textContent||"")
+    lyricsStatus:String(el.lyricsStatus?.textContent||""),
+    lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice(-60):[]},
+    staticValidation:auditValidateLoadedLyrics()
    };
   }
  };
