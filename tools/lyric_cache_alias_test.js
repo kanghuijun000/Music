@@ -139,6 +139,40 @@ if (quietConnectionIdentity.title !== "조용히 완전히 영원히" ||
     !artistIdentityMatches(quietConnectionIdentity.artist, "Nerd Connection")) {
   throw new Error("Underscore-separated lyric-video suffix broke Nerd Connection track identity");
 }
+const compactSoldOutIdentity = getLyricsIdentity({
+  id: "sold-out-compact-hyphen",
+  title: "Hawk Nelson- Sold Out (Lyrics Video)",
+  channelTitle: "Music Terminal"
+});
+if (compactSoldOutIdentity.title !== "Sold Out" || compactSoldOutIdentity.artist !== "Hawk Nelson" ||
+    !compactSoldOutIdentity.artistKnown) {
+  throw new Error("Compact hyphen in Hawk Nelson lyric-video title was not parsed");
+}
+const younhaMvIdentity = getLyricsIdentity({
+  id: "younha-official-mv",
+  title: "윤하(YOUNHA) - 사건의 지평선 M/V",
+  channelTitle: "YOUNHA"
+});
+if (younhaMvIdentity.title !== "사건의 지평선" || younhaMvIdentity.artist !== "윤하" ||
+    !(younhaMvIdentity.artistAliases || []).includes("YOUNHA")) {
+  throw new Error("Official M/V suffix leaked into the YOUNHA song title");
+}
+const dynamiteOfficialIdentity = getLyricsIdentity({
+  id: "bts-dynamite-official",
+  title: "BTS (방탄소년단) 'Dynamite' Official MV",
+  channelTitle: "HYBE LABELS"
+});
+if (dynamiteOfficialIdentity.title !== "Dynamite" || dynamiteOfficialIdentity.artist !== "BTS") {
+  throw new Error("Quoted artist/title parsing failed for an official music video");
+}
+const dittoPerformanceIdentity = getLyricsIdentity({
+  id: "newjeans-ditto-performance",
+  title: "NewJeans (뉴진스) 'Ditto' Performance Video",
+  channelTitle: "HYBE LABELS"
+});
+if (dittoPerformanceIdentity.title !== "Ditto" || dittoPerformanceIdentity.artist !== "NewJeans") {
+  throw new Error("Quoted artist/title parsing failed for a performance video");
+}
 const buzzIdentity = getLyricsIdentity({id:"buzz-video",title:"[가사]버즈2집 비망록",channelTitle:"Won Just"});
 if (buzzIdentity.title !== "비망록" || buzzIdentity.artist !== "버즈" || !(buzzIdentity.artistAliases || []).includes("Buzz")) {
   throw new Error("Buzz album-prefix title parsing failed");
