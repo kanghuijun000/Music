@@ -31,7 +31,7 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
 ];
-const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
 if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
 const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
@@ -108,6 +108,9 @@ if (!(homeSweetHomeIdentifiedIdentity.artistAliases || []).includes("카더가�
 }
 if (!artistIdentityMatches("Car, the garden", "카더가든")) {
   throw new Error("Car, the garden Korean/English identity alias was not recognized");
+}
+if (!artistIdentityMatches("너드커넥션", "Nerd Connection") || artistIdentityMatches("너드커넥션", "Nerdcore")) {
+  throw new Error("Nerd Connection Korean/English identity alias was not recognized strictly");
 }
 if (homeSweetHomeOfficialIdentity.title !== "Home Sweet Home" || homeSweetHomeOfficialIdentity.artist !== "Car, the garden" || !homeSweetHomeOfficialIdentity.artistKnown || homeSweetHomeOfficialIdentity.artistAliases.includes("Car") || homeSweetHomeOfficialIdentity.artistAliases.includes("the garden") || !homeSweetHomeOfficialIdentity.artistAliases.includes("카더가든") || !homeSweetHomeOfficialIdentity.queries.some(query=>query.artist==="카더가든")) {
   throw new Error("Home Sweet Home auto-generated song · artist credit parsing failed");
