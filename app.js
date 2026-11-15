@@ -17,6 +17,16 @@ function recordLyricFlow(stage,details={}){
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 let lyricPreviewRenderedToken=0;
+let lyricLastObservedPlayerTime=null;
+function getLyricTransitionDuration(index){
+ const start=Number(lyricState.lines[index]?.time),next=Number(lyricState.lines[index+1]?.time);
+ if(!Number.isFinite(start)||!Number.isFinite(next))return 180;
+ const gap=next-start;
+ if(gap<=0)return 110;
+ // Match the visual hand-off to phrase spacing: quicker for rapid lines,
+ // gently longer for sustained phrases, without delaying the lyric timestamp.
+ return Math.round(Math.max(110,Math.min(260,gap*160)));
+}
 const lyricCache=new Map();
 // TrackID.dev: video-level track timestamps. Results are cached per YouTube video.
 const TRACK_ANALYSIS_CACHE_KEY="music_track_timing_v1";
@@ -1105,6 +1115,10 @@ function renderLyrics(){
  }
  const timelineReady=contentTimelineReady;
  const current=timelineReady&&ytPlayer&&typeof ytPlayer.getCurrentTime==="function"?ytPlayer.getCurrentTime():0;
+ const previousObservedTime=lyricLastObservedPlayerTime;
+ const previousIndex=lyricState.lastIndex;
+ const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
+ lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
  const relativeTime=current-lyricOffsetSeconds;
  const lyricTime=Math.max(0,relativeTime+LYRIC_LEAD_SECONDS);
  let index=-1;
@@ -1122,7 +1136,9 @@ function renderLyrics(){
  const start=index<0?0:Math.max(0,index-1),end=index<0?Math.min(lyricState.lines.length,3):Math.min(lyricState.lines.length,index+2);
  for(let i=start;i<end;i++){
   const item=lyricState.lines[i],row=document.createElement("div");
-  row.className="lyric-line"+(i===index?" current":"")+(i<index?" past":"");
+  const animateCurrent=i===index&&index>=0&&previousIndex>=0&&index===previousIndex+1&&timelineReady&&observedDelta!==null&&observedDelta>=-0.05&&observedDelta<=0.35;
+  row.className="lyric-line"+(i===index?" current":"")+(i<index?" past":"")+(animateCurrent?" entering":"");
+  if(animateCurrent)row.style.setProperty("--lyric-transition-ms",getLyricTransitionDuration(index)+"ms");
   row.textContent=item.text;
   el.lyricsView.append(row);
  }
