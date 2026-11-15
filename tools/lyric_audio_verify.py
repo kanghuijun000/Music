@@ -5,7 +5,11 @@ import array, difflib, json, math, re, sys, urllib.parse, urllib.request, wave
 from pathlib import Path
 
 def norm(value):
-    return re.sub(r"[^0-9a-z가-힣]", "", str(value or "").lower())
+    text=str(value or "").lower()
+    text=re.sub(r"\\[[^\\]]*\\]|\\([^)]*\\)", " ", text)
+    text=re.sub(r"\\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\\b", " ", text, flags=re.I)
+    text=re.sub(r"가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터", " ", text, flags=re.I)
+    return re.sub(r"[^0-9a-z가-힣]", "", text)
 
 def fetch_json(url):
     request=urllib.request.Request(url,headers={"User-Agent":"Music-Live-Audio-QA/1.0"})
@@ -18,23 +22,40 @@ def identify(video_id):
     title=str(meta.get("title",""))
     author=str(meta.get("author_name",""))
     cleaned=title
-    # Remove lyric labels at either edge before parsing artist/title.
+    # Remove leading/trailing lyric labels and trailing show/episode brackets.
     cleaned=re.sub(r"^\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*","",cleaned,flags=re.I)
     cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*$","",cleaned,flags=re.I)
-    cleaned=re.sub(r"\s*[|｜/]\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
-    match=re.match(r"^(.+?)\s*[-–—]\s*(.+)$",cleaned)
-    if match:
-        artist=match.group(1).strip()
-        track=match.group(2).strip()
+    cleaned=re.sub(r"\s*[|｜/ㅣ]\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
+    cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*[\]】)）]\s*$","",cleaned).strip()
+
+    evidence=title+" "+author
+    ticktock=re.search(r"\bTICK\s*TOCK\b",title,flags=re.I)
+    ticktock_smtm=re.search(r"쇼미더머니\s*12|\bSMTM\s*12\b|SHOW\s*ME\s*THE\s*MONEY\s*12",evidence,flags=re.I)
+    ticktock_producer=(re.search(r"ZICO",evidence,flags=re.I)
+                       and re.search(r"Crush",evidence,flags=re.I)
+                       and re.search(r"prod\.?\s*by",evidence,flags=re.I))
+    if ticktock and (ticktock_smtm or ticktock_producer):
+        artist="김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁"
+        track="TICK TOCK"
     else:
-        # Some curator uploads prepend Buzz's album number without a separator.
-        buzz=re.match(r"^(버즈|buzz)\s*(?:\d+집\s*)?(.+)$",cleaned,flags=re.I)
-        if buzz:
-            artist="버즈"
-            track=buzz.group(2).strip()
+        quoted=re.match(r"""^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:lyrics?|가사)?$""",cleaned,flags=re.I)
+        if quoted:
+            artist=quoted.group(1).strip()
+            track=quoted.group(2).strip()
         else:
-            artist=author.replace(" - Topic","").strip()
-            track=cleaned
+            match=re.match(r"^(.+?)\s*[-–—]\s*(.+)$",cleaned)
+            if match:
+                artist=match.group(1).strip()
+                track=match.group(2).strip()
+            else:
+                # Some curator uploads prepend Buzz's album number without a separator.
+                buzz=re.match(r"^(버즈|buzz)\s*(?:\d+집\s*)?(.+)$",cleaned,flags=re.I)
+                if buzz:
+                    artist="버즈 (Buzz)"
+                    track=buzz.group(2).strip()
+                else:
+                    artist=author.replace(" - Topic","").strip()
+                    track=cleaned
     track=re.sub(r"\s*\([^)]*(?:official|lyrics?|가사|audio|video)[^)]*\)","",track,flags=re.I).strip()
     return title,track,artist,author
 
