@@ -49,6 +49,9 @@ const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto
 if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {
   throw new Error("Quoted artist/title lyric-video parsing failed");
 }
+if (dittoIdentity.titles.length !== 1 || dittoIdentity.titles[0] !== "Ditto") {
+  throw new Error("Quoted lyric metadata leaked into song-title aliases");
+}
 const identity = getLyricsIdentity(sourceVideo);
 if (identity.title !== "오래된 노래") throw new Error("Source title parsing failed");
 if (identity.artist !== "스탠딩 에그") throw new Error("Source artist parsing failed");
