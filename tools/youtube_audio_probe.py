@@ -151,6 +151,7 @@ def main() -> int:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "video_id": args.video_id,
         "requested_capture_seconds": args.seconds,
+        "audio_check_skipped": args.skip_audio,
         "scope": "real YouTube embed playback and OS audio output only",
         "lyric_content_verified": False,
         "vocal_sync_verified": False,
@@ -160,10 +161,11 @@ def main() -> int:
     ffmpeg = None
     server = None
     try:
-        for binary in ("ffmpeg", "pulseaudio", "pactl"):
-            if not shutil.which(binary):
-                raise RuntimeError(f"Required executable not found: {binary}")
-        start_audio_sink()
+        if not args.skip_audio:
+            for binary in ("ffmpeg", "pulseaudio", "pactl"):
+                if not shutil.which(binary):
+                    raise RuntimeError(f"Required executable not found: {binary}")
+            start_audio_sink()
         with tempfile.TemporaryDirectory(prefix="music-audio-probe-") as temp:
             audio_path = Path(temp) / "probe.wav"
 
