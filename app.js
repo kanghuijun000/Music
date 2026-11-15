@@ -220,9 +220,9 @@ if(leadingParentheticalArtist&&!artistKnown){
    {title,artist:""}
   ];
  }
- const titleAliases=artistAliases.length&&leadingParentheticalArtist
+ const titleAliases=quotedArtistTitle?[]:(artistAliases.length&&leadingParentheticalArtist
   ?parentheticalAliases.filter(value=>value!==String(leadingParentheticalArtist[2]||"").trim())
-  :parentheticalAliases;
+  :parentheticalAliases);
  // Only real song-title candidates belong in global validation.
  // The opposite side of an ambiguous "A - B" title is queried separately;
  // treating both sides as titles can accept lyrics for the artist name itself.
@@ -1918,6 +1918,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    const attempts=[(async()=>{
     const data=await request(videoUrl,"영상 ID 검색");
     if(data&&tryResult(data))return true;
+    if(data)record(provider,"LIRIQO_NO_USABLE_MATCH","영상 ID 결과가 곡 정보 또는 가사 형식 검증을 통과하지 못했습니다.");
     throw new Error("영상 ID 검색에서 검증된 가사를 찾지 못했습니다.");
    })()];
    // Do not let a slow video-ID lookup block a known title/artist search.
@@ -1935,6 +1936,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     attempts.push((async()=>{
      const data=await request(songUrl,"곡·가수 검색 ("+variant.artist+")");
      if(data&&tryResult(data,variant.artist))return true;
+     if(data)record(provider,"LIRIQO_NO_USABLE_MATCH","곡·가수 검색 결과가 "+variant.artist+" 가수명 검증을 통과하지 못했습니다.");
      throw new Error("곡·가수 검색에서 검증된 가사를 찾지 못했습니다.");
     })());
    }
