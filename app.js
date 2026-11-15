@@ -207,10 +207,14 @@ if(leadingParentheticalArtist&&!artistKnown){
     // Keep the full credited artist intact: commas can be part of an
     // artist name (for example, "Car, the garden"). Expand only explicit
     // parenthetical alternate spellings, never arbitrary comma fragments.
-    artistAliases=[...new Set([
+    const creditedAliases=[
      creditedArtist,
      ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
-    ].filter(Boolean))];
+    ];
+    // The artist's Korean and international spellings are both used by lyric providers.
+    if(trackText(creditedArtist)==="carthegarden")creditedAliases.push("카더가든");
+    if(trackText(creditedArtist)==="카더가든")creditedAliases.push("Car, the garden");
+    artistAliases=[...new Set(creditedAliases.filter(Boolean))];
     artistKnown=true;
     queries=[
      {title:creditedTitle,artist:creditedArtist},
