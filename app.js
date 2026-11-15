@@ -204,13 +204,13 @@ if(leadingParentheticalArtist&&!artistKnown){
    if(creditedArtist&&creditedTitle){
     title=creditedTitle;
     artist=creditedArtist;
-    // The credited performer field can contain several artists. Keep the
-    // full credit as the primary query, but recognize each credited name
-    // (including parenthetical romanized aliases) during strict validation.
-    const creditedNames=creditedArtist.split(/\s*,\s*/).filter(Boolean);
-    artistAliases=[...new Set(creditedNames.flatMap(name=>[
-     name,...[...name.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
-    ]).filter(Boolean))];
+    // Keep the full credited artist intact: commas can be part of an
+    // artist name (for example, "Car, the garden"). Expand only explicit
+    // parenthetical alternate spellings, never arbitrary comma fragments.
+    artistAliases=[...new Set([
+     creditedArtist,
+     ...[...creditedArtist.matchAll(/\(([^()]*)\)/g)].map(match=>String(match[1]||"").trim())
+    ].filter(Boolean))];
     artistKnown=true;
     queries=[
      {title:creditedTitle,artist:creditedArtist},
