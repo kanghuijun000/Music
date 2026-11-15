@@ -292,25 +292,36 @@ function storeLyricsForVideo(video,item,allowCrossVideo=true){
  if(!allowCrossVideo)return;
  for(const key of getSongLyricCacheKeys(video,item))storeLyric(key,item);
 }
-function promoteVideoLyricsToSongCache(sourceOffset){
- const videoId=currentVideoId;
- const cached=lyricCache.get(videoId)||readStoredLyric(videoId);
- if(!cached||cached.timingBasis!=="video"||!Array.isArray(cached.lines)||!cached.lines.length||!cached.videoMetadata)return false;
- const offset=Math.max(0,Math.min(1800,Number(sourceOffset)||0));
- const normalizedLines=cached.lines
-  .filter(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=offset)
-  .map(line=>({...line,time:Number(line.time)-offset}));
- const distinctTimes=new Set(normalizedLines.map(line=>Math.round(line.time*100))).size;
- if(normalizedLines.length<2||distinctTimes<2)return false;
- const normalized={...cached,lines:normalizedLines,timingBasis:"catalog",source:"Unison aligned"};
- lyricTimingBasis="catalog";lyricOffsetSeconds=0;
- lyricState.lines=normalizedLines;lyricState.plain=String(cached.plain||"");
- lyricState.wordSynced=Boolean(cached.wordSynced);lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
- storeLyricsForVideo(cached.videoMetadata,normalized,true);
- renderLyrics();
- return true;
-}
-function selectTrackStart(tracks,video){
+function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
+  const videoId=currentVideoId;
+  const cached=lyricCache.get(videoId)||readStoredLyric(videoId);
+  if(!cached||cached.timingBasis!=="video"||!Array.isArray(cached.lines)||!cached.lines.length||!cached.videoMetadata)return false;
+  const offset=Math.max(0,Math.min(1800,Number(sourceOffset)||0));
+  // Convert line and word timestamps from this video's timeline to the
+  // identified song timeline. Keep the original video cache as a fallback.
+  const normalizedLines=cached.lines
+   .filter(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=offset)
+   .map(line=>({...line,time:Number(line.time)-offset,
+    words:Array.isArray(line.words)?line.words.map(word=>({...word,
+     start:Number.isFinite(Number(word.start))?Math.max(0,Number(word.start)-offset):word.start,
+     end:Number.isFinite(Number(word.end))?Math.max(0,Number(word.end)-offset):word.end
+    })).filter(word=>!Number.isFinite(Number(word.end))||Number(word.end)>=0):line.words}));
+  const distinctTimes=new Set(normalizedLines.map(line=>Math.round(line.time*100))).size;
+  if(normalizedLines.length<2||distinctTimes<2)return false;
+  const normalized={...cached,lines:normalizedLines,timingBasis:"catalog",source:"Identified song synced lyrics",
+   trackName:identifiedTrack?.title||cached.trackName,artistName:identifiedTrack?.artist||cached.artistName,
+   duration:Number(identifiedTrack?.duration)||Number(cached.duration)||0,
+   acoustidId:identifiedTrack?.acoustidId||cached.acoustidId||""};
+  if(!normalized.trackName||!normalized.artistName)return false;
+  lyricTimingBasis="catalog";lyricOffsetSeconds=0;
+  lyricState.lines=normalizedLines;lyricState.plain=String(cached.plain||"");
+  lyricState.wordSynced=Boolean(cached.wordSynced);lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
+  storeLyricsForVideo(cached.videoMetadata,normalized,true);
+  recordLyricFlow("video_synced_lyrics_promoted_to_song_cache",{title:normalized.trackName,artist:normalized.artistName,lineCount:normalizedLines.length,sourceVideoId:videoId,trackStartOffset:offset});
+  renderLyrics();
+  return true;
+ }
+ function selectTrackStart(tracks,video){
  const expected=expectedTrackIdentity(video),videoDuration=Number(video?.duration)||0;
  if(!expected.title||!expected.artist)return null;
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
@@ -333,11 +344,11 @@ function selectTrackStart(tracks,video){
  if(unique.length>1&&unique[1].score>=unique[0].score-0.08)return null;
  return unique[0].track;
 }
-function applyTrackOffset(seconds){
+function applyTrackOffset(seconds,identifiedTrack=null){
  const hasMatch=seconds!==null&&seconds!==undefined&&Number.isFinite(Number(seconds));
  const value=hasMatch?Number(seconds):0;
  if(lyricTimingBasis==="video"){
-  if(hasMatch)promoteVideoLyricsToSongCache(value);
+  if(hasMatch)promoteVideoLyricsToSongCache(value,identifiedTrack);
   return;
  }
  lyricOffsetSeconds=Number.isFinite(value)&&value>=0?Math.min(value,1800):0;
@@ -413,7 +424,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  loadAlbumArtwork(video,identified);
  // Apply the fingerprint timestamp even when the existing lyrics already match.
  // Video-bound lyrics are normalized by applyTrackOffset before they are reused.
- applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp));
+ applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp),identified);
  const hasVerifiedSyncedLyrics=lyricState.lines.length>=2&&
   lyricState.lines.every(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim());
  // A same-track synced result is already the best usable result; never replace it
@@ -1929,7 +1940,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    const timingCache=readTrackAnalysisCache()[video.id];
    if(timingCache?.status==="completed"){
     const match=selectTrackStart(timingCache.tracks,video);
-    if(match)applyTrackOffset(getVideoLyricOffset(video.id,match.timestamp));
+    if(match)applyTrackOffset(getVideoLyricOffset(video.id,match.timestamp),identifiedTrack);
    }
   }else if(fromOtherUnisonVideo){
    lyricState.lines=[];lyricState.wordSynced=false;lyricTimingBasis="catalog";
