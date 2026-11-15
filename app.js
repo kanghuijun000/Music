@@ -981,6 +981,13 @@ function parseTimedTextTime(value){
  else if(parts.length===1)seconds=Number(parts[0]);
  return Number.isFinite(seconds)?seconds:NaN;
 }
+function preserveTimedTextSpacing(sourceText,wordText){
+ const source=String(sourceText||"").replace(/\\s+/gu," ").trim();
+ const words=String(wordText||"").replace(/\\s+/gu," ").trim();
+ if(!source)return words;
+ const compact=value=>value.replace(/\\s+/gu,"");
+ return compact(source)&&compact(source)===compact(words)?source:words;
+}
 function parseTtml(source){
  if(!source||typeof DOMParser==="undefined")return [];
  const doc=new DOMParser().parseFromString(String(source),"application/xml");
@@ -1014,7 +1021,10 @@ function parseTtml(source){
   const fullText=(p.textContent||"").replace(/\s+/g," ").trim();
   if(Number.isFinite(time)&&words.length){
    const ordered=words.sort((a,b)=>a.start-b.start);
-   output.push({time,text:ordered.map(word=>word.text).join(""),words:ordered});
+   const joinedText=ordered.map(word=>word.text).join("");
+    // Preserve the original TTML paragraph's whitespace between timed spans.
+    // Text nodes are intentionally excluded from word timing, but not from display text.
+    output.push({time,text:preserveTimedTextSpacing(fullText,joinedText),words:ordered});
   }else if(Number.isFinite(time)&&fullText){
    output.push({time,text:fullText,words:[]});
   }
