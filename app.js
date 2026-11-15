@@ -1394,6 +1394,32 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const text=lines.join("\n");
   return lines.length>=2&&text.length>=12?text:"";
  }
+ function restoreTimedLineSpacing(lines,plainText){
+  if(!Array.isArray(lines)||!lines.length||typeof plainText!=="string"||!plainText.trim())return lines;
+  const source=plainText.replace(/\r/g,"").trim();
+  let compact="",positions=[];
+  for(let i=0;i<source.length;i++){
+   if(!/\s/u.test(source[i])){compact+=source[i];positions.push(i);}
+  }
+  if(compact.length<12)return lines;
+  let cursor=0,eligibleChars=0,matchedChars=0,eligibleLines=0,matchedLines=0;
+  const output=lines.map(line=>{
+   const original=String(line?.text||"");
+   if(!/[가-힣]/u.test(original)||/\s/u.test(original))return line;
+   const key=original.replace(/\s+/gu,"");
+   if(!key)return line;
+   eligibleChars+=key.length;eligibleLines++;
+   const at=compact.indexOf(key,cursor);
+   if(at<0)return line;
+   const start=positions[at],end=positions[at+key.length-1]+1;
+   const restored=source.slice(start,end).trim();
+   if(!restored||restored.replace(/\s+/gu,"")!==key)return line;
+   cursor=at+key.length;matchedChars+=key.length;matchedLines++;
+   return {...line,text:restored};
+  });
+  if(!eligibleChars||matchedChars/eligibleChars<0.85||matchedLines<Math.min(2,eligibleLines))return lines;
+  return output;
+ }
  function validate(item,extraArtists=[],extraTitles=[],provider="가사 제공처"){
   if(!item){record(provider,"EMPTY_RESPONSE","응답 데이터가 비어 있습니다.");return null;}
   const evidence=item._providerQueryEvidence||null;
@@ -2019,8 +2045,30 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
  }
  const wordLines=selected.ttmlLines||[];
- const hasWords=wordLines.some(item=>item.words?.length);
- lyricState.lines=(selected._synced?wordLines:[]).filter(item=>!isCreditMetadata(item.text));
+ let displayWordLines=wordLines;
+ if(selected._synced&&wordLines.length){
+  const selectedTitle=selected.trackName||selected.title||"";
+  const selectedArtist=selected.artistName||selected.artist||"";
+  const spacingSources=[selected,...candidates.filter(item=>{
+   if(item===selected||!String(item.plainLyrics||"").trim())return false;
+   const sameTitle=trackSimilarity(item.trackName||item.title||"",selectedTitle)>=0.92;
+   const sameArtist=trackSimilarity(item.artistName||item.artist||"",selectedArtist)>=0.82;
+   const aDuration=Number(item.duration)||0,bDuration=Number(selected.duration)||0;
+   const sameDuration=!aDuration||!bDuration||Math.abs(aDuration-bDuration)<=Math.max(15,bDuration*0.12);
+   return sameTitle&&sameArtist&&sameDuration;
+  })];
+  for(const source of spacingSources){
+   const restored=restoreTimedLineSpacing(wordLines,String(source.plainLyrics||""));
+   if(restored!==wordLines){
+    displayWordLines=restored;
+    record(source===selected?(selected._source||"가사 제공처"):(source._source||"동일 곡 가사 제공처"),
+     "KOREAN_SPACING_RESTORED","동일 곡의 일반 가사와 글자 순서를 대조해 싱크 가사의 띄어쓰기를 복원했습니다.");
+    break;
+   }
+  }
+ }
+ const hasWords=displayWordLines.some(item=>item.words?.length);
+ lyricState.lines=(selected._synced?displayWordLines:[]).filter(item=>!isCreditMetadata(item.text));
  lyricState.plain=String(selected.plainLyrics||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
  lyricState.wordSynced=hasWords;
  lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
