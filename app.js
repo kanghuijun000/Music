@@ -65,14 +65,14 @@ function getLyricsIdentity(video,identifiedTrack=null){
   if(title&&artist){
    const videoTitle=cleanVideoTitle(video?.title);
    const titles=[...new Set([title,...(videoTitle&&trackSimilarity(videoTitle,title)>=0.55?[videoTitle]:[])])];
-   const queries=[{title,artist},{title,artist:""}];
+   const artistAliases=trackText(artist)==="car the garden"?["카더가든"]:
+    trackText(artist)==="카더가든"?["Car, the garden"]:[];
+   const queries=[{title,artist},...artistAliases.map(name=>({title,artist:name})),{title,artist:""}];
    const uniqueQueries=[];
    for(const query of queries){
     const key=trackText(query.title)+"|"+trackText(query.artist);
     if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:query.title,artist:query.artist||""});
    }
-   const artistAliases=trackText(artist)==="car the garden"?["카더가든"]:
-    trackText(artist)==="카더가든"?["Car, the garden"]:[];
    return {raw:title+" - "+artist,title,artist,artistAliases,artistKnown:true,isTopic:false,channel:artist,generic:false,
     titles,queries:uniqueQueries,identified:true};
   }
@@ -254,6 +254,14 @@ if(leadingParentheticalArtist&&!artistKnown){
  // treating both sides as titles can accept lyrics for the artist name itself.
  const uniqueTitles=[...new Set([title,...titleAliases].map(v=>String(v||"").trim()).filter(Boolean))];
  if(!queries.length)queries=[{title,artist:artistKnown?artist:""}];
+ if(trackText(artist)==="car the garden")artistAliases.push("카더가든");
+ if(trackText(artist)==="카더가든")artistAliases.push("Car, the garden");
+ artistAliases=[...new Set(artistAliases.filter(Boolean))];
+ if(artistKnown){
+  for(const alias of artistAliases){
+   if(!queries.some(item=>trackText(item.artist)===trackText(alias)))queries.push({title,artist:alias});
+  }
+ }
  const baseQueries=queries.slice();
  const aliasQueries=titleAliases.flatMap(alias=>artistKnown
   ?[{title:alias,artist},{title:alias,artist:""}]
@@ -268,9 +276,6 @@ if(leadingParentheticalArtist&&!artistKnown){
   const key=trackText(q.title)+"|"+trackText(q.artist);
   if(!uniqueQueries.some(item=>item.key===key))uniqueQueries.push({key,title:q.title,artist:q.artist||""});
  }
- if(trackText(artist)==="car the garden")artistAliases.push("카더가든");
- if(trackText(artist)==="카더가든")artistAliases.push("Car, the garden");
- artistAliases=[...new Set(artistAliases.filter(Boolean))];
  return {raw,title,artist,artistAliases,artistKnown,isTopic,channel,generic,titles:uniqueTitles,queries:uniqueQueries.slice(0,10)};
 }
 function expectedTrackIdentity(video){
