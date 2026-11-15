@@ -78,8 +78,13 @@ def verify(audio_path,video_id,app_snapshot):
         title_score=difflib.SequenceMatcher(None,title_norm,app_title_norm).ratio()
         if title_norm and app_title_norm.endswith(title_norm):
             title_score=1.0
-        artist_candidates=[re.sub(r"\([^)]*\)","",expected_artist)]
-        artist_candidates.extend(re.findall(r"\(([^)]+)\)",expected_artist))
+        artist_candidates=[]
+        for credited_artist in expected_artist.split(","):
+            credited_artist=credited_artist.strip()
+            if not credited_artist:
+                continue
+            artist_candidates.append(re.sub(r"\([^)]*\)","",credited_artist).strip())
+            artist_candidates.extend(re.findall(r"\(([^)]+)\)",credited_artist))
         artist_score=max((difflib.SequenceMatcher(None,norm(candidate),norm(app_artist)).ratio()
                           for candidate in artist_candidates if norm(candidate)),default=0.0)
         identity_ok=bool(title_norm and app_title_norm and title_score>=0.90 and artist_score>=0.72)
