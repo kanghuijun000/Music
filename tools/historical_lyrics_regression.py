@@ -76,12 +76,15 @@ def main():
     with tempfile.TemporaryDirectory(prefix="music-historical-") as temp:
         snapshot = Path(temp) / "app"
         snapshot.mkdir()
-        archive = run(["git", "archive", sha, "index.html", "app.js", "style.css", "sw.js", "manifest.json", "icons"])
+        archive = subprocess.run(
+            ["git", "archive", sha, "index.html", "app.js", "style.css", "sw.js", "manifest.json", "icons"],
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+        )
         if archive.returncode != 0:
             report["archive_error"] = archive.stderr[-2000:]
             raise SystemExit(report["archive_error"])
         import tarfile, io
-        with tarfile.open(fileobj=io.BytesIO(archive.stdout.encode("latin1")), mode="r:") as tar:
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
             tar.extractall(snapshot, filter="data")
         for test in TESTS:
             command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", "45", "--app-root", str(snapshot)]
