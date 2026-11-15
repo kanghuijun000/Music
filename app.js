@@ -871,6 +871,12 @@ function setLyricsDiagnostics(entries,summary){
 function renderLyrics(){
  if(lyricState.loading)return;
  if(!lyricState.lines.length){
+  if(!currentVideoId){
+   if(lyricState.lastIndex===-4)return;
+   showLyricsMessage("곡을 선택하면 가사가 여기에 표시됩니다.");
+   lyricState.lastIndex=-4;
+   return;
+  }
   if(lyricState.lastIndex===-2||lyricState.lastIndex===-3)return;
   el.lyricsView.replaceChildren();
   if(lyricState.plain){
