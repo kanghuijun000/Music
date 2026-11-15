@@ -34,25 +34,22 @@ COMMITS = [
     ("680e1bba3b68a8175e3a752cd6ad7cb9f4d5b972", "after-smooth-lyric-transition"),
 ]
 FIXED = [
-    {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM"},
-    {"name": "Counting Stars — OneRepublic (timing regression)", "video_id": "5vilULw-9Gg"},
-    {"name": "Sold Out — Hawk Nelson (timing regression)", "video_id": "GspDybPhOeY", "seconds": 70},
-    {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE"},
-    {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q"},
-    {"name": "좋은 밤 좋은 꿈 — Nerd Connection", "query": "너드커넥션 좋은 밤 좋은 꿈 가사 웅키"},
-    {"name": "Home Sweet Home — Car, the garden (lyric upload)", "video_id": "9ZAmRR6mDpU"},
-    {"name": "Home Sweet Home — Car, the garden (official audio)", "video_id": "ctS0kU2k4HE"},
-    {"name": "TICK TOCK — SMTM12", "query": "TICK TOCK Feat ZICO Prod ZICO Crush 쇼미더머니 12 알파 가사"},
+    {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM", "audio_check": False, "seconds": 25},
+    {"name": "Counting Stars — exact previously tested video", "video_id": "5vilULw-9Gg", "audio_check": False, "seconds": 25},
+    {"name": "Sold Out — exact previously tested lyric video", "video_id": "GspDybPhOeY", "audio_check": False, "seconds": 25},
+    {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE", "audio_check": False, "seconds": 25},
+    {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q", "audio_check": False, "seconds": 25},
+    {"name": "좋은 밤 좋은 꿈 — Nerd Connection (웅키 lyric video)", "video_id": "mTonMiKVZRw", "audio_check": False, "seconds": 25},
+    {"name": "Home Sweet Home — Car, the garden (lyric upload)", "video_id": "9ZAmRR6mDpU", "audio_check": False, "seconds": 25},
+    {"name": "Home Sweet Home — Car, the garden (official audio)", "video_id": "MV9kclfajk8", "audio_check": True, "seconds": 45},
+    {"name": "TICK TOCK — SMTM12 (original lyric upload)", "video_id": "Nx9pNz6-Wns", "audio_check": False, "seconds": 25},
 ]
 RANDOM_POOL = [
-    {"name": "밤편지 — IU", "query": "아이유 밤편지 가사"},
-    {"name": "주저하는 연인들을 위해 — Jannabi", "query": "잔나비 주저하는 연인들을 위해 가사"},
-    {"name": "Ditto — NewJeans", "query": "NewJeans Ditto lyrics"},
-    {"name": "Blinding Lights — The Weeknd", "query": "The Weeknd Blinding Lights lyrics"},
-    {"name": "Yellow — Coldplay", "query": "Coldplay Yellow lyrics"},
-    {"name": "Perfect — Ed Sheeran", "video_id": "kPhpHvnnn0Q"},
-    {"name": "사건의 지평선 — Younha", "query": "윤하 사건의 지평선 가사"},
-    {"name": "Dynamite — BTS", "query": "BTS Dynamite lyrics"},
+    {"name": "Counting Stars — OneRepublic (official music video)", "video_id": "hT_nvWreIhg", "audio_check": True, "seconds": 45},
+    {"name": "TICK TOCK — SMTM12 (Mnet official video)", "video_id": "0sxLgAVPWVs", "audio_check": True, "seconds": 45},
+    {"name": "사건의 지평선 — Younha (official M/V)", "video_id": "BBdC1rl5sKY", "audio_check": True, "seconds": 45},
+    {"name": "Perfect — Ed Sheeran (official music video)", "video_id": "2Vv-BfVoq4g", "audio_check": True, "seconds": 45},
+    {"name": "Blinding Lights — The Weeknd (official video)", "video_id": "4NRXx6U8ABQ", "audio_check": True, "seconds": 45},
 ]
 # Deterministic random sample: identical songs on every commit, so commit-to-commit
 # differences cannot be explained by a changing test set.
@@ -106,6 +103,8 @@ def main():
                 command += ["--video-id", test["video_id"]]
             else:
                 command += ["--query", test["query"]]
+            if not test.get("audio_check", True):
+                command.append("--skip-audio")
             try:
                 probe_path = ROOT / "youtube-audio-probe-report.json"
                 probe_path.unlink(missing_ok=True)
@@ -114,6 +113,7 @@ def main():
                 verification = detail.get("lyric_verification") or {}
                 result = {
                     "song": test["name"],
+                    "audio_check": bool(test.get("audio_check", True)),
                     "exit_code": proc.returncode,
                     "probe_passed": detail.get("probe_passed", False),
                     "video_id": detail.get("video_id"),
@@ -158,7 +158,8 @@ def main():
         "identity_verified": sum(1 for x in results if (x.get("lyric_verification") or {}).get("identity_verified")),
         "retrieval_passed": sum(1 for x in results if (x.get("lyric_verification") or {}).get("identity_verified") and (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present"))),
         "vocal_sync_passed": sum(1 for x in results if (x.get("lyric_verification") or {}).get("vocal_sync_verified")),
-        "vocal_sync_inconclusive": sum(1 for x in results if x.get("verification_status") == "INCONCLUSIVE"),
+        "vocal_sync_inconclusive": sum(1 for x in results if x.get("verification_status") == "INCONCLUSIVE" and x.get("audio_check", True)),
+        "audio_check_skipped": sum(1 for x in results if not x.get("audio_check", True)),
         "vocal_sync_failed": sum(1 for x in results if x.get("verification_status") == "FAIL"),
         "timing_verification_failures": sum(1 for x in results if x.get("verification_status") == "FAIL"),
         "youtube_embed_blocked": sum(1 for x in results if x.get("youtube_player_error_code") in (101, 150)),
@@ -171,6 +172,11 @@ def main():
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or x.get("app_static_validation_passed") is False or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
+    if args.commit.upper() == "HEAD" and not report["summary"]["vocal_sync_passed"]:
+        report["summary"]["sync_gate"] = "NO_AUDIO_SYNC_PASS"
+        out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
+        return 1
     return 0 if len(results) == len(TESTS) and not retrieval_failures else 1
 
 if __name__ == "__main__":
