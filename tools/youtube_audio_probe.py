@@ -246,6 +246,11 @@ def main() -> int:
                             renderer_mismatches += 1
                     time.sleep(0.2)
                 app_snapshot = page.evaluate("window.__musicQa.snapshot()")
+                report["app_lyrics_status"] = str(app_snapshot.get("lyricsStatus") or "")
+                report["app_lyric_track"] = app_snapshot.get("track") or {}
+                report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
+                report["app_lyric_offset_seconds"] = app_snapshot.get("lyricOffsetSeconds")
+                report["lyric_flow_events"] = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])[-30:]
                 report["player_playing_seen"] = playing_seen
                 report["player_time_advanced_seconds"] = round(last_time, 2)
                 report["player_state_changes"] = state_changes
