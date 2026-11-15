@@ -139,6 +139,7 @@ def check_static() -> list[dict]:
         "plain-lyrics fallback remains valid when audio verification is unavailable": "renderer.get(\"plain_lyrics_present\")" in probe and 'report["verification_status"] = "INCONCLUSIVE"' in probe,
         "retrieval-only videos still receive strict song identity verification": '"--skip-audio"' in probe and "verify_lyrics(None, args.video_id, app_snapshot, identified)" in probe and "if audio_path is None:" in verifier,
         "comma-containing artist names are not split into false aliases": "Commas can be part of one artist name" in app and 'trackText(artist)==="car the garden"' in app and 'trackText(artist)==="카더가든"' in app and "creditedArtist.split" not in app,
+        "Nerd Connection Korean-English artist alias is explicit": '["너드커넥션","nerd connection"]' in app and '("너드커넥션", "nerd connection")' in health,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
             "if(!candidates.some(item=>item._synced))" in app
