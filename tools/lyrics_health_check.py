@@ -19,6 +19,7 @@ USER_AGENT = "Music-Lyrics-HealthCheck/1.0 (+https://github.com/kanghuijun000/Mu
 BASE_FIXTURES = [
     {"title": "오래된 노래", "artist": "스탠딩 에그", "duration": 272, "kind": "regression"},
     {"title": "비망록", "artist": "버즈", "duration": 0, "kind": "regression"},
+    {"title": "밤편지", "artist": "아이유", "duration": 0, "kind": "regression"},
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
     {"title": "조용히 완전히 영원히", "artist": "너드커넥션", "duration": 189, "kind": "baseline"},
