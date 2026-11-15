@@ -33,6 +33,9 @@
 .lyric-line{width:100%;font-size:14px;line-height:1.55;font-weight:600;color:#737c8e;transition:color .2s,transform .2s,font-size .2s;overflow-wrap:anywhere}
 .lyric-line.past{color:#525b6c;font-size:12px;font-weight:500}
 .lyric-line.current{color:var(--accent);font-size:19px;font-weight:800;transform:scale(1.02);text-shadow:0 0 22px #b6f36a25}
+.lyric-line.current.entering{animation:lyric-line-enter var(--lyric-transition-ms,180ms) cubic-bezier(.22,.72,.24,1) both;will-change:transform,opacity}
+@keyframes lyric-line-enter{from{opacity:.58;transform:translateY(8px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1.02)}}
+@media(prefers-reduced-motion:reduce){.lyric-line.current.entering{animation:none;will-change:auto}}
 .lyric-line.plain{color:#c3c8d4;font-size:13px;font-weight:500}
 .lyrics-view:has(.plain){justify-content:flex-start;overflow-y:auto;mask-image:none;gap:10px}
 @media(max-width:560px){.lyrics-card{min-height:280px;padding:14px 10px}.lyrics-view{height:245px}.lyric-line.current{font-size:17px}}
