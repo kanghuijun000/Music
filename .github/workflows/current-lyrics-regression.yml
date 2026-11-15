@@ -1,0 +1,57 @@
+name: Current Music Lyrics Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/current-lyrics-regression.yml"
+      - "tools/historical_lyrics_regression.py"
+      - "tools/youtube_audio_probe.py"
+      - "tools/lyric_audio_verify.py"
+      - "app.js"
+      - "index.html"
+      - "sw.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: current-music-lyrics-regression
+  cancel-in-progress: false
+
+jobs:
+  current-main:
+    name: "10-song regression — current main"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install browser and audio verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils xvfb
+          python -m pip install --upgrade pip
+          python -m pip install playwright faster-whisper
+          python -m playwright install --with-deps chromium
+
+      - name: Test current app against ten fixed and random songs
+        run: xvfb-run -a python tools/historical_lyrics_regression.py --commit HEAD
+
+      - name: Upload current regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-music-lyrics-regression
+          path: historical-lyrics-regression-*.json
+          if-no-files-found: warn
+          retention-days: 30
