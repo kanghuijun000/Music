@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   current-main:
-    name: "16-video regression — current app"
+    name: "19-video regression — current app"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -54,7 +54,7 @@ jobs:
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
 
-      - name: Test current app against sixteen fixed and random video fixtures
+      - name: Test current app against nineteen fixed and random video fixtures
         run: xvfb-run -a python tools/historical_lyrics_regression.py --commit HEAD
 
       - name: Upload current regression report
