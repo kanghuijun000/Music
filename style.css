@@ -297,3 +297,19 @@ h1 em{color:var(--accent)}
 .api-origin-copy button{flex:none;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#ffffff0a;color:var(--text);font-size:10px}
 .api-guide-finish{font:inherit;cursor:pointer}
 @media(max-width:560px){.api-guide-dialog{padding:15px}.api-guide-step{padding:11px}.api-origin-copy{align-items:stretch}.api-origin-copy button{font-size:9px}}
+
+
+/* YouTube-style search suggestions and recent-query list */
+.search-area{z-index:40}
+.recent-searches{max-height:min(66vh,560px);overflow-y:auto;overscroll-behavior:contain;padding:8px 6px;background:#101014;border:1px solid #ffffff12;border-radius:15px;box-shadow:0 20px 55px #000b}
+.recent-heading{padding:8px 13px 5px;color:#85858f;font-size:10px;letter-spacing:.2px}
+.suggestion-heading{padding-top:12px;border-top:1px solid #ffffff0d;margin-top:5px}
+.recent-clear{font-size:10px;color:#85858f}
+.recent-row{width:100%;min-height:54px;display:flex;align-items:center;gap:16px;padding:10px 13px;border:0;border-radius:8px;background:transparent;color:#f0f0f3;text-align:left;cursor:pointer}
+.recent-row:hover,.recent-row.keyboard-active,.recent-row:focus-visible{background:#ffffff0d;outline:none}
+.recent-clock,.recent-search-icon{width:24px;height:24px;flex:none;display:grid;place-items:center;color:#e2e2e7}
+.recent-clock svg,.recent-search-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.recent-query-text{flex:1;min-width:0;font-size:14px;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent-insert-icon{width:23px;height:23px;flex:none;display:grid;place-items:center;color:#d8d8df;opacity:.9}
+.recent-insert-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:560px){.recent-searches{top:calc(100% + 5px);left:-4px;right:-4px;max-height:62vh;padding:6px 4px;border-radius:12px}.recent-row{min-height:51px;gap:14px;padding:9px 11px}.recent-query-text{font-size:13px}}
