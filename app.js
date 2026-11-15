@@ -227,11 +227,11 @@ if(leadingParentheticalArtist&&!artistKnown){
   }
 
   if(!artistKnown){
-   const originalVideoCredit=descriptionLines.map(line=>line.replace(/^[#•*\\d.)\\s]+/,"").trim())
-    .map(line=>line.match(/(?:Original\\s*Music\\s*Video)\\s*[:：]\\s*[•·]?\\s*(.{2,120}?)\\s*[-–—]\\s*(.{2,180})/i))
+   const originalVideoCredit=descriptionLines.map(line=>line.replace(/^[#•*\d.)\s]+/,"").trim())
+    .map(line=>line.match(/(?:Original\s*Music\s*Video)\s*[:：]\s*[•·]?\s*(.{2,120}?)\s*[-–—]\s*(.{2,180})/i))
     .find(match=>{
      if(!match)return false;
-     const titleParts=raw.split(/\\s*[-–—]\\s*/).map(part=>part.trim()).filter(Boolean);
+     const titleParts=raw.split(/\s*[-–—]\s*/).map(part=>part.trim()).filter(Boolean);
      const videoTrack=titleParts.length>1?titleParts.slice(1).join(" - "):raw;
      return trackSimilarity(cleanVideoTitle(match[2]),videoTrack)>=0.92;
     });
