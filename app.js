@@ -41,6 +41,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Artist (alternate name) - Song is a common Korean lyric-video title format.
  // Keep the parenthetical text as an artist alias, never as a possible song title.
  const identityTitleSource=originalTitle.replace(/\s*\[[^\]]*\]\s*$/,"").trim();
+ const hasExplicitLyricsLabel=/\[[^\]]*(?:가사|lyrics?)[^\]]*\]\s*$/i.test(originalTitle);
  const leadingParentheticalArtist=identityTitleSource.match(/^\s*([^()]+?)\s*\(([^()]*)\)\s*[-–—|]\s*(.+?)\s*$/);
  const parentheticalAliases=[...originalTitle.matchAll(/\(([^()]*)\)/g)]
   .map(match=>String(match[1]||"").trim())
@@ -72,7 +73,19 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }else if(!generic&&isTopic){
   artist=channel;artistKnown=Boolean(channel);
  }
- if(leadingParentheticalArtist&&!artistKnown){
+ // Explicitly labelled lyric uploads commonly use "Artist - Song".
+// A lyric-curator channel should not make both sides ambiguous; short-title
+// validation below still requires exact artist AND duration matches.
+if(!artistKnown&&hasExplicitLyricsLabel&&parts.length===2){
+ const [artistCandidate,songCandidate]=parts;
+ if(artistCandidate&&songCandidate&&trackText(artistCandidate)!==trackText(songCandidate)){
+  title=songCandidate;
+  artist=artistCandidate;
+  artistKnown=true;
+  queries=[{title:songCandidate,artist:artistCandidate},{title:songCandidate,artist:""}];
+ }
+}
+if(leadingParentheticalArtist&&!artistKnown){
   const candidateArtist=String(leadingParentheticalArtist[1]||"").trim();
   const parentheticalName=String(leadingParentheticalArtist[2]||"").trim();
   const songTitle=String(leadingParentheticalArtist[3]||"").trim();
