@@ -1204,6 +1204,9 @@ function auditValidateLoadedLyrics(){
   const duration=Number(ytPlayer?.getDuration?.())||Number(selectedVideoDuration)||0;
   if(duration&&lines.some(line=>Number(line.time)>duration+90))problems.push("영상 길이보다 지나치게 늦은 가사 타임스탬프가 있습니다.");
   if(lines.some(line=>!String(line.text||"").trim()))problems.push("내용이 비어 있는 가사 줄이 있습니다.");
+  const spacingCheck=normalizeTimedLyricsSpacing(lines,lyricState.plain||"");
+  if(spacingCheck.unsafe)problems.push("한국어 가사 띄어쓰기를 검증할 수 없습니다.");
+  else if((spacingCheck.lines||[]).length===lines.length&&spacingCheck.lines.some((line,index)=>String(line.text||"")!==String(lines[index].text||"")))problems.push("띄어쓰기 복구 결과가 실제 화면 가사에 반영되지 않았습니다.");
  }
  return problems;
 }
