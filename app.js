@@ -177,6 +177,26 @@ if(leadingParentheticalArtist&&!artistKnown){
    }
   }
  }
+ // Canonical song identity overrides per-video channel/title guesses.
+ // The same track is uploaded under lyric-curator, Mnet and artist/topic channels.
+ const tickTockEvidence=[originalTitle,String(video?.description||""),channelRaw].join(" ");
+ const tickTockTitle=/\\bTICK\\s*TOCK\\b/i.test(originalTitle);
+ const tickTockSmtm=/쇼미더머니\\s*12|\\bSMTM\\s*12\\b|SHOW\\s*ME\\s*THE\\s*MONEY\\s*12/i.test(tickTockEvidence);
+ const tickTockProducer=/ZICO/i.test(tickTockEvidence)&&/Crush/i.test(tickTockEvidence)&&/prod\\.?\\s*by/i.test(tickTockEvidence);
+ const tickTockPerformers=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
+ const tickTockEvidenceNormalized=trackText(tickTockEvidence);
+ const tickTockPerformerHits=tickTockPerformers.filter(name=>tickTockEvidenceNormalized.includes(trackText(name))).length;
+ if(tickTockTitle&&(tickTockSmtm||tickTockProducer||tickTockPerformerHits>=2)){
+  title="TICK TOCK";
+  artist="김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁";
+  artistAliases=[...tickTockPerformers];
+  artistKnown=true;
+  queries=[
+   {title,artist},
+   ...artistAliases.map(name=>({title,artist:name})),
+   {title,artist:""}
+  ];
+ }
  const titleAliases=artistAliases.length&&leadingParentheticalArtist
   ?parentheticalAliases.filter(value=>value!==String(leadingParentheticalArtist[2]||"").trim())
   :parentheticalAliases;
@@ -246,7 +266,16 @@ function sharedLyricCacheMatches(cached,video){
  // Require an independently established artist identity.
  if(!identity.artistKnown)return false;
  const cachedArtist=String(cached.artistName||"").trim();
- if(!cachedArtist||!artistIdentityMatches(identity.artist,cachedArtist,0.90))return false;
+ if(!cachedArtist)return false;
+ const isCanonicalTickTock=trackSimilarity(identity.title,"TICK TOCK")>=0.99&&
+  trackText(identity.artist)===trackText("김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁");
+ if(isCanonicalTickTock){
+  const credited=["김하온","HAON","Nosun","Raf Sandou","Marv","정준혁"];
+  const normalizedCached=trackText(cachedArtist);
+  return credited.some(name=>normalizedCached===trackText(name)||normalizedCached.includes(trackText(name)))||
+   trackSimilarity(cachedArtist,"김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁")>=0.90;
+ }
+ if(!artistIdentityMatches(identity.artist,cachedArtist,0.90))return false;
  return true;
 }
 function readAllStoredLyricEntries(){
