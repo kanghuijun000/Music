@@ -40,6 +40,8 @@ FIXED = [
     {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE", "audio_check": False, "seconds": 25},
     {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q", "audio_check": False, "seconds": 25},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection (웅키 lyric video)", "video_id": "mTonMiKVZRw", "audio_check": False, "seconds": 25},
+    {"name": "밤편지 — IU (lyric video)", "video_id": "LgJCX7ze0Qc", "audio_check": False, "seconds": 25},
+    {"name": "조용히 완전히 영원히 — Nerd Connection (official lyrics video)", "video_id": "1q2fBL1LqZI", "audio_check": False, "seconds": 25},
     {"name": "Home Sweet Home — Car, the garden (lyric upload)", "video_id": "9ZAmRR6mDpU", "audio_check": False, "seconds": 25},
     {"name": "Home Sweet Home — Car, the garden (official audio)", "video_id": "MV9kclfajk8", "audio_check": True, "seconds": 45},
     {"name": "TICK TOCK — SMTM12 (original lyric upload)", "video_id": "Nx9pNz6-Wns", "audio_check": False, "seconds": 25},
