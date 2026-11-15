@@ -217,13 +217,24 @@ def verify(audio_path,video_id,app_snapshot):
                       estimated_video_intro_or_lyric_offset_seconds=round(offset,2),
                       median_vocal_word_start_error_seconds=round(median,2),
                       mean_text_similarity=round(average,3))
+        app_offset=float(app_snapshot.get("lyricOffsetSeconds") or 0)
+        offset_error=abs(offset-app_offset)
         content_ok=len(matches)>=5 and ratio>=0.25
-        sync_ok=content_ok and median<=1.5
+        # The search offset is diagnostic only. A pass requires the app to
+        # have actually applied that same offset to its rendered timeline.
+        sync_ok=content_ok and median<=1.5 and offset_error<=1.5
+        report.update(app_applied_offset_seconds=round(app_offset,2),
+                      app_to_vocal_offset_error_seconds=round(offset_error,2))
         report["lyric_content_verified"]=content_ok
         report["vocal_sync_verified"]=sync_ok
         report["overall"]="PASS" if sync_ok else "FAIL_OR_INCONCLUSIVE"
         if not sync_ok:
-            report["reason"]="Too few matching vocal lines or median vocal-to-lyric timing error exceeds 1.5 seconds"
+            if not content_ok:
+                report["reason"]="Too few matching vocal lines to verify lyric content"
+            elif offset_error>1.5:
+                report["reason"]=f"Measured vocal offset ({offset:.2f}s) differs from the app-applied offset ({app_offset:.2f}s)"
+            else:
+                report["reason"]="Median vocal-to-lyric timing error exceeds 1.5 seconds"
         return report
     except Exception as exc:
         report["reason"]=type(exc).__name__+": "+str(exc)[:300]
