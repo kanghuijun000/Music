@@ -58,6 +58,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const cleanVideoTitle=value=>String(value||"")
   .replace(/\[[^\]]*\]|\([^)]*\)/g," ")
   .replace(/\s*(?:ㅣ|\/|\||_|[-–—])\s*(?:가사|lyrics?|official|뮤직비디오|뮤비|audio|video|live|performance|remaster(?:ed)?).*$/i," ")
+  .replace(/\s+(?:official\s+)?(?:m\/v|mv|performance\s+video)$/i," ")
   .replace(/\s+/g," ").trim();
  if(identifiedTrack){
   const title=String(identifiedTrack.title||identifiedTrack.trackName||"").trim();
@@ -93,7 +94,7 @@ function getLyricsIdentity(video,identifiedTrack=null){
  const parts=raw.split(/\s+[-–—|]\s+/).map(v=>v.trim()).filter(Boolean);
  const channelRaw=String(video?.channelTitle||"").trim();
  const isTopic=/\s*-\s*Topic$/i.test(channelRaw);
- const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").trim();
+ const channel=channelRaw.replace(/\s*-\s*Topic$/i,"").replace(/\s*VEVO$/i,"").trim();
  const generic=/^(youtube|vevo|various artists|unknown|official|music|stone music entertainment|1thek|kakao entertainment|kakao music|genie music|bugs!?|nhn bugs|danal entertainment|poclanos|mirrorball music|sony music korea|warner music korea|universal music korea|dingo music|딩고뮤직|멜론|melon|mnet|kbs kpop|mbckpop|sbs kpop)$/i.test(channel);
  let title=raw,artist="",artistKnown=false,queries=[],artistAliases=[];
  // Buzz lyric uploads sometimes encode the album number before the song
@@ -125,8 +126,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
  }
  // Quoted song names are common in curator titles such as
  // "NewJeans 'Ditto' Lyrics". Only trust this form when a lyric label is present.
- const quotedArtistTitle=raw.match(/^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:lyrics?|가사)?$/i);
- if(!artistKnown&&hasExplicitLyricsLabel&&quotedArtistTitle){
+ const quotedArtistTitle=raw.match(/^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:(?:lyrics?|가사)|(?:official\s*(?:mv|music\s*video)|performance\s*video|mv))?$/i);
+ const hasOfficialVideoLabel=/\b(?:official\s*(?:mv|music\s*video)|performance\s*video|mv)\b/i.test(originalTitle);
+ if(!artistKnown&&(hasExplicitLyricsLabel||hasOfficialVideoLabel)&&quotedArtistTitle){
   const quotedArtist=String(quotedArtistTitle[1]||"").trim();
   const quotedTitle=String(quotedArtistTitle[2]||"").trim();
   if(quotedArtist&&quotedTitle&&trackText(quotedArtist)!==trackText(quotedTitle)){
@@ -139,8 +141,9 @@ function getLyricsIdentity(video,identifiedTrack=null){
  // Explicitly labelled lyric uploads commonly use "Artist - Song".
 // A lyric-curator channel should not make both sides ambiguous; short-title
 // validation below still requires exact artist AND duration matches.
-if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&parts.length===2){
- const [artistCandidate,songCandidate]=parts;
+if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&(parts.length===2||parts.length===1)){
+ const compactParts=parts.length===2?parts:raw.match(/^(.{2,100}?)\s*[-–—]\s*(.{2,140})$/)?.slice(1)||[];
+ const [artistCandidate,songCandidate]=compactParts.map(value=>String(value||"").trim());
  if(artistCandidate&&songCandidate&&trackText(artistCandidate)!==trackText(songCandidate)){
   title=songCandidate;
   artist=artistCandidate;
