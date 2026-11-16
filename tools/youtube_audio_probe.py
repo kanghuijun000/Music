@@ -214,10 +214,20 @@ def main() -> int:
                 }) if "youtube" in request.url else None)
                 page.goto("https://kanghuijun000.github.io/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_function(
-                    "window.__musicQa && window.__musicQa.snapshot().playerReady",
-                    timeout=60000,
-                )
+                ready_deadline = time.monotonic() + 60
+                player_ready = False
+                while time.monotonic() < ready_deadline:
+                    try:
+                        player_ready = bool(page.evaluate(
+                            "() => Boolean(window.__musicQa && window.__musicQa.snapshot().playerReady)"
+                        ))
+                    except Exception:
+                        player_ready = False
+                    if player_ready:
+                        break
+                    time.sleep(0.25)
+                if not player_ready:
+                    raise TimeoutError("Music QA player did not become ready within 60 seconds")
                 # Start capture before selecting the video so the recording begins at video time zero.
                 if not args.skip_audio:
                     ffmpeg = subprocess.Popen([

@@ -32,6 +32,7 @@ COMMITS = [
     ("ff08c106ce746b764f5f5e77eaa78e96c3df8fc2", "before-korean-spacing-guard"),
     ("a14f3e2e00a8612e8924d5f88b5e6580aae94972", "after-korean-spacing-guard"),
     ("680e1bba3b68a8175e3a752cd6ad7cb9f4d5b972", "after-smooth-lyric-transition"),
+    ("837a3a642253bbdaf50c9bcc934c0e7cf89bc6be", "before-title-context-improvements"),
 ]
 FIXED = [
     {"name": "오래된 노래 — exact user video", "video_id": "LMyH5WT7JEM", "audio_check": False, "seconds": 25},
@@ -39,6 +40,8 @@ FIXED = [
     {"name": "Sold Out — exact previously tested lyric video", "video_id": "GspDybPhOeY", "audio_check": False, "seconds": 25},
     {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE", "audio_check": False, "seconds": 25},
     {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q", "audio_check": False, "seconds": 25},
+    {"name": "인사 — Beomjin (exact short-title user video)", "video_id": "bbqr6NkJ88A", "audio_check": True, "seconds": 45},
+    {"name": "사랑인걸 — exact user video with reported constant lag", "video_id": "6RsbVu2fG_o", "audio_check": True, "seconds": 45},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection (웅키 lyric video)", "video_id": "mTonMiKVZRw", "audio_check": False, "seconds": 25},
     {"name": "밤편지 — IU (lyric video)", "video_id": "EjMTw4xLcBI", "audio_check": False, "seconds": 25},
     {"name": "조용히 완전히 영원히 — Nerd Connection (official lyrics video)", "video_id": "1q2fBL1LqZI", "audio_check": False, "seconds": 25},
@@ -66,7 +69,9 @@ def run(cmd, *, timeout=1200):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True, help="Historical commit SHA")
+    parser.add_argument("--fixed-only", action="store_true", help="Run only the fixed comparison fixtures")
     args = parser.parse_args()
+    test_set = FIXED if args.fixed_only else TESTS
     if args.commit.upper() == "HEAD":
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         label = "current-app"
@@ -79,7 +84,7 @@ def main():
         "created_at": datetime.now(timezone.utc).isoformat(),
         "commit": sha,
         "stage": label,
-        "test_set": [item["name"] for item in TESTS],
+        "test_set": [item["name"] for item in test_set],
         "results": [],
         "summary": {},
         "limitations": [
@@ -102,7 +107,7 @@ def main():
         import tarfile, io
         with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
             tar.extractall(snapshot, filter="data")
-        for test in TESTS:
+        for test in test_set:
             command = [sys.executable, "tools/youtube_audio_probe.py", "--seconds", str(test.get("seconds", 45)), "--app-root", str(snapshot)]
             if test.get("video_id"):
                 command += ["--video-id", test["video_id"]]
@@ -182,7 +187,7 @@ def main():
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
         return 1
-    return 0 if len(results) == len(TESTS) and not retrieval_failures else 1
+    return 0 if len(results) == len(test_set) and not retrieval_failures else 1
 
 if __name__ == "__main__":
     raise SystemExit(main())
