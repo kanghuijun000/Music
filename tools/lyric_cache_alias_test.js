@@ -35,8 +35,36 @@ const names = [
   "restoreTimedLineSpacing",
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
+  "getLyricLineStartTime",
 ];
-const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const noWordTiming = {time:2.0,text:"가사 한 줄",words:[]};
+if (getLyricLineStartTime(noWordTiming)!==2.0) throw new Error("Lines without word timing must retain their original timestamp");
+const alignedWordTiming = {time:2.0,text:"첫 음절로 시작",words:[
+ {text:"첫",start:2.075,end:2.18},{text:" 음절로",start:2.22,end:2.55},{text:" 시작",start:2.58,end:2.9}
+]};
+if (getLyricLineStartTime(alignedWordTiming)!==2.075) throw new Error("A trusted first-word anchor within 120ms was not applied");
+const earlyWordTiming = {time:2.1,text:"첫 음절로 시작",words:[
+ {text:"첫",start:2.0,end:2.08},{text:" 음절로",start:2.12,end:2.4}
+]};
+if (getLyricLineStartTime(earlyWordTiming)!==2.0) throw new Error("A trusted early word anchor was not applied");
+const largeWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.2,end:word.end+0.2}))};
+if (getLyricLineStartTime(largeWordDelta)!==2.0) throw new Error("A word anchor beyond the safety bound changed the base timestamp");
+const mismatchedWordText = {...alignedWordTiming,words:[
+ {text:"다른",start:2.05,end:2.2},{text:" 내용",start:2.25,end:2.5}
+]};
+if (getLyricLineStartTime(mismatchedWordText)!==2.0) throw new Error("A mismatched word sequence changed the base timestamp");
+const closeAdjacentLines = [
+ {time:2.0,text:"앞 줄",words:[{text:"앞",start:1.9,end:1.98},{text:" 줄",start:1.99,end:2.08}]},
+ {time:2.1,text:"첫 음절로 시작",words:[
+  {text:"첫",start:2.04,end:2.08},{text:" 음절로",start:2.12,end:2.4}
+ ]}
+];
+if (getLyricLineStartTime(closeAdjacentLines[1],closeAdjacentLines,1)!==2.1) {
+ throw new Error("Micro timing crossed the midpoint and could reorder adjacent lyric lines");
+}
+const singleWordTiming = {...alignedWordTiming,words:[alignedWordTiming.words[0]]};
+if (getLyricLineStartTime(singleWordTiming)!==2.0) throw new Error("A single word timestamp was treated as a reliable anchor");
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
 if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
 const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
