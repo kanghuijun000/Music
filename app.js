@@ -1281,7 +1281,7 @@ function auditExpectedLineIndex(playerTime){
  if(!Number.isFinite(relative)||relative<0)return -1;
  const lyricTime=Math.max(0,relative+LYRIC_LEAD_SECONDS);
  let index=-1;
- for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i])<=lyricTime)index=i;else break;}
+ for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}
  return index;
 }
 function auditMedian(values){
