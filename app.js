@@ -1347,7 +1347,7 @@ function auditValidateLoadedLyrics(){
 function recordPlaybackAuditRender(index,playerTime){
  if(!playbackAudit.active||playbackAudit.videoId!==currentVideoId||index<0||index===playbackAudit.lastRenderedIndex)return;
  const line=lyricState.lines[index];if(!line)return;
- const relative=Number(playerTime)-lyricOffsetSeconds,scheduled=Number(line.time)-LYRIC_LEAD_SECONDS;
+ const relative=Number(playerTime)-lyricOffsetSeconds,scheduled=getLyricLineStartTime(line)-LYRIC_LEAD_SECONDS;
  playbackAudit.transitions.push({lineIndex:index,playerTime:Number(playerTime.toFixed(3)),scheduledPlayerTime:Number(scheduled.toFixed(3)),uiDelayMs:Math.round((relative-scheduled)*1000)});
  if(playbackAudit.transitions.length>120)playbackAudit.transitions.shift();
  playbackAudit.lastRenderedIndex=index;
