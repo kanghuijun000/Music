@@ -54,6 +54,15 @@ const mismatchedWordText = {...alignedWordTiming,words:[
  {text:"다른",start:2.05,end:2.2},{text:" 내용",start:2.25,end:2.5}
 ]};
 if (getLyricLineStartTime(mismatchedWordText)!==2.0) throw new Error("A mismatched word sequence changed the base timestamp");
+const closeAdjacentLines = [
+ {time:2.0,text:"앞 줄",words:[{text:"앞",start:1.9,end:1.98},{text:" 줄",start:1.99,end:2.08}]},
+ {time:2.1,text:"첫 음절로 시작",words:[
+  {text:"첫",start:2.04,end:2.08},{text:" 음절로",start:2.12,end:2.4}
+ ]}
+];
+if (getLyricLineStartTime(closeAdjacentLines[1],closeAdjacentLines,1)!==2.1) {
+ throw new Error("Micro timing crossed the midpoint and could reorder adjacent lyric lines");
+}
 const singleWordTiming = {...alignedWordTiming,words:[alignedWordTiming.words[0]]};
 if (getLyricLineStartTime(singleWordTiming)!==2.0) throw new Error("A single word timestamp was treated as a reliable anchor");
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
