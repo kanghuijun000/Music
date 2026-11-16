@@ -22,6 +22,9 @@ function extractFunction(name) {
 const names = [
   "trackText",
   "trackSimilarity",
+  "getTrackVersionKey",
+  "extractVideoTitleMetadata",
+  "lyricCacheVersionMatches",
   "canonicalArtistIdentity",
   "artistIdentityMatches",
   "getLyricsIdentity",
@@ -190,6 +193,26 @@ const wrongBuzzTitleCache = {...correctBuzzCache,trackName:"스물의 노래"};
 if (sharedLyricCacheMatches(wrongBuzzTitleCache,buzzTargetVideo)) {
   throw new Error("Buzz memoir accepted lyrics from the different song 스물의 노래");
 }
+const metadataCredits = extractVideoTitleMetadata("TICK TOCK (Feat. ZICO) (Prod. by ZICO, Crush) [쇼미더머니 12 Episode 1]ㅣLyrics/가사");
+if (!metadataCredits.featuredArtists.includes("ZICO") || !metadataCredits.producerNames.includes("ZICO") ||
+    !metadataCredits.producerNames.includes("Crush") || !metadataCredits.contextTags.includes("쇼미더머니 12 Episode 1")) {
+  throw new Error("Featured artist, producer, or program context was lost during title analysis");
+}
+const tickTockIdentity = getLyricsIdentity({id:"ticktock-context",title:"TICK TOCK (Feat. ZICO) (Prod. by ZICO, Crush) [쇼미더머니 12 Episode 1]ㅣLyrics/가사",channelTitle:"알파"});
+if (tickTockIdentity.title !== "TICK TOCK" || !tickTockIdentity.searchTerms.some(term=>term.includes("ZICO")) ||
+    !tickTockIdentity.searchTerms.some(term=>term.includes("쇼미더머니 12 Episode 1"))) {
+  throw new Error("Contextual title search variants were not generated for a lyric upload");
+}
+const shortTopicIdentity = getLyricsIdentity({id:"short-song",title:"인사",channelTitle:"가수 - Topic"});
+if (shortTopicIdentity.title !== "인사" || shortTopicIdentity.artist !== "가수" || !shortTopicIdentity.artistKnown) {
+  throw new Error("Short-title Topic-channel artist identity was not preserved");
+}
+const originalVersionVideo = {id:"original-version",title:"Artist - Song",channelTitle:"Artist - Topic"};
+const remixVersionVideo = {id:"remix-version",title:"Artist - Song (Remix)",channelTitle:"Artist - Topic"};
+const originalVersionCache = {trackName:"Song",artistName:"Artist",videoMetadata:originalVersionVideo};
+if (lyricCacheVersionMatches(originalVersionCache,remixVersionVideo)) throw new Error("Original and remix versions shared a lyric cache");
+const matchingRemixCache = {...originalVersionCache,videoMetadata:remixVersionVideo};
+if (!lyricCacheVersionMatches(matchingRemixCache,remixVersionVideo)) throw new Error("Matching remix version cache was rejected");
 const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto' Lyrics (뉴진스 Ditto 가사) (Color Coded Lyrics)",channelTitle:"Jaeguchi"});
 if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {
   throw new Error("Quoted artist/title lyric-video parsing failed");

@@ -121,7 +121,7 @@ def check_static() -> list[dict]:
         "synced-only candidate gate exists": "_synced" in app and "ttmlLines.length>=2" in app,
         "exact video source can omit artist only with exact title and close duration": "exactVideoIdentityWithoutArtist=exactVideoSource&&!itemArtist&&title===100&&closeDuration" in app,
         "verified lyrics can finish before all providers settle": "firstVerifiedCandidate.then(()=>" in app and "await delay(450)" in app,
-        "audio identification can start its song-specific retry without waiting for the first search": "try{await initialLyricsPromise;}catch(_){}" not in app and "const finishWithTracks=async tracks=>{" in app,
+        "audio identification waits for initial lyrics resolution before applying the fingerprint offset": "try{await initialLyricsPromise;}catch(_){}" in app and "const finishWithTracks=async tracks=>{" in app,
         "same-track plain lyrics trigger a fingerprinted synced-lyrics retry": "previousPlainFallback=Boolean(previous&&!previous.lines.length" in app and "reason:previousPlainFallback?\"upgrade_plain_to_synced\"" in app,
         "same-track plain lyrics are preserved if no verified synced replacement exists": "sameTrack&&previousPlainFallback" in app and "lyricState.plain=previous.plain" in app,
         "fingerprint cache reuse still verifies title and artist": "const titleMatches=trackSimilarity(cached.trackName,metadata.trackName)>=0.92;" in app and "if(titleMatches&&artistMatches)" in app,
