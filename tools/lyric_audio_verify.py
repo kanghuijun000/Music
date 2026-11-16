@@ -4,10 +4,23 @@ from __future__ import annotations
 import array, difflib, json, math, re, sys, urllib.parse, urllib.request, wave
 from pathlib import Path
 
+def clean_video_suffix(value):
+    text=str(value or "").strip()
+    # Remove presentation labels only at the end; keep genuine song-version
+    # labels such as remix/live/cover intact for identity matching.
+    suffix=r"(?:official\\s*)?(?:music\\s*video|m\\s*/\\s*v|mv|performance\\s+video|official\\s+audio|audio|lyrics?|가사)"
+    previous=None
+    while text and text!=previous:
+        previous=text
+        text=re.sub(r"\\s*[-|｜/ㅣ]?\\s*"+suffix+r"\\s*$","",text,flags=re.I).strip()
+        text=re.sub(r"\\s*[|｜/ㅣ]\\s*(?:가사|lyrics?).*$","",text,flags=re.I).strip()
+    return text
+
 def norm(value):
     text=str(value or "").lower()
-    text=re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", text)
-    text=re.sub(r"\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b", " ", text, flags=re.I)
+    text=re.sub(r"\\[[^\\]]*\\]|\\([^)]*\\)", " ", text)
+    text=re.sub(r"\\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\\b", " ", text, flags=re.I)
+    text=re.sub(r"\\bperformance\\s+video\\b|\\bm\\s*/\\s*v\\b", " ", text, flags=re.I)
     text=re.sub(r"가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터", " ", text, flags=re.I)
     text=re.sub(r"vevo$", "", text, flags=re.I)
     return re.sub(r"[^0-9a-z가-힣]", "", text)
@@ -41,6 +54,7 @@ def identify(video_id):
     cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*(?:가사|lyrics?)[^\]】)）]*[\]】)）]\s*$","",cleaned,flags=re.I)
     cleaned=re.sub(r"\s*[|｜/ㅣ]\s*(?:가사|lyrics?).*$","",cleaned,flags=re.I).strip()
     cleaned=re.sub(r"\s*[\[【(（][^\]】)）]*[\]】)）]\s*$","",cleaned).strip()
+    cleaned=clean_video_suffix(cleaned)
 
     evidence=title+" "+author+" "+description
     ticktock=re.search(r"\bTICK\s*TOCK\b",title,flags=re.I)
@@ -52,7 +66,8 @@ def identify(video_id):
         artist="김하온 (HAON), Nosun, Raf Sandou, Marv, 정준혁"
         track="TICK TOCK"
     else:
-        quoted=re.match(r"""^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:lyrics?|가사)?$""",cleaned,flags=re.I)
+        # Parse quoted official MV/performance titles as artist + song, not channel + full title.
+        quoted=re.match(r"""^(.+?)\\s+['"“‘](.+?)['"”’]\\s*(?:(?:official\\s*)?(?:lyrics?|가사|mv|m\\s*/\\s*v|music\\s*video|performance\\s+video|audio))?$""",cleaned,flags=re.I)
         if quoted:
             artist=quoted.group(1).strip()
             track=quoted.group(2).strip()
@@ -70,6 +85,7 @@ def identify(video_id):
                 else:
                     artist=author.replace(" - Topic","").strip()
                     track=cleaned
+    track=clean_video_suffix(track)
     track=re.sub(r"\s*\([^)]*(?:official|lyrics?|가사|audio|video)[^)]*\)","",track,flags=re.I).strip()
     # Auto-generated music descriptions may identify a track as "Song · Artist".
     # Resolve this only when one side exactly identifies the selected video title.
