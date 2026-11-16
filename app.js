@@ -17,6 +17,27 @@ function recordLyricFlow(stage,details={}){
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 
+// Conservative per-line refinement: trust provider word timing only when it
+// independently agrees with the line timestamp and the first word matches.
+const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.12;
+function getLyricLineStartTime(line){
+ const base=Number(line?.time);
+ if(!Number.isFinite(base)||base<0)return NaN;
+ const words=(Array.isArray(line?.words)?line.words:[])
+  .filter(word=>Number.isFinite(Number(word?.start))&&Number(word.start)>=0&&String(word?.text||"").trim())
+  .sort((a,b)=>Number(a.start)-Number(b.start));
+ if(words.length<2)return base;
+ const first=words[0],second=words[1];
+ const lineText=String(line?.text||"").replace(/\\s+/gu,"");
+ const firstText=String(first.text||"").replace(/\\s+/gu,"");
+ const delta=Number(first.start)-base;
+ const wordGap=Number(second.start)-Number(first.start);
+ if(!lineText||!firstText||!lineText.startsWith(firstText))return base;
+ if(!Number.isFinite(delta)||Math.abs(delta)>LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS)return base;
+ if(!Number.isFinite(wordGap)||wordGap<=0||wordGap>1.5)return base;
+ return Number(Number(first.start).toFixed(3));
+}
+
 let lyricPreviewRenderedToken=0;
 let lyricLastObservedPlayerTime=null;
 function getLyricTransitionDuration(index){
@@ -1222,7 +1243,7 @@ function renderLyrics(){
  const relativeTime=current-lyricOffsetSeconds;
  const lyricTime=Math.max(0,relativeTime+LYRIC_LEAD_SECONDS);
  let index=-1;
- if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}}
+ if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i])<=lyricTime)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&(index>=0?timelineReady:lyricPreviewRenderedToken===lyricLoadToken))return;
@@ -1251,7 +1272,7 @@ function auditExpectedLineIndex(playerTime){
  if(!Number.isFinite(relative)||relative<0)return -1;
  const lyricTime=Math.max(0,relative+LYRIC_LEAD_SECONDS);
  let index=-1;
- for(let i=0;i<lyricState.lines.length;i++){if(Number(lyricState.lines[i].time)<=lyricTime)index=i;else break;}
+ for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i])<=lyricTime)index=i;else break;}
  return index;
 }
 function auditMedian(values){
@@ -2522,7 +2543,7 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
    return {
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
-    lines:(lyricState.lines||[]).map(line=>({time:Number(line.time),text:String(line.text||"")})),
+    lines:(lyricState.lines||[]).map(line=>({time:getLyricLineStartTime(line),baseTime:Number(line.time),microAdjustmentSeconds:Number((getLyricLineStartTime(line)-Number(line.time)).toFixed(3)),text:String(line.text||"")})),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
     timingBasis:lyricTimingBasis,lyricOffsetSeconds,
