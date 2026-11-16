@@ -29,9 +29,9 @@ assert not result_for("Unrelated Artist")["identity_verified"], "an unrelated ar
 assert norm("OneRepublicVEVO") == norm("OneRepublic"), "VEVO channel suffix must not alter artist identity"
 
 def identify_title(title: str, author: str):
-    with patch("lyric_audio_verify.fetch_json", return_value={"title": title, "author_name": author}), \\
-         patch("lyric_audio_verify.fetch_video_description", return_value=""):
-        return verifier.identify("test-video")
+    with patch("lyric_audio_verify.fetch_json", return_value={"title": title, "author_name": author}):
+        with patch("lyric_audio_verify.fetch_video_description", return_value=""):
+            return verifier.identify("test-video")
 
 def verify_parsed_identity(title: str, author: str, app_title: str, app_artist: str):
     identity = identify_title(title, author)
