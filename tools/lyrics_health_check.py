@@ -21,6 +21,7 @@ BASE_FIXTURES = [
     {"title": "비망록", "artist": "버즈", "duration": 0, "kind": "regression"},
     {"title": "밤편지", "artist": "아이유", "duration": 0, "kind": "regression"},
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
+    {"title": "인사", "artist": "범진", "duration": 215, "kind": "strict-match"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
     {"title": "Home Sweet Home", "artist": "카더가든", "duration": 206, "kind": "regression"},
     {"title": "Counting Stars", "artist": "OneRepublic", "duration": 0, "kind": "regression"},
@@ -54,6 +55,7 @@ ARTIST_ALIAS_GROUPS = (
     frozenset((norm("버즈"), norm("buzz"))),
     frozenset((norm("카더가든"), norm("car the garden"))),
     frozenset((norm("너드커넥션"), norm("nerd connection"))),
+    frozenset((norm("범진"), norm("beomjin"), norm("beom jin"), norm("beom-jin"))),
 )
 
 def artist_match(actual: object, expected: str) -> bool:

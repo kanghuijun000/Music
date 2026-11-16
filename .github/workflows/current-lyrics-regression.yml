@@ -32,9 +32,9 @@ concurrency:
 
 jobs:
   current-main:
-    name: "19-video regression — current app"
+    name: "21-video regression — current app vs baseline"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -55,7 +55,11 @@ jobs:
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
 
-      - name: Test current app against nineteen fixed and random video fixtures
+      - name: Run baseline app against the same fixed video set
+        continue-on-error: true
+        run: xvfb-run -a python tools/historical_lyrics_regression.py --commit 837a3a642253bbdaf50c9bcc934c0e7cf89bc6be --fixed-only
+
+      - name: Test current app against twenty-one fixed and random video fixtures
         env:
           EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -63,11 +67,45 @@ jobs:
           test "$ACTUAL_SOURCE_SHA" = "$EXPECTED_SOURCE_SHA"
           xvfb-run -a python tools/historical_lyrics_regression.py --commit HEAD
 
-      - name: Upload current regression report
+      - name: Compare synced-lyric coverage with baseline
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, subprocess
+          baseline_path = pathlib.Path("historical-lyrics-regression-837a3a6422.json")
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()[:10]
+          current_path = pathlib.Path(f"historical-lyrics-regression-{sha}.json")
+          if not baseline_path.exists() or not current_path.exists():
+              raise SystemExit("Baseline or current regression report is missing")
+          baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+          current = json.loads(current_path.read_text(encoding="utf-8"))
+          names = set(baseline["test_set"])
+          base = {item["song"]: item for item in baseline["results"]}
+          now = {item["song"]: item for item in current["results"]}
+          def synced(item):
+              verify = item.get("lyric_verification") or {}
+              return bool(verify.get("identity_verified")) and int(item.get("timed_line_count") or 0) >= 2
+          def retrieved(item):
+              verify = item.get("lyric_verification") or {}
+              return bool(verify.get("identity_verified")) and (int(item.get("timed_line_count") or 0) >= 2 or item.get("plain_lyrics_present"))
+          base_sync = sum(synced(base[name]) for name in names if name in base)
+          current_sync = sum(synced(now[name]) for name in names if name in now)
+          base_retrieval = sum(retrieved(base[name]) for name in names if name in base)
+          current_retrieval = sum(retrieved(now[name]) for name in names if name in now)
+          print(f"Fixed-set verified synced lyrics: baseline={base_sync}, current={current_sync}")
+          print(f"Fixed-set verified retrieval: baseline={base_retrieval}, current={current_retrieval}")
+          if current_sync <= base_sync:
+              raise SystemExit("FAIL: verified synced-lyric coverage did not increase over baseline")
+          if current_retrieval < base_retrieval:
+              raise SystemExit("FAIL: verified lyric retrieval regressed versus baseline")
+          print("PASS: synced-lyric coverage increased without reducing verified retrieval")
+          PY
+
+      - name: Upload baseline and current regression reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: current-music-lyrics-regression
+          name: current-music-lyrics-regression-with-baseline
           path: historical-lyrics-regression-*.json
           if-no-files-found: warn
           retention-days: 30

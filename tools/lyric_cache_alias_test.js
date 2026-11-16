@@ -25,6 +25,8 @@ const names = [
   "getTrackVersionKey",
   "extractVideoTitleMetadata",
   "lyricCacheVersionMatches",
+  "lyricCacheNormalize",
+  "getSongLyricCacheKeys",
   "canonicalArtistIdentity",
   "artistIdentityMatches",
   "getLyricsIdentity",
@@ -34,7 +36,7 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
 ];
-const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const ttmlSpaced = preserveTimedTextSpacing("오래된 노래를 다시 불러", "오래된노래를다시불러");
 if (ttmlSpaced !== "오래된 노래를 다시 불러") throw new Error("TTML source whitespace was not preserved");
 const ttmlNoSpace = preserveTimedTextSpacing("오래된노래를다시불러", "오래된노래를다시불러");
@@ -213,6 +215,24 @@ const originalVersionCache = {trackName:"Song",artistName:"Artist",videoMetadata
 if (lyricCacheVersionMatches(originalVersionCache,remixVersionVideo)) throw new Error("Original and remix versions shared a lyric cache");
 const matchingRemixCache = {...originalVersionCache,videoMetadata:remixVersionVideo};
 if (!lyricCacheVersionMatches(matchingRemixCache,remixVersionVideo)) throw new Error("Matching remix version cache was rejected");
+if (sharedLyricCacheMatches(originalVersionCache,remixVersionVideo)) throw new Error("Original recording lyrics were reused for a remix");
+if (!sharedLyricCacheMatches(matchingRemixCache,remixVersionVideo)) throw new Error("Same-version remix cache was not reusable");
+const originalKeys=getSongLyricCacheKeys(originalVersionVideo);
+const remixKeys=getSongLyricCacheKeys(remixVersionVideo);
+if (originalKeys.some(key=>remixKeys.includes(key))) throw new Error("Original and remix cache keys were not isolated");
+if (getTrackVersionKey("Artist - Live") !== "") throw new Error("A song titled Live was misclassified as a live recording");
+const featureX=extractVideoTitleMetadata("Feat. X Ambassadors");
+if (!featureX.featuredArtists.includes("X Ambassadors")) throw new Error("X Ambassadors was incorrectly split as a separator");
+const beomjinVideo={id:"bbqr6NkJ88A",title:"범진 - 인사 [가사/Lyrics]",channelTitle:"웅키",duration:215};
+const beomjinIdentity=getLyricsIdentity(beomjinVideo);
+if (beomjinIdentity.title!=="인사"||beomjinIdentity.artist!=="범진"||!beomjinIdentity.artistKnown) throw new Error("Beomjin short-title identity parsing failed");
+if (!artistIdentityMatches("Beomjin",beomjinIdentity.artist,1)) throw new Error("Romanized Beomjin artist alias was not recognized");
+const koreanSuffixIdentity=getLyricsIdentity({id:"korean-label",title:"Artist - 인사 ㅣ가사",channelTitle:"Lyrics Channel"});
+if (koreanSuffixIdentity.title!=="인사"||koreanSuffixIdentity.artist!=="Artist") throw new Error("Unbracketed Korean 가사 suffix blocked artist/title parsing");
+const officialAudioIdentity=getLyricsIdentity({id:"official-audio",title:"Artist - Song (Official Audio)",channelTitle:"Music Channel"});
+if (officialAudioIdentity.title!=="Song"||officialAudioIdentity.artist!=="Artist"||officialAudioIdentity.titles.includes("Official Audio")) throw new Error("Official Audio metadata blocked song identity parsing");
+const quotedAudioIdentity=getLyricsIdentity({id:"quoted-audio",title:"BTS 'Dynamite' Official Audio",channelTitle:"Music Channel"});
+if (quotedAudioIdentity.title!=="Dynamite"||quotedAudioIdentity.artist!=="BTS") throw new Error("Quoted Official Audio title parsing failed");
 const dittoIdentity = getLyricsIdentity({id:"ditto-video",title:"NewJeans 'Ditto' Lyrics (뉴진스 Ditto 가사) (Color Coded Lyrics)",channelTitle:"Jaeguchi"});
 if (dittoIdentity.title !== "Ditto" || dittoIdentity.artist !== "NewJeans") {
   throw new Error("Quoted artist/title lyric-video parsing failed");
