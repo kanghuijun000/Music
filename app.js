@@ -28,8 +28,8 @@ function getLyricLineStartTime(line){
   .sort((a,b)=>Number(a.start)-Number(b.start));
  if(words.length<2)return base;
  const first=words[0],second=words[1];
- const lineText=String(line?.text||"").replace(/\\s+/gu,"");
- const firstText=String(first.text||"").replace(/\\s+/gu,"");
+ const lineText=String(line?.text||"").replace(/\s+/gu,"");
+ const firstText=String(first.text||"").replace(/\s+/gu,"");
  const delta=Number(first.start)-base;
  const wordGap=Number(second.start)-Number(first.start);
  if(!lineText||!firstText||!lineText.startsWith(firstText))return base;
