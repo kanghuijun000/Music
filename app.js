@@ -16,6 +16,12 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
+// Track-specific correction for a consistently late lyric transition.
+// This is additive to the global compensation and does not affect other videos.
+const VIDEO_LYRIC_LEAD_OFFSETS=Object.freeze({"6RsbVu2fG_o":0.15});
+function getLyricLeadSeconds(videoId=currentVideoId){
+ return LYRIC_LEAD_SECONDS+(Number(VIDEO_LYRIC_LEAD_OFFSETS[String(videoId||"")])||0);
+}
 let lyricPreviewRenderedToken=0;
 let lyricLastObservedPlayerTime=null;
 function getLyricTransitionDuration(index){
@@ -1168,7 +1174,7 @@ function renderLyrics(){
  const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
  const relativeTime=current-lyricOffsetSeconds;
- const lyricTime=Math.max(0,relativeTime+LYRIC_LEAD_SECONDS);
+ const lyricTime=Math.max(0,relativeTime+getLyricLeadSeconds());
  let index=-1;
  if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(lyricState.lines[i].time<=lyricTime)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
@@ -1197,7 +1203,7 @@ function renderLyrics(){
 function auditExpectedLineIndex(playerTime){
  const relative=Number(playerTime)-lyricOffsetSeconds;
  if(!Number.isFinite(relative)||relative<0)return -1;
- const lyricTime=Math.max(0,relative+LYRIC_LEAD_SECONDS);
+ const lyricTime=Math.max(0,relative+getLyricLeadSeconds());
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){if(Number(lyricState.lines[i].time)<=lyricTime)index=i;else break;}
  return index;
