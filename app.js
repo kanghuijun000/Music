@@ -487,7 +487,10 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
   const title=trackSimilarity(track.title,expected.title),artist=trackSimilarity(track.artist,expected.artist);
   const confidence=Number(track.confidence)||0,duration=Number(track.duration)||0,timestamp=Number(track.timestamp);
-  const durationMatches=!duration||!videoDuration||Math.abs(duration-videoDuration)<=Math.max(15,videoDuration*0.12);
+  // A YouTube upload may contain an edited intro before the identified song.
+  // Permit the video to be longer than the song, but keep the reverse mismatch tight.
+  const durationMatches=!duration||!videoDuration||
+   (duration<=videoDuration+15&&videoDuration-duration<=Math.max(90,duration*0.30));
   return {track,title,artist,confidence,duration,timestamp,durationMatches,
    key:trackText(track.title)+"|"+trackText(track.artist),score:title*0.45+artist*0.30+confidence*0.20+(durationMatches?0.05:0)};
  }).filter(item=>item.title>=0.90&&item.artist>=0.80&&item.confidence>=0.80&&item.durationMatches&&
@@ -636,6 +639,11 @@ async function startTrackOffsetAnalysis(video,initialLyricsPromise=Promise.resol
  const cache=readTrackAnalysisCache();let cached=cache[videoId];const now=Date.now();
  const isCurrent=()=>token===trackAnalysisToken&&videoId===currentVideoId;
  const finishWithTracks=async tracks=>{
+  if(!isCurrent())return;
+  // Do not apply a video-start offset until the initial lyric load has decided
+  // whether its timestamps belong to the video timeline or the song timeline.
+  // Otherwise a fast TrackID response can race loadLyrics() and be overwritten.
+  try{await initialLyricsPromise;}catch(_){}
   if(!isCurrent())return;
   recordLyricFlow("track_analysis_results_ready",{trackCount:Array.isArray(tracks)?tracks.length:0});const identifiedHandled=await tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromise,isCurrent);
    
