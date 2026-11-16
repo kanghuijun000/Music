@@ -8,19 +8,19 @@ def clean_video_suffix(value):
     text=str(value or "").strip()
     # Remove presentation labels only at the end; keep genuine song-version
     # labels such as remix/live/cover intact for identity matching.
-    suffix=r"(?:official\\s*)?(?:music\\s*video|m\\s*/\\s*v|mv|performance\\s+video|official\\s+audio|audio|lyrics?|가사)"
+    suffix=r"(?:official\s*)?(?:music\s*video|m\s*/\s*v|mv|performance\s+video|official\s+audio|audio|lyrics?|가사)"
     previous=None
     while text and text!=previous:
         previous=text
-        text=re.sub(r"\\s*[-|｜/ㅣ]?\\s*"+suffix+r"\\s*$","",text,flags=re.I).strip()
-        text=re.sub(r"\\s*[|｜/ㅣ]\\s*(?:가사|lyrics?).*$","",text,flags=re.I).strip()
+        text=re.sub(r"\s*[-|｜/ㅣ]?\s*"+suffix+r"\s*$","",text,flags=re.I).strip()
+        text=re.sub(r"\s*[|｜/ㅣ]\s*(?:가사|lyrics?).*$","",text,flags=re.I).strip()
     return text
 
 def norm(value):
     text=str(value or "").lower()
-    text=re.sub(r"\\[[^\\]]*\\]|\\([^)]*\\)", " ", text)
-    text=re.sub(r"\\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\\b", " ", text, flags=re.I)
-    text=re.sub(r"\\bperformance\\s+video\\b|\\bm\\s*/\\s*v\\b", " ", text, flags=re.I)
+    text=re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", text)
+    text=re.sub(r"\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b", " ", text, flags=re.I)
+    text=re.sub(r"\bperformance\s+video\b|\bm\s*/\s*v\b", " ", text, flags=re.I)
     text=re.sub(r"가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터", " ", text, flags=re.I)
     text=re.sub(r"vevo$", "", text, flags=re.I)
     return re.sub(r"[^0-9a-z가-힣]", "", text)
