@@ -110,7 +110,7 @@ def check_static() -> list[dict]:
     probe = (ROOT / "tools/youtube_audio_probe.py").read_text(encoding="utf-8")
     results = []
     checks = {
-        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&hasExplicitLyricsLabel&&(parts.length===2||parts.length===1))" in app,
+        "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&(hasExplicitLyricsLabel||hasOfficialVideoLabel)&&(parts.length===2||parts.length===1))" in app,
         "shared song lyric cache checks verified artist aliases from both uploads": "function cachedArtistIdentityNames(cached)" in app and "identity.artistAliases" in app and "cachedArtistIdentityNames(cached)" in app,
         "video-specific offsets are never reused across different uploads": 'if(item.timingBasis==="video"&&sourceKey!==targetVideoId)return null;' in app,
         "quoted lyric-video titles resolve artist and song": "quotedArtistTitle=raw.match" in app,
@@ -142,6 +142,7 @@ def check_static() -> list[dict]:
         "retrieval-only videos still receive strict song identity verification": '"--skip-audio"' in probe and "verify_lyrics(None, args.video_id, app_snapshot, identified)" in probe and "if audio_path is None:" in verifier,
         "comma-containing artist names are not split into false aliases": "Commas can be part of one artist name" in app and 'trackText(artist)==="car the garden"' in app and 'trackText(artist)==="카더가든"' in app and "creditedArtist.split" not in app,
         "Nerd Connection Korean-English artist alias is explicit": '["너드커넥션","nerd connection"]' in app and artist_match("Nerd Connection", "너드커넥션") and not artist_match("Nerdcore", "너드커넥션"),
+        "Beomjin Korean-English artist alias is explicit and narrow": '["범진","beomjin","beom jin","beom-jin"]' in app and artist_match("Beomjin", "범진") and not artist_match("Beom", "범진"),
         "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "LiriQo runs only as a fallback when no synced lyrics were found": (
