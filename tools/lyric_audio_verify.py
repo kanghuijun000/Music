@@ -67,7 +67,7 @@ def identify(video_id):
         track="TICK TOCK"
     else:
         # Parse quoted official MV/performance titles as artist + song, not channel + full title.
-        quoted=re.match(r"""^(.+?)\\s+['"“‘](.+?)['"”’]\\s*(?:(?:official\\s*)?(?:lyrics?|가사|mv|m\\s*/\\s*v|music\\s*video|performance\\s+video|audio))?$""",cleaned,flags=re.I)
+        quoted=re.match(r"""^(.+?)\s+['"“‘](.+?)['"”’]\s*(?:(?:official\s*)?(?:lyrics?|가사|mv|m\s*/\s*v|music\s*video|performance\s+video|audio))?$""",cleaned,flags=re.I)
         if quoted:
             artist=quoted.group(1).strip()
             track=quoted.group(2).strip()
