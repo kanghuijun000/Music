@@ -318,6 +318,9 @@ def main() -> int:
                 )
                 if report["probe_passed"]:
                     report["verification_status"] = "PASS"
+                elif report["lyric_verification"].get("overall") == "INCONCLUSIVE":
+                    report["verification_status"] = "INCONCLUSIVE"
+                    report["inconclusive_reason"] = report["lyric_verification"].get("reason") or "Audio was captured, but there was not enough reliable vocal text to verify the constant offset."
                 elif renderer.get("plain_lyrics_present") and renderer.get("timed_line_count", 0) < 2:
                     # Plain lyrics are an intentional fallback, not a failed sync test.
                     report["verification_status"] = "INCONCLUSIVE"
