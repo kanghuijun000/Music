@@ -37,7 +37,7 @@ const names = [
   "preserveTimedTextSpacing",
   "getLyricLineStartTime",
 ];
-const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const noWordTiming = {time:2.0,text:"가사 한 줄",words:[]};
 if (getLyricLineStartTime(noWordTiming)!==2.0) throw new Error("Lines without word timing must retain their original timestamp");
 const alignedWordTiming = {time:2.0,text:"첫 음절로 시작",words:[
