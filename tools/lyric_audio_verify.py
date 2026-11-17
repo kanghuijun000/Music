@@ -25,6 +25,22 @@ def norm(value):
     text=re.sub(r"vevo$", "", text, flags=re.I)
     return re.sub(r"[^0-9a-z가-힣]", "", text)
 
+def effective_app_offset(app_snapshot):
+    """Return the single constant offset actually used by the rendered lyric timeline."""
+    explicit=app_snapshot.get("effectiveAppOffsetSeconds")
+    if explicit is not None:
+        value=float(explicit)
+        if math.isfinite(value):
+            return value
+    base=float(app_snapshot.get("lyricOffsetSeconds") or 0)
+    manual=float(app_snapshot.get("videoManualAdvanceSeconds") or 0)
+    lead_value=app_snapshot.get("lyricLeadSeconds")
+    lead=0.04 if lead_value is None else float(lead_value)
+    value=base-manual-lead
+    if not math.isfinite(value):
+        raise ValueError("Invalid effective lyric timeline offset")
+    return value
+
 def fetch_json(url):
     request=urllib.request.Request(url,headers={"User-Agent":"Music-Live-Audio-QA/1.0"})
     with urllib.request.urlopen(request,timeout=15) as response:
@@ -235,9 +251,7 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
                         candidates.append((ratio,words[start_index][0],words[end_index][1],start_index,end_index))
             candidates_by_line.append(candidates)
 
-        best=None
-        for offset_step in range(-180,181):
-            offset=offset_step*0.25
+        def score_constant_offset(offset):
             matches=[]
             used=set()
             for line_index,line in enumerate(lines):
@@ -245,51 +259,79 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
                 options=[]
                 for candidate in candidates_by_line[line_index]:
                     ratio,start,end,first,last=candidate
-                    delta=abs(start-expected)
-                    if delta<=5.5 and not any(i in used for i in range(first,last+1)):
-                        options.append((ratio-delta*0.018,ratio,delta,first,last))
+                    signed_error=start-expected
+                    delta=abs(signed_error)
+                    if delta<=2.5 and not any(i in used for i in range(first,last+1)):
+                        options.append((ratio-delta*0.12,ratio,delta,signed_error,first,last))
                 if options:
-                    _,ratio,delta,first,last=max(options,key=lambda x:x[0])
+                    _,ratio,delta,signed_error,first,last=max(options,key=lambda x:x[0])
                     if ratio>=0.48:
-                        matches.append((ratio,delta))
+                        matches.append((ratio,delta,signed_error,line_index))
                         used.update(range(first,last+1))
-            if matches:
-                errors=sorted(item[1] for item in matches)
-                median=errors[len(errors)//2]
-                average=sum(item[0] for item in matches)/len(matches)
-                quality=len(matches)*2+average-median*0.02
-                if best is None or quality>best[0]:
-                    best=(quality,offset,matches,median,average)
+            if not matches:
+                return None
+            errors=sorted(item[1] for item in matches)
+            median=errors[len(errors)//2]
+            average=sum(item[0] for item in matches)/len(matches)
+            quality=len(matches)*2+average-median*0.5
+            return (quality,round(float(offset),3),matches,median,average)
+
+        # Fit one constant offset across the whole song. A coarse pass finds the
+        # neighborhood; a short fine pass resolves it to 25 ms without inventing
+        # per-section or progressive timing corrections.
+        best=None
+        for offset_step in range(-180,181):
+            candidate=score_constant_offset(offset_step*0.25)
+            if candidate and (best is None or candidate[0]>best[0]):
+                best=candidate
+        if best:
+            coarse_offset=best[1]
+            for fine_step in range(-10,11):
+                candidate=score_constant_offset(coarse_offset+fine_step*0.025)
+                if candidate and (candidate[0]>best[0] or
+                                  (candidate[0]==best[0] and candidate[3]<best[3])):
+                    best=candidate
 
         if not best:
             report["reason"]="No reliable match between the app's displayed lyrics and recognized vocals"
             return report
         _,offset,matches,median,average=best
-        eligible=sum(1 for line in lines if float(line["time"])<=float(words[-1][1])+45)
+        eligible=sum(1 for line in lines if float(line["time"])<=float(words[-1][1])+2.5)
         ratio=len(matches)/max(1,eligible)
+        signed_residuals=sorted(item[2] for item in matches)
+        absolute_residuals=sorted(abs(value) for value in signed_residuals)
+        median_signed=signed_residuals[len(signed_residuals)//2]
+        p90_index=max(0,min(len(absolute_residuals)-1,math.ceil(len(absolute_residuals)*0.90)-1))
+        p90_residual=absolute_residuals[p90_index]
+        app_offset=effective_app_offset(app_snapshot)
+        offset_error=abs(offset-app_offset)
+        content_ok=len(matches)>=8 and ratio>=0.40 and average>=0.50
+        # Do not call a song synchronized merely because a broad search found
+        # a plausible lyric match: the app's actual constant offset must agree.
+        sync_ok=content_ok and median<=0.35 and offset_error<=0.25
         report.update(matched_vocal_lines=len(matches),eligible_lyric_lines=eligible,
                       matched_line_ratio=round(ratio,3),
-                      estimated_video_intro_or_lyric_offset_seconds=round(offset,2),
-                      median_vocal_word_start_error_seconds=round(median,2),
+                      offset_model="single_constant_offset",
+                      offset_search_resolution_seconds=0.025,
+                      estimated_video_intro_or_lyric_offset_seconds=round(offset,3),
+                      median_vocal_word_start_error_seconds=round(median,3),
+                      median_signed_vocal_lyric_residual_seconds=round(median_signed,3),
+                      p90_vocal_lyric_residual_seconds=round(p90_residual,3),
                       mean_text_similarity=round(average,3))
-        app_offset=float(app_snapshot.get("lyricOffsetSeconds") or 0)
-        offset_error=abs(offset-app_offset)
-        content_ok=len(matches)>=5 and ratio>=0.25
-        # The search offset is diagnostic only. A pass requires the app to
-        # have actually applied that same offset to its rendered timeline.
-        sync_ok=content_ok and median<=1.5 and offset_error<=1.5
-        report.update(app_applied_offset_seconds=round(app_offset,2),
-                      app_to_vocal_offset_error_seconds=round(offset_error,2))
+        report.update(app_applied_offset_seconds=round(app_offset,3),
+                      video_manual_advance_seconds=round(float(app_snapshot.get("videoManualAdvanceSeconds") or 0),3),
+                      lyric_lead_seconds=round(float(app_snapshot.get("lyricLeadSeconds",0.04) if app_snapshot.get("lyricLeadSeconds") is not None else 0.04),3),
+                      app_to_vocal_offset_error_seconds=round(offset_error,3))
         report["lyric_content_verified"]=content_ok
         report["vocal_sync_verified"]=sync_ok
-        report["overall"]="PASS" if sync_ok else "FAIL_OR_INCONCLUSIVE"
+        report["overall"]="PASS" if sync_ok else "INCONCLUSIVE" if not content_ok else "FAIL"
         if not sync_ok:
             if not content_ok:
-                report["reason"]="Too few matching vocal lines to verify lyric content"
-            elif offset_error>1.5:
-                report["reason"]=f"Measured vocal offset ({offset:.2f}s) differs from the app-applied offset ({app_offset:.2f}s)"
+                report["reason"]="Too few high-confidence matching vocal lines to verify a whole-song constant offset"
+            elif offset_error>0.25:
+                report["reason"]=f"Measured constant vocal offset ({offset:.3f}s) differs from the app timeline offset ({app_offset:.3f}s)"
             else:
-                report["reason"]="Median vocal-to-lyric timing error exceeds 1.5 seconds"
+                report["reason"]="Whole-song vocal-to-lyric residual exceeds 0.35 seconds"
         return report
     except Exception as exc:
         report["reason"]=type(exc).__name__+": "+str(exc)[:300]
