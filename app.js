@@ -17,10 +17,13 @@ function recordLyricFlow(stage,details={}){
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 
-// User-observed constant late offset for this exact YouTube upload only.
-// Keep it as a separate playback-layer correction: never rewrite shared song lyrics.
+// Upload-specific playback-layer corrections only; never rewrite shared song lyrics.
+// Positive values advance lyric display; negative values delay it.
 function getVideoManualAdvanceSeconds(videoId){
- return String(videoId||"")==="afYxfsgiuLI"?0.95:0;
+ const id=String(videoId||"");
+ if(id==="afYxfsgiuLI")return 0.95;
+ if(id==="cFgk2PMgPJ4")return -0.30;
+ return 0;
 }
 
 // Conservative per-line refinement: trust provider word timing only when it
