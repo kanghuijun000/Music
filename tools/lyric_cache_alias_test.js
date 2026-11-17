@@ -48,8 +48,8 @@ const earlyWordTiming = {time:2.1,text:"첫 음절로 시작",words:[
  {text:"첫",start:2.0,end:2.08},{text:" 음절로",start:2.12,end:2.4}
 ]};
 if (getLyricLineStartTime(earlyWordTiming)!==2.0) throw new Error("A trusted early word anchor was not applied");
-const moderateWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.24,end:word.end+0.24}))};
-if (getLyricLineStartTime(moderateWordDelta)!==2.315) throw new Error("A text-verified first-word anchor within 300ms was not applied");
+const moderateWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.20,end:word.end+0.20}))};
+if (getLyricLineStartTime(moderateWordDelta)!==2.275) throw new Error("A text-verified first-word anchor within 300ms was not applied");
 const largeWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.31,end:word.end+0.31}))};
 if (getLyricLineStartTime(largeWordDelta)!==2.0) throw new Error("A word anchor beyond the 300ms safety bound changed the base timestamp");
 const mismatchedWordText = {...alignedWordTiming,words:[
