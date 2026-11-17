@@ -56,10 +56,14 @@ const mismatchedWordText = {...alignedWordTiming,words:[
  {text:"다른",start:2.05,end:2.2},{text:" 내용",start:2.25,end:2.5}
 ]};
 if (getLyricLineStartTime(mismatchedWordText)!==2.0) throw new Error("A mismatched first word changed the base timestamp");
-const mismatchedSecondWordText = {...alignedWordTiming,words:[
+const legacySingleTokenAnchor = {...alignedWordTiming,words:[
  {text:"첫",start:2.05,end:2.2},{text:" 엉뚱한",start:2.25,end:2.5}
 ]};
-if (getLyricLineStartTime(mismatchedSecondWordText)!==2.0) throw new Error("A mismatched second word changed the base timestamp");
+if (getLyricLineStartTime(legacySingleTokenAnchor)!==2.05) throw new Error("The previous 120ms first-word behavior regressed");
+const mismatchedSecondWordText = {...alignedWordTiming,words:[
+ {text:"첫",start:2.20,end:2.3},{text:" 엉뚱한",start:2.35,end:2.5}
+]};
+if (getLyricLineStartTime(mismatchedSecondWordText)!==2.0) throw new Error("A mismatched second word was accepted in the expanded timing window");
 const closeAdjacentLines = [
  {time:2.0,text:"앞 줄",words:[{text:"앞",start:1.9,end:1.98},{text:" 줄",start:1.99,end:2.08}]},
  {time:2.1,text:"첫 음절로 시작",words:[
