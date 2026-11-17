@@ -27,6 +27,8 @@ assert result_for(EXPECTED_ARTISTS)["identity_verified"], "full credited artist 
 assert result_for("Nosun")["identity_verified"], "a single credited performer must match the collaboration"
 assert not result_for("Unrelated Artist")["identity_verified"], "an unrelated artist must be rejected"
 assert norm("OneRepublicVEVO") == norm("OneRepublic"), "VEVO channel suffix must not alter artist identity"
+assert abs(verifier.effective_app_offset({"lyricOffsetSeconds": 1.2, "videoManualAdvanceSeconds": 0.95, "lyricLeadSeconds": 0.04}) - 0.21) < 1e-9, "manual video correction and display lead must be included in the effective app offset"
+assert abs(verifier.effective_app_offset({"lyricOffsetSeconds": 0.0}) + 0.04) < 1e-9, "legacy snapshots must include the display lead"
 
 def identify_title(title: str, author: str):
     with patch("lyric_audio_verify.fetch_json", return_value={"title": title, "author_name": author}):
