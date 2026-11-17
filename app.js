@@ -10,6 +10,8 @@ function recordLyricFlow(stage,details={}){
  let playerTime=null;try{const value=Number(ytPlayer?.getCurrentTime?.());if(Number.isFinite(value))playerTime=Number(value.toFixed(3));}catch(_){}
  lyricFlowAudit.events.push({stage,at:new Date().toISOString(),elapsedMs:Date.now()-lyricFlowAudit.startedAt,playerTime,
   loading:Boolean(lyricState.loading),lineCount:lyricState.lines.length,offsetSeconds:Number(lyricOffsetSeconds)||0,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   timingBasis:lyricTimingBasis,...details});
  if(lyricFlowAudit.events.length>60)lyricFlowAudit.events.shift();
 }
@@ -54,6 +56,33 @@ function getLyricLineStartTime(line,lines=null,index=-1){
   if(Number.isFinite(next)&&candidate>=(base+next)/2)return base;
  }
  return candidate;
+}
+
+// One authoritative timeline conversion shared by rendering, QA and vocal marks.
+// Positive effective offsets mean the player must advance farther before a lyric appears.
+function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
+ return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
+}
+function getLyricTimelineTime(playerTime,videoId=currentVideoId){
+ const time=Number(playerTime);
+ return Number.isFinite(time)?time-getLyricTimelineOffsetSeconds(videoId):NaN;
+}
+function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideoId){
+ const lineTime=getLyricLineStartTime(line,lines,index);
+ return Number.isFinite(lineTime)?lineTime+getLyricTimelineOffsetSeconds(videoId):NaN;
+}
+function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
+ const time=Number(playerTime);
+ const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
+ if(!Number.isFinite(relative)||relative<0)return -1;
+ const lyricTime=getLyricTimelineTime(time,videoId);
+ if(!Number.isFinite(lyricTime))return -1;
+ let index=-1;
+ for(let i=0;i<lyricState.lines.length;i++){
+  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;
+  else break;
+ }
+ return index;
 }
 
 let lyricPreviewRenderedToken=0;
@@ -1258,8 +1287,8 @@ function renderLyrics(){
  const previousIndex=lyricState.lastIndex;
  const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
- const relativeTime=current-lyricOffsetSeconds+getVideoManualAdvanceSeconds(currentVideoId);
- const lyricTime=Math.max(0,relativeTime+LYRIC_LEAD_SECONDS);
+ const relativeTime=Number(current)-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(currentVideoId);
+ const lyricTime=Math.max(0,getLyricTimelineTime(current,currentVideoId));
  let index=-1;
  if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
@@ -1286,12 +1315,7 @@ function renderLyrics(){
 }
 
 function auditExpectedLineIndex(playerTime){
- const relative=Number(playerTime)-lyricOffsetSeconds+getVideoManualAdvanceSeconds(currentVideoId);
- if(!Number.isFinite(relative)||relative<0)return -1;
- const lyricTime=Math.max(0,relative+LYRIC_LEAD_SECONDS);
- let index=-1;
- for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}
- return index;
+ return getLyricLineIndexAtPlayerTime(playerTime,currentVideoId);
 }
 function auditMedian(values){
  const sorted=values.filter(Number.isFinite).slice().sort((a,b)=>a-b);
@@ -1365,8 +1389,10 @@ function auditValidateLoadedLyrics(){
 function recordPlaybackAuditRender(index,playerTime){
  if(!playbackAudit.active||playbackAudit.videoId!==currentVideoId||index<0||index===playbackAudit.lastRenderedIndex)return;
  const line=lyricState.lines[index];if(!line)return;
- const relative=Number(playerTime)-lyricOffsetSeconds,scheduled=getLyricLineStartTime(line,lyricState.lines,index)-LYRIC_LEAD_SECONDS;
- playbackAudit.transitions.push({lineIndex:index,playerTime:Number(playerTime.toFixed(3)),scheduledPlayerTime:Number(scheduled.toFixed(3)),uiDelayMs:Math.round((relative-scheduled)*1000)});
+ const scheduledPlayerTime=getLyricPlayerTimeForLine(line,lyricState.lines,index,currentVideoId);
+ if(!Number.isFinite(scheduledPlayerTime)||!Number.isFinite(Number(playerTime)))return;
+ const uiDelayMs=Math.round((Number(playerTime)-scheduledPlayerTime)*1000);
+ playbackAudit.transitions.push({lineIndex:index,playerTime:Number(Number(playerTime).toFixed(3)),scheduledPlayerTime:Number(scheduledPlayerTime.toFixed(3)),uiDelayMs});
  if(playbackAudit.transitions.length>120)playbackAudit.transitions.shift();
  playbackAudit.lastRenderedIndex=index;
 }
@@ -1397,7 +1423,10 @@ function getPlaybackAuditReport(){
  return {generatedAt:new Date().toISOString(),videoId:currentVideoId,videoTitle:String(el.nowTitle?.textContent||""),videoChannel:String(el.nowChannel?.textContent||""),
   lyricTrack:currentLyricsTrack?{title:currentLyricsTrack.title,artist:currentLyricsTrack.artist,duration:currentLyricsTrack.duration,source:currentLyricsTrack.source,upstreamProvider:currentLyricsTrack.upstreamProvider}:null,lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice():[],startedAt:lyricFlowAudit.startedAt||null},
    
-  timingBasis:lyricTimingBasis,lyricOffsetSeconds,syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
+  timingBasis:lyricTimingBasis,lyricOffsetSeconds,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
+  syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
   playerState:ytPlayer?.getPlayerState?.()??null,playerTime:Number(ytPlayer?.getCurrentTime?.()||0),samples:playbackAudit.samples,
   missingTicks:playbackAudit.missingTicks,mismatchTicks:playbackAudit.mismatchTicks,uiTransitionCount:playbackAudit.transitions.length,
   medianUiDelayMs:auditMedian(delays),userMarkedVocalStarts:playbackAudit.marks.length,medianUserMarkedOffsetMs:auditMedian(vocalOffsets),
@@ -2533,7 +2562,7 @@ el.auditMarkButton?.addEventListener("click",()=>{
  try{if(ytPlayer.getPlayerState()!==YT.PlayerState.PLAYING)return;}catch(_){return;}
  const index=lyricState.lastIndex,line=lyricState.lines[index];if(index<0||!line)return;
  let playerTime=0;try{playerTime=Number(ytPlayer.getCurrentTime())||0;}catch(_){return;}
- const offsetMs=Math.round(((playerTime-lyricOffsetSeconds)-Number(line.time))*1000);
+ const offsetMs=Math.round((getLyricTimelineTime(playerTime,currentVideoId)-getLyricLineStartTime(line,lyricState.lines,index))*1000);
  const previous=playbackAudit.marks[playbackAudit.marks.length-1];
  if(previous&&previous.lineIndex===index){auditSetStatus("같은 가사 줄은 한 번만 기록됩니다. 다음 줄이 실제로 시작할 때 눌러 주세요.");return;}
  playbackAudit.marks.push({lineIndex:index,playerTime:Number(playerTime.toFixed(3)),lyricTimestamp:Number(Number(line.time).toFixed(3)),offsetMs});
@@ -2565,6 +2594,8 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
     timingBasis:lyricTimingBasis,lyricOffsetSeconds,
+    videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+    effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
     track:currentLyricsTrack?{title:currentLyricsTrack.title||currentLyricsTrack.trackName||"",
       artist:currentLyricsTrack.artist||currentLyricsTrack.artistName||"",
       source:currentLyricsTrack.source||"",upstreamProvider:currentLyricsTrack.upstreamProvider||""}:null,
