@@ -28,9 +28,10 @@ function getVideoManualAdvanceSeconds(videoId){
  return 0;
 }
 
-// Conservative per-line refinement: trust provider word timing only when it
-// independently agrees with the line timestamp and the first word matches.
-const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.12;
+// Refine a line from word timing only when the first two timed tokens both
+// match the lyric prefix. The wider 300ms window is guarded by that extra
+// text evidence and the adjacent-line midpoint checks below.
+const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.30;
 function getLyricLineStartTime(line,lines=null,index=-1){
  const base=Number(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
@@ -41,9 +42,12 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  const first=words[0],second=words[1];
  const lineText=String(line?.text||"").replace(/\s+/gu,"");
  const firstText=String(first.text||"").replace(/\s+/gu,"");
+ const secondText=String(second.text||"").replace(/\s+/gu,"");
  const delta=Number(first.start)-base;
  const wordGap=Number(second.start)-Number(first.start);
- if(!lineText||!firstText||!lineText.startsWith(firstText))return base;
+ // A single matching token is not enough: both consecutive word anchors
+ // must reproduce the beginning of this exact lyric line.
+ if(!lineText||!firstText||!secondText||!lineText.startsWith(firstText+secondText))return base;
  if(!Number.isFinite(delta)||Math.abs(delta)>LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS)return base;
  if(!Number.isFinite(wordGap)||wordGap<=0||wordGap>1.5)return base;
  const candidate=Number(Number(first.start).toFixed(3));
@@ -56,33 +60,6 @@ function getLyricLineStartTime(line,lines=null,index=-1){
   if(Number.isFinite(next)&&candidate>=(base+next)/2)return base;
  }
  return candidate;
-}
-
-// One authoritative timeline conversion shared by rendering, QA and vocal marks.
-// Positive effective offsets mean the player must advance farther before a lyric appears.
-function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
- return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
-}
-function getLyricTimelineTime(playerTime,videoId=currentVideoId){
- const time=Number(playerTime);
- return Number.isFinite(time)?time-getLyricTimelineOffsetSeconds(videoId):NaN;
-}
-function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideoId){
- const lineTime=getLyricLineStartTime(line,lines,index);
- return Number.isFinite(lineTime)?lineTime+getLyricTimelineOffsetSeconds(videoId):NaN;
-}
-function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
- const time=Number(playerTime);
- const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
- if(!Number.isFinite(relative)||relative<0)return -1;
- const lyricTime=getLyricTimelineTime(time,videoId);
- if(!Number.isFinite(lyricTime))return -1;
- let index=-1;
- for(let i=0;i<lyricState.lines.length;i++){
-  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;
-  else break;
- }
- return index;
 }
 
 let lyricPreviewRenderedToken=0;
