@@ -28,9 +28,10 @@ function getVideoManualAdvanceSeconds(videoId){
  return 0;
 }
 
-// Conservative per-line refinement: trust provider word timing only when it
-// independently agrees with the line timestamp and the first word matches.
-const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.12;
+// Refine from word timing conservatively. Preserve the original 120ms
+// single-token rule; only the expanded 120–300ms band needs two matching tokens.
+const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.30;
+const LYRIC_WORD_ANCHOR_LEGACY_SECONDS=0.12;
 function getLyricLineStartTime(line,lines=null,index=-1){
  const base=Number(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
@@ -41,10 +42,16 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  const first=words[0],second=words[1];
  const lineText=String(line?.text||"").replace(/\s+/gu,"");
  const firstText=String(first.text||"").replace(/\s+/gu,"");
+ const secondText=String(second.text||"").replace(/\s+/gu,"");
  const delta=Number(first.start)-base;
+ const absoluteDelta=Math.abs(delta);
  const wordGap=Number(second.start)-Number(first.start);
  if(!lineText||!firstText||!lineText.startsWith(firstText))return base;
- if(!Number.isFinite(delta)||Math.abs(delta)>LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS)return base;
+ if(!Number.isFinite(delta)||absoluteDelta>LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS)return base;
+ // Keep all previously trusted small adjustments. Larger adjustments require
+ // both consecutive word tokens to match the exact lyric-line prefix.
+ if(absoluteDelta>LYRIC_WORD_ANCHOR_LEGACY_SECONDS&&
+    (!secondText||!lineText.startsWith(firstText+secondText)))return base;
  if(!Number.isFinite(wordGap)||wordGap<=0||wordGap>1.5)return base;
  const candidate=Number(Number(first.start).toFixed(3));
  // Adjacent lines share a midpoint boundary. Never let a refined timestamp
@@ -58,8 +65,6 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  return candidate;
 }
 
-// One authoritative timeline conversion shared by rendering, QA and vocal marks.
-// Positive effective offsets mean the player must advance farther before a lyric appears.
 function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
  return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
 }
