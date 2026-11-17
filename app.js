@@ -17,6 +17,12 @@ function recordLyricFlow(stage,details={}){
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 
+// User-observed constant late offset for this exact YouTube upload only.
+// Keep it as a separate playback-layer correction: never rewrite shared song lyrics.
+function getVideoManualAdvanceSeconds(videoId){
+ return String(videoId||"")==="afYxfsgiuLI"?0.75:0;
+}
+
 // Conservative per-line refinement: trust provider word timing only when it
 // independently agrees with the line timestamp and the first word matches.
 const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.12;
@@ -1249,7 +1255,7 @@ function renderLyrics(){
  const previousIndex=lyricState.lastIndex;
  const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
- const relativeTime=current-lyricOffsetSeconds;
+ const relativeTime=current-lyricOffsetSeconds+getVideoManualAdvanceSeconds(currentVideoId);
  const lyricTime=Math.max(0,relativeTime+LYRIC_LEAD_SECONDS);
  let index=-1;
  if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}}
@@ -1277,7 +1283,7 @@ function renderLyrics(){
 }
 
 function auditExpectedLineIndex(playerTime){
- const relative=Number(playerTime)-lyricOffsetSeconds;
+ const relative=Number(playerTime)-lyricOffsetSeconds+getVideoManualAdvanceSeconds(currentVideoId);
  if(!Number.isFinite(relative)||relative<0)return -1;
  const lyricTime=Math.max(0,relative+LYRIC_LEAD_SECONDS);
  let index=-1;
