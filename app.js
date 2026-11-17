@@ -20,7 +20,7 @@ const LYRIC_LEAD_SECONDS=0.04;
 // User-observed constant late offset for this exact YouTube upload only.
 // Keep it as a separate playback-layer correction: never rewrite shared song lyrics.
 function getVideoManualAdvanceSeconds(videoId){
- return String(videoId||"")==="afYxfsgiuLI"?0.75:0;
+ return String(videoId||"")==="afYxfsgiuLI"?0.9:0;
 }
 
 // Conservative per-line refinement: trust provider word timing only when it
