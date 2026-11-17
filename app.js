@@ -65,6 +65,31 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  return candidate;
 }
 
+function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
+ return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
+}
+function getLyricTimelineTime(playerTime,videoId=currentVideoId){
+ const time=Number(playerTime);
+ return Number.isFinite(time)?time-getLyricTimelineOffsetSeconds(videoId):NaN;
+}
+function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideoId){
+ const lineTime=getLyricLineStartTime(line,lines,index);
+ return Number.isFinite(lineTime)?lineTime+getLyricTimelineOffsetSeconds(videoId):NaN;
+}
+function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
+ const time=Number(playerTime);
+ const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
+ if(!Number.isFinite(relative)||relative<0)return -1;
+ const lyricTime=getLyricTimelineTime(time,videoId);
+ if(!Number.isFinite(lyricTime))return -1;
+ let index=-1;
+ for(let i=0;i<lyricState.lines.length;i++){
+  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;
+  else break;
+ }
+ return index;
+}
+
 let lyricPreviewRenderedToken=0;
 let lyricLastObservedPlayerTime=null;
 function getLyricTransitionDuration(index){
