@@ -37,7 +37,7 @@ const names = [
   "preserveTimedTextSpacing",
   "getLyricLineStartTime",
 ];
-const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const noWordTiming = {time:2.0,text:"가사 한 줄",words:[]};
 if (getLyricLineStartTime(noWordTiming)!==2.0) throw new Error("Lines without word timing must retain their original timestamp");
 const alignedWordTiming = {time:2.0,text:"첫 음절로 시작",words:[
@@ -48,12 +48,18 @@ const earlyWordTiming = {time:2.1,text:"첫 음절로 시작",words:[
  {text:"첫",start:2.0,end:2.08},{text:" 음절로",start:2.12,end:2.4}
 ]};
 if (getLyricLineStartTime(earlyWordTiming)!==2.0) throw new Error("A trusted early word anchor was not applied");
-const largeWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.2,end:word.end+0.2}))};
-if (getLyricLineStartTime(largeWordDelta)!==2.0) throw new Error("A word anchor beyond the safety bound changed the base timestamp");
+const moderateWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.24,end:word.end+0.24}))};
+if (getLyricLineStartTime(moderateWordDelta)!==2.315) throw new Error("A text-verified first-word anchor within 300ms was not applied");
+const largeWordDelta = {...alignedWordTiming,words:alignedWordTiming.words.map(word=>({...word,start:word.start+0.31,end:word.end+0.31}))};
+if (getLyricLineStartTime(largeWordDelta)!==2.0) throw new Error("A word anchor beyond the 300ms safety bound changed the base timestamp");
 const mismatchedWordText = {...alignedWordTiming,words:[
  {text:"다른",start:2.05,end:2.2},{text:" 내용",start:2.25,end:2.5}
 ]};
-if (getLyricLineStartTime(mismatchedWordText)!==2.0) throw new Error("A mismatched word sequence changed the base timestamp");
+if (getLyricLineStartTime(mismatchedWordText)!==2.0) throw new Error("A mismatched first word changed the base timestamp");
+const mismatchedSecondWordText = {...alignedWordTiming,words:[
+ {text:"첫",start:2.05,end:2.2},{text:" 엉뚱한",start:2.25,end:2.5}
+]};
+if (getLyricLineStartTime(mismatchedSecondWordText)!==2.0) throw new Error("A mismatched second word changed the base timestamp");
 const closeAdjacentLines = [
  {time:2.0,text:"앞 줄",words:[{text:"앞",start:1.9,end:1.98},{text:" 줄",start:1.99,end:2.08}]},
  {time:2.1,text:"첫 음절로 시작",words:[
