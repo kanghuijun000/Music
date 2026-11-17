@@ -589,7 +589,7 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
    duration:Number(identifiedTrack?.duration)||Number(cached.duration)||0,
    acoustidId:identifiedTrack?.acoustidId||cached.acoustidId||""};
   if(!normalized.trackName||!normalized.artistName)return false;
-  lyricTimingBasis="catalog";lyricOffsetSeconds=0;
+  lyricTimingBasis="catalog";lyricOffsetSeconds=offset;
   lyricState.lines=normalizedLines;lyricState.plain=String(cached.plain||"");
   lyricState.wordSynced=Boolean(cached.wordSynced);lyricState.lastIndex=-1;lyricState.lastWordIndex=-1;
   for(const key of getSongLyricCacheKeys(cached.videoMetadata,normalized))storeLyric(key,normalized);
