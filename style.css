@@ -321,3 +321,9 @@ h1 em{color:var(--accent)}
 /* Mobile search suggestions should scroll with the page, not trap vertical swipes in the dropdown. */
 .recent-searches{max-height:none;overflow:visible;overscroll-behavior:auto;touch-action:pan-y;-webkit-overflow-scrolling:auto}
 @media(max-width:560px){.recent-searches{max-height:none;overflow:visible;overscroll-behavior:auto;touch-action:pan-y}}
+
+
+/* Inline YouTube API key validation feedback */
+.api-key-error{margin:8px 0 0;color:#ff647c;font-size:11px;line-height:1.65;overflow-wrap:anywhere;}
+.api-key-error[hidden]{display:none!important;}
+.api-key-input[aria-invalid="true"]{border-color:#ff647c;}
