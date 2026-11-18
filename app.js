@@ -2918,7 +2918,7 @@ async function searchPlaylistSongs(query){
    row.append(img,info,add);playlistEl.searchResults.append(row);
   });
  }catch(error){
-  const apiKeyMessage=getApiKeyProblemMessage(error);if(apiKeyMessage)openSettings(apiKeyMessage);playlistEl.searchResults.replaceChildren();const msg=document.createElement("p");msg.className="playlist-search-message";msg.textContent=apiKeyMessage?"YouTube API 키를 확인해 주세요. 설정 창의 빨간 안내를 확인해 주세요.":(error?.message||"검색에 실패했어요.");playlistEl.searchResults.append(msg);
+  const apiKeyMessage=getApiKeyProblemMessage(error);if(apiKeyMessage){if(playlistEl.searchDialog.open)playlistEl.searchDialog.close();openSettings(apiKeyMessage);}playlistEl.searchResults.replaceChildren();const msg=document.createElement("p");msg.className="playlist-search-message";msg.textContent=apiKeyMessage?"YouTube API 키를 확인해 주세요. 설정 창의 빨간 안내를 확인해 주세요.":(error?.message||"검색에 실패했어요.");playlistEl.searchResults.append(msg);
  }finally{playlistEl.searchButton.disabled=false;playlistEl.searchButton.textContent="검색";}
 }
 document.getElementById("homeNavButton").addEventListener("click",showMusicHome);
