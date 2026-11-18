@@ -2515,7 +2515,7 @@ document.getElementById("apiGuideFinishButton").addEventListener("click",()=>{
 });
 apiGuideDialog.addEventListener("click",event=>{if(event.target===apiGuideDialog)apiGuideDialog.close();});
 el.apiKeyInput.addEventListener("input",()=>{if(el.apiKeyInput.value.trim())setApiKeyError("");});
-el.saveKeyButton.addEventListener("click",()=>{const value=el.apiKeyInput.value.trim();if(!value){setApiKeyError("YouTube API 키를 입력해 주세요.");el.apiKeyInput.focus();return;}if(!/^AIza[\\w-]{20,}$/.test(value)){setApiKeyError("API 키 형식이 올바르지 않습니다. Google Cloud에서 발급한 키를 다시 확인해 주세요.");el.apiKeyInput.focus();return;}apiKey=value;localStorage.setItem(STORAGE_KEY,apiKey);setApiKeyError("");updateConnectionStatus();el.settingsDialog.close();showToast("API 키를 이 기기에 저장했어요.");});
+el.saveKeyButton.addEventListener("click",()=>{const value=el.apiKeyInput.value.trim();if(!value){setApiKeyError("YouTube API 키를 입력해 주세요.");el.apiKeyInput.focus();return;}if(!/^AIza[\w-]{20,}$/.test(value)){setApiKeyError("API 키 형식이 올바르지 않습니다. Google Cloud에서 발급한 키를 다시 확인해 주세요.");el.apiKeyInput.focus();return;}apiKey=value;localStorage.setItem(STORAGE_KEY,apiKey);setApiKeyError("");updateConnectionStatus();el.settingsDialog.close();showToast("API 키를 이 기기에 저장했어요.");});
 el.removeKeyButton.addEventListener("click",()=>{apiKey="";localStorage.removeItem(STORAGE_KEY);el.apiKeyInput.value="";updateConnectionStatus();el.settingsDialog.close();showToast("저장된 API 키를 삭제했어요.");});
 el.settingsDialog.addEventListener("click",event=>{if(event.target===el.settingsDialog)el.settingsDialog.close();});
 el.playPauseButton.addEventListener("click",()=>{if(!ytPlayer)return;if(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING)ytPlayer.pauseVideo();else ytPlayer.playVideo();});
