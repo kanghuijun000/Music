@@ -2395,37 +2395,23 @@ function updateMediaSession(state){
  if(!("mediaSession" in navigator))return;
  try{
   navigator.mediaSession.playbackState=state;
-  if("setPositionState" in navigator){
-   if(state==="none"||!ytPlayer){
-    navigator.mediaSession.setPositionState();
-   }else{
-    const duration=Number(ytPlayer.getDuration()),position=Number(ytPlayer.getCurrentTime());
-    if(Number.isFinite(duration)&&duration>0&&Number.isFinite(position)){
-     // playbackRate must remain a positive rate even while paused.
-     navigator.mediaSession.setPositionState({duration,playbackRate:1,position:Math.min(duration,Math.max(0,position))});
-    }else{
-     navigator.mediaSession.setPositionState();
-    }
+  if("setPositionState" in navigator&&ytPlayer){
+   const duration=ytPlayer.getDuration(),position=ytPlayer.getCurrentTime();
+   if(Number.isFinite(duration)&&duration>0&&Number.isFinite(position)){
+    navigator.mediaSession.setPositionState({duration,playbackRate:state==="playing"?1:0,position:Math.min(duration,Math.max(0,position))});
    }
   }
  }catch(error){console.debug("Media Session update unavailable:",error);}
 }
 function setupMediaSession(){
  if(!("mediaSession" in navigator))return;
- // Progressive enhancement only: browsers without Audio Session API simply
- // continue using the standard Media Session integration below.
- try{
-  if(navigator.audioSession&&"type" in navigator.audioSession){
-   navigator.audioSession.type="playback";
-  }
- }catch(error){console.debug("Audio Session playback hint unavailable:",error);}
  const actions={
-  play:()=>{if(ytPlayer&&currentVideoId)ytPlayer.playVideo();},
+  play:()=>{if(ytPlayer)ytPlayer.playVideo();},
   pause:()=>{if(ytPlayer)ytPlayer.pauseVideo();},
   stop:()=>{if(ytPlayer)ytPlayer.pauseVideo();},
-  seekbackward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.max(0,ytPlayer.getCurrentTime()-(Number(details?.seekOffset)||10)),true);},
-  seekforward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.min(ytPlayer.getDuration(),ytPlayer.getCurrentTime()+(Number(details?.seekOffset)||10)),true);},
-  seekto:details=>{if(ytPlayer&&Number.isFinite(Number(details?.seekTime)))ytPlayer.seekTo(Number(details.seekTime),true);}
+  seekbackward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.max(0,ytPlayer.getCurrentTime()-(details.seekOffset||10)),true);},
+  seekforward:details=>{if(ytPlayer)ytPlayer.seekTo(Math.min(ytPlayer.getDuration(),ytPlayer.getCurrentTime()+(details.seekOffset||10)),true);},
+  seekto:details=>{if(ytPlayer&&Number.isFinite(details.seekTime))ytPlayer.seekTo(details.seekTime,true);}
  };
  for(const [action,handler] of Object.entries(actions)){
   try{navigator.mediaSession.setActionHandler(action,handler);}
@@ -2437,7 +2423,6 @@ function refreshMediaSessionFromPlayer(){
  const state=ytPlayer.getPlayerState();
  if(state===YT.PlayerState.PLAYING)updateMediaSession("playing");
  else if(state===YT.PlayerState.PAUSED)updateMediaSession("paused");
- else if(state===YT.PlayerState.ENDED||state===YT.PlayerState.CUED||state===YT.PlayerState.UNSTARTED)updateMediaSession("none");
 }
 function updateMediaMetadata(video){
  if(!("mediaSession" in navigator)||!("MediaMetadata" in window))return;
