@@ -1,0 +1,6 @@
+{
+  "appId": "com.kanghuijun.music",
+  "appName": "Music",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

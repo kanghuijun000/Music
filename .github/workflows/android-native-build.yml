@@ -1,0 +1,74 @@
+name: Android native APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - native-migration
+    paths:
+      - 'app.js'
+      - 'index.html'
+      - 'style.css'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'install.html'
+      - 'icons/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/android-native-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out native migration branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Capacitor dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Stage the unchanged web app
+        run: |
+          mkdir -p www/icons
+          cp index.html app.js style.css manifest.json sw.js install.html www/
+          cp icons/* www/icons/
+
+      - name: Generate the native Android project
+        run: npx cap add android
+
+      - name: Synchronize bundled web assets
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Publish installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-Android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
