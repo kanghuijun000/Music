@@ -63,14 +63,20 @@ jobs:
       - name: Synchronize bundled web assets
         run: npx cap sync android
 
+      - name: Verify separate package identity
+        working-directory: android
+        run: |
+          grep -R 'applicationId.*com.kanghuijun.music.v193' app/build.gradle*
+          ! grep -R 'applicationId.*com.kanghuijun.music"' app/build.gradle*
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
 
-      - name: Publish installable debug APK
+      - name: Publish separate-install debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Music-Android-debug
+          name: Music-v193-separate-app
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
