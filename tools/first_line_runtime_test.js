@@ -86,6 +86,10 @@ assert.ok(Number.isNaN(context.providerMillisecondsToSeconds(null)),
   "a missing provider timestamp must remain missing");
 assert.ok(Number.isNaN(context.providerMillisecondsToSeconds("")),
   "an empty provider timestamp must remain missing");
+assert.ok(Number.isNaN(context.providerMillisecondsToSeconds("   ")),
+  "a whitespace-only provider timestamp must remain missing");
+assert.ok(Number.isNaN(context.providerMillisecondsToSeconds(false)),
+  "a boolean must not be coerced into a zero timestamp");
 assert.equal(context.providerMillisecondsToSeconds(0), 0,
   "a real zero-millisecond timestamp must remain valid");
 assert.equal(context.providerMillisecondsToSeconds(50), 0.05,
