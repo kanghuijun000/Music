@@ -157,7 +157,9 @@ def measure_first_line_anchor(line_time, candidates, app_offset, max_audio_time=
         "first_line_vocal_end_seconds":round(end,3),
         "first_line_expected_display_seconds":round(expected,3),
         "first_line_signed_error_seconds":round(residual,3),
-        "first_line_suggested_offset_delta_seconds":round(residual,3),
+        # The app's positive calibration advances lyrics; a positive residual
+        # means the vocal starts later, so the required calibration delta is negative.
+        "first_line_suggested_offset_delta_seconds":round(-residual,3),
         "first_line_text_similarity":round(similarity,3),
         "first_line_matched_word_count":last-first+1,
         "measurement_uncertainty_seconds":None,
