@@ -1952,6 +1952,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
     duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
     videoBound:Boolean(valid._videoBound),sameVideoSource:Boolean(valid._sameVideoSource),
+    sourceVideoId:String(valid._unisonSourceVideoId||valid.sourceVideoId||""),
     upstreamProvider:String(valid._liriqoProvider||valid.upstreamProvider||""),lineCount:timingLines.length,
     firstLines:timingLines.slice(0,3).map((line,index)=>{
      const baseTime=finiteTimestampSeconds(line?.time);
@@ -2472,6 +2473,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    provider:item._source||"",trackName:item.trackName||item.title||"",
    artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
    videoBound:Boolean(item._videoBound),sameVideoSource:Boolean(item._sameVideoSource),
+   sourceVideoId:String(item._unisonSourceVideoId||item.sourceVideoId||""),
    upstreamProvider:String(item._liriqoProvider||item.upstreamProvider||""),
    firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
     Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null,
