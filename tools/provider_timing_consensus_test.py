@@ -40,7 +40,7 @@ class ProviderTimingConsensusTests(unittest.TestCase):
                  "lineCount": 10, "firstLines": [{"time": 1.0, "textFingerprint": "same"}]}
         report = analyze_result({"lyric_candidate_timing_evidence": [event, event]})
         self.assertEqual(report["candidate_count"], 1)
-        self.assertEqual(report["status"], "NO_MULTI_CLUSTER_CONFLICT")
+        self.assertEqual(report["status"], "SINGLE_TIMING_CLUSTER")
 
     def test_ignores_unmatched_or_unsynced_candidates(self):
         result = {"lyric_candidate_timing_evidence": [
@@ -53,7 +53,7 @@ class ProviderTimingConsensusTests(unittest.TestCase):
         ]}
         report = analyze_result(result)
         self.assertEqual(report["candidate_count"], 0)
-        self.assertEqual(report["status"], "NO_MULTI_CLUSTER_CONFLICT")
+        self.assertEqual(report["status"], "NO_TIMING_EVIDENCE")
 
     def test_includes_selected_candidate_and_alternatives(self):
         result = {"lyric_candidate_timing_evidence": [{
