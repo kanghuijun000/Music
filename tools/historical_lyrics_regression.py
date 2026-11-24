@@ -10,6 +10,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from provider_timing_consensus import analyze_report as analyze_provider_timing_report
+
 ROOT = Path(__file__).resolve().parents[1]
 COMMITS = [
     ("17845ac5147727c40badbd8a0050a211d50a3d89", "baseline-before-lyric-regressions"),
@@ -138,6 +140,7 @@ def main():
                     "lyric_verification": detail.get("lyric_verification", {}),
                     "app_lyrics_status": detail.get("app_lyrics_status", ""),
                     "app_lyric_track": detail.get("app_lyric_track", {}),
+                    "app_selected_first_line": detail.get("app_selected_first_line"),
                     "app_lyric_timing_basis": detail.get("app_lyric_timing_basis"),
                     "app_lyric_offset_seconds": detail.get("app_lyric_offset_seconds"),
                     "lyric_flow_events": detail.get("lyric_flow_events", []),
@@ -181,6 +184,8 @@ def main():
         "player_started": sum(1 for x in results if x.get("player_playing_seen")),
         "youtube_or_environment_inconclusive": sum(1 for x in results if x.get("audio_check", True) and not (x.get("audio") or {}).get("audio_detected")),
     }
+    report["first_line_candidate_analysis"] = analyze_provider_timing_report(report)
+    report["summary"]["ambiguous_first_line_timing"] = report["first_line_candidate_analysis"]["ambiguous_songs"]
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
