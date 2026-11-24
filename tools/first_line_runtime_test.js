@@ -28,6 +28,10 @@ assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "unlisted-video"), -1,
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.30, "unlisted-video"), 0,
   "unlisted videos should still render at the original threshold");
 
+context.lyricState.lines = [{ time: 0.10, text: "first lyric" }];
+assert.equal(context.getLyricLineIndexAtPlayerTime(0.21, "TKDpOEkT0cY"), 0,
+  "the calibrated video must use the same adjusted timeline for its first-line threshold");
+
 // Lock down the existing per-line word-anchor behavior before adding any new layer.
 const lineAt50ms = {
   time: 10.0, text: "hello world",
