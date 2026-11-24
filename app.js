@@ -18,7 +18,7 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
-// Timestamps are millisecond-based; absorb sub-millisecond IEEE-754 boundary noise only.
+// Timestamps are millisecond-based; tolerate at most 1 ms of floating-point boundary noise.
 const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
 function providerMillisecondsToSeconds(value){
  if(value===null||value===undefined||value==="")return NaN;
@@ -1924,17 +1924,19 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(valid){
    valid._source=provider;candidates.push(valid);
    const timingLines=Array.isArray(valid.ttmlLines)?valid.ttmlLines:[];
+   const safeSeconds=value=>value===null||value===undefined||value===""?null:
+    Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
    recordLyricFlow("lyric_candidate_timing_evidence",{
     provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
     duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
     videoBound:Boolean(valid._videoBound),lineCount:timingLines.length,
     firstLines:timingLines.slice(0,3).map(line=>({
-     time:Number.isFinite(Number(line?.time))?Number(Number(line.time).toFixed(3)):null,
+     time:safeSeconds(line?.time),
      text:String(line?.text||""),
      words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
       text:String(word?.text||""),
-      start:Number.isFinite(Number(word?.start))?Number(Number(word.start).toFixed(3)):null,
-      end:Number.isFinite(Number(word?.end))?Number(Number(word.end).toFixed(3)):null
+      start:safeSeconds(word?.start),
+      end:safeSeconds(word?.end)
      }))
     }))
    });
