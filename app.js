@@ -2486,7 +2486,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
     Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null,
    firstLineEffectiveTime:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
-    Number(getLyricLineStartTime(item.ttmlLines[0],item.ttmlLines,0).toFixed(3)):null
+    Number(getLyricLineStartTime(item.ttmlLines[0],item.ttmlLines,0).toFixed(3)):null,
+   firstLineFingerprint:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    getLyricTextFingerprint(item.ttmlLines[0]?.text):"",
+   firstLineTextLength:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    String(item.ttmlLines[0]?.text||"").length:0
   }))
  });
  if(!selected){
