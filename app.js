@@ -561,7 +561,8 @@ function readAllStoredLyricEntries(){
  return [...entries.entries()];
 }
 function hasUsableCachedLyrics(item){
- return Boolean(item&&Array.isArray(item.lines)&&item.lines.length>=2&&item.lines.every(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()));
+ return Boolean(item&&Array.isArray(item.lines)&&item.lines.length>=2&&item.lines.every(line=>
+  line&&Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim()));
 }
 function prepareSharedCacheForVideo(item,sourceKey,targetVideoId){
  if(!hasUsableCachedLyrics(item))return null;
