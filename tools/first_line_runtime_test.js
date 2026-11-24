@@ -82,6 +82,18 @@ const nullWordStart = {
 };
 assert.equal(context.getLyricLineStartTime(nullWordStart), 0.20,
   "a missing word timestamp must never be coerced to time zero and shift a lyric early");
+assert.ok(Number.isNaN(context.finiteTimestampSeconds(null)),
+  "a missing timestamp must remain invalid");
+assert.ok(Number.isNaN(context.finiteTimestampSeconds("   ")),
+  "a blank timestamp must remain invalid");
+assert.ok(Number.isNaN(context.finiteTimestampSeconds(false)),
+  "a boolean must not become a zero-second timestamp");
+assert.equal(context.finiteTimestampSeconds(0), 0,
+  "a genuine zero-second timestamp must remain valid");
+assert.equal(context.finiteTimestampSeconds("0.05"), 0.05,
+  "numeric timestamp strings must retain millisecond-scale precision");
+assert.ok(Number.isNaN(context.getLyricLineStartTime({ time: null, text: "missing", words: [] })),
+  "a missing lyric line timestamp must not become time zero");
 assert.ok(Number.isNaN(context.providerMillisecondsToSeconds(null)),
   "a missing provider timestamp must remain missing");
 assert.ok(Number.isNaN(context.providerMillisecondsToSeconds("")),
