@@ -265,6 +265,7 @@ def main() -> int:
                 report["app_player_ready"] = bool(app_snapshot.get("playerReady"))
                 report["app_lyrics_status"] = str(app_snapshot.get("lyricsStatus") or "")
                 report["app_lyric_track"] = app_snapshot.get("track") or {}
+                report["app_selected_first_line"] = app_snapshot.get("firstLineTiming")
                 report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
                 report["app_lyric_offset_seconds"] = app_snapshot.get("lyricOffsetSeconds")
                 flow_events = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])
