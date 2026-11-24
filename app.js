@@ -77,6 +77,30 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  return candidate;
 }
 
+// Read-only QA evidence for the existing word-anchor refinement.
+// This helper never changes lyric timestamps or playback timing.
+function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
+ const source=Array.isArray(lines)?lines:[];
+ const count=Math.max(0,Math.min(10,Number(limit)||5));
+ return source.slice(0,count).map((line,index)=>{
+  const base=Number(line?.time);
+  const effective=getLyricLineStartTime(line,source,index);
+  const words=Array.isArray(line?.words)?line.words:[];
+  const round=value=>Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
+  return {
+   lineIndex:index,
+   text:String(line?.text||""),
+   baseLineTime:round(base),
+   effectiveLineTime:round(effective),
+   appliedWordAnchorDelta:round(Number.isFinite(base)&&Number.isFinite(effective)?effective-base:NaN),
+   wordCount:words.length,
+   firstWords:words.slice(0,6).map(word=>({
+    text:String(word?.text||""),start:round(word?.start),end:round(word?.end)
+   }))
+  };
+ });
+}
+
 function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
  return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS-getVideoFirstLineCalibrationSeconds(videoId);
 }
@@ -1530,6 +1554,7 @@ function getPlaybackAuditReport(){
   videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
   effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
+  wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
   playerState:ytPlayer?.getPlayerState?.()??null,playerTime:Number(ytPlayer?.getCurrentTime?.()||0),samples:playbackAudit.samples,
   missingTicks:playbackAudit.missingTicks,mismatchTicks:playbackAudit.mismatchTicks,uiTransitionCount:playbackAudit.transitions.length,
   medianUiDelayMs:auditMedian(delays),userMarkedVocalStarts:playbackAudit.marks.length,medianUserMarkedOffsetMs:auditMedian(vocalOffsets),
@@ -2732,6 +2757,8 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
     lines:(lyricState.lines||[]).map((line,index)=>({time:getLyricLineStartTime(line,lyricState.lines,index),baseTime:Number(line.time),microAdjustmentSeconds:Number((getLyricLineStartTime(line,lyricState.lines,index)-Number(line.time)).toFixed(3)),text:String(line.text||"")})),
+    wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
+    wordSynced:Boolean(lyricState.wordSynced),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
     timingBasis:lyricTimingBasis,lyricOffsetSeconds,
