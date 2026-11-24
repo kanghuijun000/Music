@@ -39,9 +39,13 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
   "finiteTimestampSeconds",
+  "getVideoLyricOffset",
   "getLyricLineStartTime",
 ];
 const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+if (getVideoLyricOffset("video", null) !== null) throw new Error("A missing TrackID offset must not become a zero-second offset");
+if (getVideoLyricOffset("video", "") !== null) throw new Error("An empty TrackID offset must remain missing");
+if (getVideoLyricOffset("video", 0) !== 0) throw new Error("A genuine zero-second TrackID offset must remain valid");
 const missingTimestamp = {time:null,text:"누락된 시간",words:[]};
 if (!Number.isNaN(getLyricLineStartTime(missingTimestamp))) throw new Error("A missing line timestamp must not be coerced to zero");
 const nullWordTimestamp = {time:0.2,text:"hello world",words:[
