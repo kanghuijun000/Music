@@ -168,7 +168,7 @@ const TRACK_ANALYSIS_CACHE_KEY="music_track_timing_v1";
 const TRACK_ANALYSIS_CACHE_LIMIT=80;
 let lyricOffsetSeconds=0,trackAnalysisToken=0,lyricTimingBasis="catalog";
 // Never apply an unverified per-video offset. Use only a matched track timestamp from analysis.
-function getVideoLyricOffset(videoId,detected=0){const value=Number(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):0;}
+function getVideoLyricOffset(videoId,detected=0){const value=finiteTimestampSeconds(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):null;}
 function readTrackAnalysisCache(){try{const value=JSON.parse(localStorage.getItem(TRACK_ANALYSIS_CACHE_KEY)||"{}");return value&&typeof value==="object"?value:{};}catch(_){return {};}}
 function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).sort((a,b)=>(Number(b[1]?.savedAt)||0)-(Number(a[1]?.savedAt)||0));localStorage.setItem(TRACK_ANALYSIS_CACHE_KEY,JSON.stringify(Object.fromEntries(entries.slice(0,TRACK_ANALYSIS_CACHE_LIMIT))));}catch(error){console.warn("Track timing cache could not be saved:",error);}}
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
@@ -634,7 +634,9 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
   const videoId=currentVideoId;
   const cached=lyricCache.get(videoId)||readStoredLyric(videoId);
   if(!cached||cached.timingBasis!=="video"||!Array.isArray(cached.lines)||!cached.lines.length||!cached.videoMetadata)return false;
-  const offset=Math.max(0,Math.min(1800,Number(sourceOffset)||0));
+  const parsedOffset=finiteTimestampSeconds(sourceOffset);
+  if(!Number.isFinite(parsedOffset)||parsedOffset<0)return false;
+  const offset=Math.min(1800,parsedOffset);
   // Convert line and word timestamps from this video's timeline to the
   // identified song timeline. Keep the original video cache as a fallback.
   const normalizedLines=normalizeVideoBoundLyricsToSongTimeline(cached.lines,offset);
@@ -773,8 +775,9 @@ async function resolveReferenceVideoSongOffset(referenceVideo){
 }
 
 function applyTrackOffset(seconds,identifiedTrack=null){
- const hasMatch=seconds!==null&&seconds!==undefined&&Number.isFinite(Number(seconds));
- const value=hasMatch?Number(seconds):0;
+ const parsedOffset=finiteTimestampSeconds(seconds);
+ const hasMatch=Number.isFinite(parsedOffset)&&parsedOffset>=0;
+ const value=hasMatch?Math.min(parsedOffset,1800):0;
  if(lyricTimingBasis==="video"){
   if(hasMatch)promoteVideoLyricsToSongCache(value,identifiedTrack);
   return;
