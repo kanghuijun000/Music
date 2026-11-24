@@ -91,6 +91,34 @@ assert.equal(context.providerMillisecondsToSeconds(0), 0,
 assert.equal(context.providerMillisecondsToSeconds(50), 0.05,
   "provider milliseconds must convert without losing 50ms precision");
 
+const parserStart = source.indexOf("function parseYamlText(");
+const parserEnd = source.indexOf("function showLyricsMessage(", parserStart);
+assert.ok(parserStart >= 0 && parserEnd > parserStart, "lyricsfile parser block must exist");
+const parserContext = {
+  providerMillisecondsToSeconds: context.providerMillisecondsToSeconds,
+  isCreditMetadata: () => false
+};
+vm.createContext(parserContext);
+vm.runInContext(source.slice(parserStart, parserEnd), parserContext);
+const parsedLyricsfile = parserContext.parseLyricsfile(`lines:
+  - text: hello world
+    start_ms: 200
+    end_ms: 500
+    words:
+      - text: hello
+        start_ms:
+        end_ms: 300
+      - text: world
+        start_ms: 350
+        end_ms: 500
+`);
+assert.equal(parsedLyricsfile.length, 1);
+assert.equal(parsedLyricsfile[0].time, 0.2);
+assert.equal(parsedLyricsfile[0].words.length, 1,
+  "lyricsfile parser must discard a word whose start_ms is missing");
+assert.equal(parsedLyricsfile[0].words[0].text, "world");
+assert.equal(parsedLyricsfile[0].words[0].start, 0.35);
+
 const invalidGap = {
   time: 10.0, text: "hello world",
   words: [
