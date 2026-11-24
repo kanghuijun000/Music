@@ -2735,7 +2735,7 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
     timingBasis:lyricTimingBasis,lyricOffsetSeconds,
-    videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+    videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
     effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
     track:currentLyricsTrack?{title:currentLyricsTrack.title||currentLyricsTrack.trackName||"",
       artist:currentLyricsTrack.artist||currentLyricsTrack.artistName||"",
