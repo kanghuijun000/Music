@@ -35,6 +35,7 @@ def _candidate_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "artist": str(event.get("artistName") or ""),
                 "time": _number(first.get("effectiveTime", first.get("time"))),
                 "fingerprint": str(first.get("textFingerprint") or ""),
+                "text_length": int(first.get("textLength", 1) or 0),
                 "synced": bool(event.get("synced")),
                 "line_count": int(event.get("lineCount") or 0),
                 "kind": "candidate",
@@ -46,6 +47,7 @@ def _candidate_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
                 "artist": str(event.get("artistName") or ""),
                 "time": _number(event.get("firstLineEffectiveTime", event.get("firstLineTime"))),
                 "fingerprint": str(event.get("firstLineFingerprint") or ""),
+                "text_length": int(event.get("firstLineTextLength", 1) or 0),
                 "synced": bool(event.get("synced")),
                 "line_count": 1 if _number(event.get("firstLineTime")) is not None else 0,
                 "kind": "selected",
@@ -57,11 +59,13 @@ def _candidate_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
                     "artist": str(alt.get("artistName") or ""),
                     "time": _number(alt.get("firstLineEffectiveTime", alt.get("firstLineTime"))),
                     "fingerprint": str(alt.get("firstLineFingerprint") or ""),
+                    "text_length": int(alt.get("firstLineTextLength", 1) or 0),
                     "synced": True,
                     "line_count": 1 if _number(alt.get("firstLineTime")) is not None else 0,
                     "kind": "alternative",
                 })
-    return [row for row in rows if row["synced"] and row["time"] is not None and row["fingerprint"]]
+    return [row for row in rows if row["synced"] and row["time"] is not None and row["fingerprint"]
+            and row.get("text_length", 1) > 0]
 
 
 def _deduplicate(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -91,7 +95,7 @@ def _clusters(rows: list[dict[str, Any]], tolerance: float) -> list[list[dict[st
     return groups
 
 
-def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.25) -> dict[str, Any]:
+def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.35) -> dict[str, Any]:
     rows = _deduplicate(_candidate_rows(result))
     by_fingerprint: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -143,7 +147,7 @@ def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.
     }
 
 
-def analyze_report(report: dict[str, Any], cluster_tolerance_seconds: float = 0.25) -> dict[str, Any]:
+def analyze_report(report: dict[str, Any], cluster_tolerance_seconds: float = 0.35) -> dict[str, Any]:
     results = report.get("results") or []
     analyzed = [analyze_result(item, cluster_tolerance_seconds) for item in results]
     return {
