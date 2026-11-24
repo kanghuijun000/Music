@@ -135,6 +135,26 @@ assert.equal(parsedLyricsfile[0].words.length, 1,
 assert.equal(parsedLyricsfile[0].words[0].text, "world");
 assert.equal(parsedLyricsfile[0].words[0].start, 0.35);
 
+const normalizeStart = source.indexOf("function normalizeVideoBoundLyricsToSongTimeline(");
+const normalizeEnd = source.indexOf("async function resolveReferenceVideoSongOffset(", normalizeStart);
+assert.ok(normalizeStart >= 0 && normalizeEnd > normalizeStart, "video timeline normalizer must exist");
+const normalizeContext = { finiteTimestampSeconds: context.finiteTimestampSeconds };
+vm.createContext(normalizeContext);
+vm.runInContext(source.slice(normalizeStart, normalizeEnd), normalizeContext);
+const normalizedVideoLines = normalizeContext.normalizeVideoBoundLyricsToSongTimeline([
+  { time: null, text: "missing line time", words: [] },
+  { time: 5, text: "valid line", words: [
+    { text: "missing word start", start: null, end: 6 },
+    { text: "valid word", start: 5.2, end: 5.5 }
+  ] }
+], 2);
+assert.equal(normalizedVideoLines.length, 1,
+  "video normalization must discard a line with a missing timestamp");
+assert.equal(normalizedVideoLines[0].time, 3);
+assert.equal(normalizedVideoLines[0].words[0].start, null,
+  "video normalization must preserve missing word times instead of converting them to zero");
+assert.equal(normalizedVideoLines[0].words[1].start, 3.2);
+
 const invalidGap = {
   time: 10.0, text: "hello world",
   words: [
