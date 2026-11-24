@@ -215,20 +215,22 @@ def main() -> int:
                 page.goto("https://kanghuijun000.github.io/?qa=1&qa_version=124",
                           wait_until="domcontentloaded", timeout=45000)
                 ready_deadline = time.monotonic() + 60
-                player_ready = False
+                qa_ready = False
                 while time.monotonic() < ready_deadline:
                     try:
-                        player_ready = bool(page.evaluate(
-                            "() => Boolean(window.__musicQa && window.__musicQa.snapshot().playerReady)"
+                        qa_ready = bool(page.evaluate(
+                            "() => Boolean(window.__musicQa && typeof window.__musicQa.setVideo === 'function')"
                         ))
                     except Exception:
-                        player_ready = False
-                    if player_ready:
+                        qa_ready = False
+                    if qa_ready:
                         break
                     time.sleep(0.25)
-                if not player_ready:
-                    raise TimeoutError("Music QA player did not become ready within 60 seconds")
-                # Start capture before selecting the video so the recording begins at video time zero.
+                if not qa_ready:
+                    raise TimeoutError("Music QA diagnostics bridge did not become ready within 60 seconds")
+                # Lyrics and provider diagnostics do not require the YouTube iframe to be playable.
+                # Capture audio opportunistically, but always run setVideo so embed-blocked videos
+                # still produce lyric-source and timing evidence.
                 if not args.skip_audio:
                     ffmpeg = subprocess.Popen([
                         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -260,6 +262,7 @@ def main() -> int:
                             renderer_mismatches += 1
                     time.sleep(0.2)
                 app_snapshot = page.evaluate("window.__musicQa.snapshot()")
+                report["app_player_ready"] = bool(app_snapshot.get("playerReady"))
                 report["app_lyrics_status"] = str(app_snapshot.get("lyricsStatus") or "")
                 report["app_lyric_track"] = app_snapshot.get("track") or {}
                 report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
