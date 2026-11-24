@@ -21,6 +21,8 @@ assert.equal(context.getVideoFirstLineCalibrationSeconds("TKDpOEkT0cY"), 0.15);
 assert.equal(context.getVideoFirstLineCalibrationSeconds("unlisted-video"), 0);
 assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("TKDpOEkT0cY") - 0.11) < 1e-9);
 assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("unlisted-video") - 0.26) < 1e-9);
+context.lyricOffsetSeconds = 0;
+context.lyricState.lines = [{ time: 0.30, text: "first lyric" }];
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "TKDpOEkT0cY"), 0,
   "the known late first line should advance by its video-only calibration");
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "unlisted-video"), -1,
