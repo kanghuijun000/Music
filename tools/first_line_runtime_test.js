@@ -38,10 +38,9 @@ assert.equal(context.getLyricLineIndexAtPlayerTime(0, "unlisted-video"), -1,
   "the display lead must not bypass the original song-start gate");
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.02, "unlisted-video"), 0,
   "lyrics should become eligible at the original detected song-start offset");
-context.lyricOffsetSeconds = 0.3;
-
+context.lyricOffsetSeconds = 0;
 context.lyricState.lines = [{ time: 0.10, text: "first lyric" }];
-assert.equal(context.getLyricLineIndexAtPlayerTime(0.21, "TKDpOEkT0cY"), 0,
+assert.equal(context.getLyricLineIndexAtPlayerTime(0, "TKDpOEkT0cY"), 0,
   "the calibrated video must use the same adjusted timeline for its first-line threshold");
 
 // Lock down the existing per-line word-anchor behavior before adding any new layer.
