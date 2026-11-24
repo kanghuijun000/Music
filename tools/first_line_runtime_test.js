@@ -73,6 +73,24 @@ const mismatchedWord = {
 assert.equal(context.getLyricLineStartTime(mismatchedWord), 10.0,
   "word timing must not adjust a line when the text prefix does not match");
 
+const nullWordStart = {
+  time: 0.20, text: "hello world",
+  words: [
+    { text: "hello", start: null, end: 0.10 },
+    { text: "world", start: 0.30, end: 0.48 }
+  ]
+};
+assert.equal(context.getLyricLineStartTime(nullWordStart), 0.20,
+  "a missing word timestamp must never be coerced to time zero and shift a lyric early");
+assert.ok(Number.isNaN(context.providerMillisecondsToSeconds(null)),
+  "a missing provider timestamp must remain missing");
+assert.ok(Number.isNaN(context.providerMillisecondsToSeconds("")),
+  "an empty provider timestamp must remain missing");
+assert.equal(context.providerMillisecondsToSeconds(0), 0,
+  "a real zero-millisecond timestamp must remain valid");
+assert.equal(context.providerMillisecondsToSeconds(50), 0.05,
+  "provider milliseconds must convert without losing 50ms precision");
+
 const invalidGap = {
   time: 10.0, text: "hello world",
   words: [
@@ -87,6 +105,9 @@ const evidence = context.getLyricWordTimingEvidence([lineAt50ms], 1);
 assert.equal(evidence.length, 1);
 assert.equal(evidence[0].wordCount, 2);
 assert.equal(evidence[0].firstWords[0].start, 10.05);
+const nullEvidence = context.getLyricWordTimingEvidence([nullWordStart], 1);
+assert.equal(nullEvidence[0].firstWords[0].start, null,
+  "QA must preserve missing word timestamps rather than reporting false zero values");
 assert.equal(evidence[0].appliedWordAnchorDelta, 0.05,
   "QA evidence must expose the actual applied word-anchor delta");
 assert.ok(Math.abs(context.getLyricLineStartTime(lineAt200ms) - 10.20) < 1e-9);
