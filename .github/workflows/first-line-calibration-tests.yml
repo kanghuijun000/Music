@@ -36,3 +36,4 @@ jobs:
         run: |
           python tools/lyric_audio_verify_test.py
           node tools/first_line_runtime_test.js
+          node tools/lyric_cache_alias_test.js
