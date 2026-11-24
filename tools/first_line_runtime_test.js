@@ -28,6 +28,16 @@ assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "unlisted-video"), -1,
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.30, "unlisted-video"), 0,
   "unlisted videos should still render at the original threshold");
 
+// Preserve the original song-start gate: the global 40ms display lead must
+// not expose lyrics before a detected song-start offset has been reached.
+context.lyricOffsetSeconds = 0.02;
+context.lyricState.lines = [{ time: 0, text: "first lyric" }];
+assert.equal(context.getLyricLineIndexAtPlayerTime(0, "unlisted-video"), -1,
+  "the display lead must not bypass the original song-start gate");
+assert.equal(context.getLyricLineIndexAtPlayerTime(0.02, "unlisted-video"), 0,
+  "lyrics should become eligible at the original detected song-start offset");
+context.lyricOffsetSeconds = 0.3;
+
 context.lyricState.lines = [{ time: 0.10, text: "first lyric" }];
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.21, "TKDpOEkT0cY"), 0,
   "the calibrated video must use the same adjusted timeline for its first-line threshold");
