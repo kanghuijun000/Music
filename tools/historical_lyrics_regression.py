@@ -145,6 +145,7 @@ def main():
                     "app_static_validation": detail.get("app_static_validation"),
                     "app_static_validation_passed": detail.get("app_static_validation_passed"),
                     "verification_status": detail.get("verification_status", "MISSING"),
+                    "app_player_ready": detail.get("app_player_ready", False),
                     "player_playing_seen": detail.get("player_playing_seen", False),
                     "player_time_advanced_seconds": detail.get("player_time_advanced_seconds", 0),
                     "youtube_player_error_code": detail.get("youtube_player_error_code"),
