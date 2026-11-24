@@ -88,14 +88,14 @@ def _clusters(rows: list[dict[str, Any]], tolerance: float) -> list[list[dict[st
     ordered = sorted(rows, key=lambda row: row["time"])
     groups: list[list[dict[str, Any]]] = []
     for row in ordered:
-        if not groups or row["time"] - statistics.median(x["time"] for x in groups[-1]) > tolerance:
+        if not groups or row["time"] - groups[-1][-1]["time"] > tolerance:
             groups.append([row])
         else:
             groups[-1].append(row)
     return groups
 
 
-def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.35) -> dict[str, Any]:
+def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.4) -> dict[str, Any]:
     rows = _deduplicate(_candidate_rows(result))
     by_fingerprint: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
