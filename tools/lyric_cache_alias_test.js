@@ -35,9 +35,16 @@ const names = [
   "restoreTimedLineSpacing",
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
+  "finiteTimestampSeconds",
   "getLyricLineStartTime",
 ];
 const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const missingTimestamp = {time:null,text:"누락된 시간",words:[]};
+if (!Number.isNaN(getLyricLineStartTime(missingTimestamp))) throw new Error("A missing line timestamp must not be coerced to zero");
+const nullWordTimestamp = {time:0.2,text:"hello world",words:[
+ {text:"hello",start:null,end:0.1},{text:"world",start:0.3,end:0.48}
+]};
+if (getLyricLineStartTime(nullWordTimestamp)!==0.2) throw new Error("A missing first-word timestamp shifted the line to zero");
 const noWordTiming = {time:2.0,text:"가사 한 줄",words:[]};
 if (getLyricLineStartTime(noWordTiming)!==2.0) throw new Error("Lines without word timing must retain their original timestamp");
 const alignedWordTiming = {time:2.0,text:"첫 음절로 시작",words:[
