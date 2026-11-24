@@ -18,8 +18,13 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
-// Timestamps are millisecond-based; absorb sub-millisecond IEEE-754 boundary noise only.
+// Timestamps are millisecond-based; tolerate at most 1 ms of floating-point boundary noise.
 const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
+function providerMillisecondsToSeconds(value){
+ if(value===null||value===undefined||value==="")return NaN;
+ const number=Number(value);
+ return Number.isFinite(number)?number/1000:NaN;
+}
 
 // Provisional user-reported per-upload first-lyric calibration. This is deliberately separate
 // from song/provider timestamps and from legacy manual video corrections.
@@ -50,7 +55,8 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  const base=Number(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
  const words=(Array.isArray(line?.words)?line.words:[])
-  .filter(word=>Number.isFinite(Number(word?.start))&&Number(word.start)>=0&&String(word?.text||"").trim())
+  .filter(word=>word?.start!==null&&word?.start!==undefined&&word?.start!==""&&
+   Number.isFinite(Number(word.start))&&Number(word.start)>=0&&String(word?.text||"").trim())
   .sort((a,b)=>Number(a.start)-Number(b.start));
  if(words.length<2)return base;
  const first=words[0],second=words[1];
@@ -88,7 +94,8 @@ function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
   const base=Number(line?.time);
   const effective=getLyricLineStartTime(line,source,index);
   const words=Array.isArray(line?.words)?line.words:[];
-  const round=value=>Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
+  const round=value=>value===null||value===undefined||value===""?null:
+   Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
   return {
    lineIndex:index,
    text:String(line?.text||""),
@@ -1917,17 +1924,19 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(valid){
    valid._source=provider;candidates.push(valid);
    const timingLines=Array.isArray(valid.ttmlLines)?valid.ttmlLines:[];
+   const safeSeconds=value=>value===null||value===undefined||value===""?null:
+    Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
    recordLyricFlow("lyric_candidate_timing_evidence",{
     provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
     duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
     videoBound:Boolean(valid._videoBound),lineCount:timingLines.length,
     firstLines:timingLines.slice(0,3).map(line=>({
-     time:Number.isFinite(Number(line?.time))?Number(Number(line.time).toFixed(3)):null,
+     time:safeSeconds(line?.time),
      text:String(line?.text||""),
      words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
       text:String(word?.text||""),
-      start:Number.isFinite(Number(word?.start))?Number(Number(word.start).toFixed(3)):null,
-      end:Number.isFinite(Number(word?.end))?Number(Number(word.end).toFixed(3)):null
+      start:safeSeconds(word?.start),
+      end:safeSeconds(word?.end)
      }))
     }))
    });
@@ -2292,9 +2301,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     const rawWords=Array.isArray(line.words)?line.words:
      (Array.isArray(item?.words?.[line.id])?item.words[line.id]:[]);
     const words=rawWords.map(word=>({
-     text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
+     text:String(word?.text||""),start:providerMillisecondsToSeconds(word?.start),
+     end:providerMillisecondsToSeconds(word?.end)
     })).filter(word=>word.text&&Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.end>word.start);
-    return {time:Number(line.start)/1000,text:String(line.text||""),words};
+    return {time:providerMillisecondsToSeconds(line?.start),text:String(line?.text||""),words};
    }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
    if(normalized.length>=2)return normalized;
    if(typeof item?.lrc==="string"){const parsed=parseLrc(item.lrc);if(parsed.length>=2)return parsed;}
