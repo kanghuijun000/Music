@@ -19,7 +19,7 @@ function recordLyricFlow(stage,details={}){
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
 
-// Verified per-upload first-lyric calibration. This is deliberately separate
+// Provisional user-reported per-upload first-lyric calibration. This is deliberately separate
 // from song/provider timestamps and from legacy manual video corrections.
 // Love Yourself (웅키 lyric upload) was reported about 150 ms late; only this
 // exact upload receives the small advance. Refine/remove only with new evidence.
