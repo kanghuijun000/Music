@@ -1916,6 +1916,21 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const valid=validate(item,extraArtists,extraTitles,provider);
   if(valid){
    valid._source=provider;candidates.push(valid);
+   const timingLines=Array.isArray(valid.ttmlLines)?valid.ttmlLines:[];
+   recordLyricFlow("lyric_candidate_timing_evidence",{
+    provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
+    duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
+    videoBound:Boolean(valid._videoBound),lineCount:timingLines.length,
+    firstLines:timingLines.slice(0,3).map(line=>({
+     time:Number.isFinite(Number(line?.time))?Number(Number(line.time).toFixed(3)):null,
+     text:String(line?.text||""),
+     words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
+      text:String(word?.text||""),
+      start:Number.isFinite(Number(word?.start))?Number(Number(word.start).toFixed(3)):null,
+      end:Number.isFinite(Number(word?.end))?Number(Number(word.end).toFixed(3)):null
+     }))
+    }))
+   });
    if(valid._synced&&Number(valid._score)>=220&&!firstVerifiedCandidateNotified){
     firstVerifiedCandidateNotified=true;recordLyricFlow("first_verified_synced_candidate",{requestId,provider,score:Number(valid._score)||0});
      
@@ -2407,6 +2422,18 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const selected=candidates.find(item=>item._synced&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2)||
   candidates.filter(item=>!item._synced&&String(item.plainLyrics||"").trim().length>=12)
    .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0]||null;
+ if(selected)recordLyricFlow("lyric_candidate_selected",{
+  provider:selected._source||"",trackName:selected.trackName||selected.title||"",
+  artistName:selected.artistName||selected.artist||"",score:Number(selected._score)||0,
+  synced:Boolean(selected._synced),videoBound:Boolean(selected._videoBound),
+  candidateCount:candidates.length,
+  alternatives:candidates.filter(item=>item!==selected&&item._synced).slice(0,5).map(item=>({
+   provider:item._source||"",trackName:item.trackName||item.title||"",
+   artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
+   videoBound:Boolean(item._videoBound),firstLineTime:Number.isFinite(Number(item.ttmlLines?.[0]?.time))?
+    Number(Number(item.ttmlLines[0].time).toFixed(3)):null
+  }))
+ });
  if(!selected){
   lyricState.loading=false;
   if(aiAssistButton)aiAssistButton.hidden=false;
