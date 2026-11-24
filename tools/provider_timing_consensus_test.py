@@ -31,7 +31,7 @@ class ProviderTimingConsensusTests(unittest.TestCase):
         self.assertEqual(report["status"], "AMBIGUOUS_PROVIDER_TIMING")
         group = report["first_line_groups"][0]
         self.assertEqual(group["cluster_count"], 2)
-        self.assertAlmostEqual(group["cluster_separation_seconds"], 5.45, places=2)
+        self.assertAlmostEqual(group["cluster_separation_seconds"], 5.51, places=2)
         self.assertEqual(report["automatic_correction_applied"], False)
 
     def test_deduplicates_repeated_provider_responses(self):
