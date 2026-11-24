@@ -21,7 +21,8 @@ const LYRIC_LEAD_SECONDS=0.04;
 // Timestamps are millisecond-based; tolerate at most 1 ms of floating-point boundary noise.
 const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
 function providerMillisecondsToSeconds(value){
- if(value===null||value===undefined||value==="")return NaN;
+ if(value===null||value===undefined||typeof value==="boolean"||
+  (typeof value==="string"&&!value.trim()))return NaN;
  const number=Number(value);
  return Number.isFinite(number)?number/1000:NaN;
 }
@@ -55,8 +56,9 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  const base=Number(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
  const words=(Array.isArray(line?.words)?line.words:[])
-  .filter(word=>word?.start!==null&&word?.start!==undefined&&word?.start!==""&&
-   Number.isFinite(Number(word.start))&&Number(word.start)>=0&&String(word?.text||"").trim())
+  .filter(word=>word?.start!==null&&word?.start!==undefined&&typeof word.start!=="boolean"&&
+   !(typeof word.start==="string"&&!word.start.trim())&&Number.isFinite(Number(word.start))&&
+   Number(word.start)>=0&&String(word?.text||"").trim())
   .sort((a,b)=>Number(a.start)-Number(b.start));
  if(words.length<2)return base;
  const first=words[0],second=words[1];
@@ -94,7 +96,8 @@ function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
   const base=Number(line?.time);
   const effective=getLyricLineStartTime(line,source,index);
   const words=Array.isArray(line?.words)?line.words:[];
-  const round=value=>value===null||value===undefined||value===""?null:
+  const round=value=>value===null||value===undefined||typeof value==="boolean"||
+   (typeof value==="string"&&!value.trim())?null:
    Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
   return {
    lineIndex:index,
@@ -1924,7 +1927,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   if(valid){
    valid._source=provider;candidates.push(valid);
    const timingLines=Array.isArray(valid.ttmlLines)?valid.ttmlLines:[];
-   const safeSeconds=value=>value===null||value===undefined||value===""?null:
+   const safeSeconds=value=>value===null||value===undefined||typeof value==="boolean"||
+    (typeof value==="string"&&!value.trim())?null:
     Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
    recordLyricFlow("lyric_candidate_timing_evidence",{
     provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
