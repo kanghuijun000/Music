@@ -136,6 +136,13 @@ assert.equal(context.getLyricLineStartTime(invalidGap), 10.0,
 const evidence = context.getLyricWordTimingEvidence([lineAt50ms], 1);
 assert.equal(evidence.length, 1);
 assert.equal(evidence[0].wordCount, 2);
+assert.equal(context.getLyricTextFingerprint("Hello world"), context.getLyricTextFingerprint("hello-world"),
+  "normalized lyric fingerprints must match equivalent text without storing lyric text");
+assert.ok(evidence[0].textFingerprint);
+assert.equal(Object.hasOwn(evidence[0], "text"), false,
+  "QA evidence must not export lyric line text");
+assert.equal(Object.hasOwn(evidence[0].firstWords[0], "text"), false,
+  "QA evidence must not export lyric word text");
 assert.equal(evidence[0].firstWords[0].start, 10.05);
 const nullEvidence = context.getLyricWordTimingEvidence([nullWordStart], 1);
 assert.equal(nullEvidence[0].firstWords[0].start, null,
