@@ -30,6 +30,9 @@ const names = [
   "canonicalArtistIdentity",
   "artistIdentityMatches",
   "getLyricsIdentity",
+  "expectedTrackIdentity",
+  "selectIdentifiedTrack",
+  "selectTrackStart",
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
   "restoreTimedLineSpacing",
@@ -306,6 +309,21 @@ const wrongTitleVideo = {...targetVideo, id: "wrong-title", title: "다른 노�
 if (sharedLyricCacheMatches(correctCache, wrongTitleVideo)) {
   throw new Error("Cache accepted a different song title");
 }
-console.log("PASS: cross-upload artist alias reuse remains title- and artist-verified");
+const trackVideo = {id:"track-test",title:"스탠딩 에그 - 오래된 노래",channelTitle:"Standing Egg",duration:240};
+const missingStartTrack = {title:"오래된 노래",artist:"스탠딩 에그",confidence:0.95,duration:230,timestamp:null};
+if (selectTrackStart([missingStartTrack], trackVideo) !== null) {
+  throw new Error("TrackID accepted a missing timestamp as a zero-second song start");
+}
+if (selectIdentifiedTrack([missingStartTrack], trackVideo) !== null) {
+  throw new Error("Audio identification accepted a missing timestamp as a zero-second song start");
+}
+const zeroStartTrack = {...missingStartTrack,timestamp:0};
+if (selectTrackStart([zeroStartTrack], trackVideo)?.timestamp !== 0) {
+  throw new Error("A genuine zero-second TrackID start was incorrectly rejected");
+}
+if (selectIdentifiedTrack([zeroStartTrack], trackVideo)?.timestamp !== 0) {
+  throw new Error("A genuine zero-second audio-identification start was incorrectly rejected");
+}
+console.log("PASS: cross-upload cache identity and strict TrackID timestamp validation");
 `;
 vm.runInNewContext(code, {console});
