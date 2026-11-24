@@ -27,4 +27,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Run identity and first-line timing tests
-        run: python tools/lyric_audio_verify_test.py
+        run: |
+          python tools/lyric_audio_verify_test.py
+          node tools/first_line_runtime_test.js
