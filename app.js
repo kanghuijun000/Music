@@ -88,7 +88,7 @@ function getLyricLineStartTime(line,lines=null,index=-1){
 }
 
 function getLyricTextFingerprint(value){
- const normalized=String(value||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+ const normalized=String(value||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
  if(!normalized)return "";
  let hash=2166136261;
  for(let i=0;i<normalized.length;i++){hash^=normalized.charCodeAt(i);hash=Math.imul(hash,16777619);}
