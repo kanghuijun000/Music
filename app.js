@@ -20,10 +20,14 @@ function recordLyricFlow(stage,details={}){
 const LYRIC_LEAD_SECONDS=0.04;
 // Timestamps are millisecond-based; tolerate at most 1 ms of floating-point boundary noise.
 const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
-function providerMillisecondsToSeconds(value){
+function finiteTimestampSeconds(value){
  if(value===null||value===undefined||typeof value==="boolean"||
   (typeof value==="string"&&!value.trim()))return NaN;
  const number=Number(value);
+ return Number.isFinite(number)?number:NaN;
+}
+function providerMillisecondsToSeconds(value){
+ const number=finiteTimestampSeconds(value);
  return Number.isFinite(number)?number/1000:NaN;
 }
 
@@ -53,7 +57,7 @@ function getVideoManualAdvanceSeconds(videoId){
 const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.30;
 const LYRIC_WORD_ANCHOR_LEGACY_SECONDS=0.12;
 function getLyricLineStartTime(line,lines=null,index=-1){
- const base=Number(line?.time);
+ const base=finiteTimestampSeconds(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
  const words=(Array.isArray(line?.words)?line.words:[])
   .filter(word=>word?.start!==null&&word?.start!==undefined&&typeof word.start!=="boolean"&&
@@ -652,7 +656,7 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
  if(!expected.title||!expected.artist)return null;
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
   const title=trackSimilarity(track.title,expected.title),artist=trackSimilarity(track.artist,expected.artist);
-  const confidence=Number(track.confidence)||0,duration=Number(track.duration)||0,timestamp=Number(track.timestamp);
+  const confidence=Number(track.confidence)||0,duration=Number(track.duration)||0,timestamp=finiteTimestampSeconds(track.timestamp);
   // A YouTube upload may contain an edited intro before the identified song.
   // Permit the video to be longer than the song, but keep the reverse mismatch tight.
   const durationMatches=!duration||!videoDuration||
@@ -803,7 +807,7 @@ function selectIdentifiedTrack(tracks,video){
  const videoDuration=Number(video?.duration)||0;
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
   const title=String(track?.title||"").trim(),artist=String(track?.artist||"").trim();
-  const confidence=Number(track?.confidence),duration=Number(track?.duration),timestamp=Number(track?.timestamp);
+  const confidence=Number(track?.confidence),duration=Number(track?.duration),timestamp=finiteTimestampSeconds(track?.timestamp);
   return {track,title,artist,confidence,duration,timestamp,key:trackText(title)+"|"+trackText(artist)};
  }).filter(item=>item.title&&item.artist&&!item.track?.isUnknown&&Number.isFinite(item.confidence)&&item.confidence>=0.80&&
   Number.isFinite(item.duration)&&item.duration>=45&&Number.isFinite(item.timestamp)&&item.timestamp>=0&&
@@ -1864,7 +1868,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)&&!exactVideoIdentityWithoutArtist){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   }
   const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
-  let lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
+  let lines=extractLines(item).filter(line=>line&&Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
   const spacing=normalizeTimedLyricsSpacing(lines,plain.join("\n"));
