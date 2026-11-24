@@ -73,6 +73,8 @@ near_early = verifier.measure_first_line_anchor(
     5.0, [(0.94, 4.85, 5.20, 0, 2)], 0.0)
 assert near_early["verified"] and abs(near_early["first_line_signed_error_seconds"] + 0.15) < 1e-9, near_early
 assert near_late["automatic_correction_applied"] is False, near_late
+assert near_late["calibration_eligible"] is False, near_late
+assert near_late["measurement_uncertainty_seconds"] is None, near_late
 assert not verifier.measure_first_line_anchor(
     5.0, [(0.60, 5.05, 5.42, 0, 2)], 0.0)["verified"], "low-confidence phrase match must not be accepted"
 assert not verifier.measure_first_line_anchor(
