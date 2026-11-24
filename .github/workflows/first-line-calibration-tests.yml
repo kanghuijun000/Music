@@ -18,6 +18,8 @@ on:
       - "tools/lyric_audio_verify.py"
       - "tools/lyric_audio_verify_test.py"
       - "tools/first_line_runtime_test.js"
+      - "tools/provider_timing_consensus.py"
+      - "tools/provider_timing_consensus_test.py"
       - "app.js"
 
 permissions:
