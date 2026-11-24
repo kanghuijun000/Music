@@ -1951,7 +1951,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    recordLyricFlow("lyric_candidate_timing_evidence",{
     provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
     duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
-    videoBound:Boolean(valid._videoBound),lineCount:timingLines.length,
+    videoBound:Boolean(valid._videoBound),sameVideoSource:Boolean(valid._sameVideoSource),
+    upstreamProvider:String(valid._liriqoProvider||valid.upstreamProvider||""),lineCount:timingLines.length,
     firstLines:timingLines.slice(0,3).map(line=>({
      time:safeSeconds(line?.time),
      textFingerprint:getLyricTextFingerprint(line?.text),
@@ -2464,7 +2465,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   alternatives:candidates.filter(item=>item!==selected&&item._synced).slice(0,5).map(item=>({
    provider:item._source||"",trackName:item.trackName||item.title||"",
    artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
-   videoBound:Boolean(item._videoBound),firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
+   videoBound:Boolean(item._videoBound),sameVideoSource:Boolean(item._sameVideoSource),
+   upstreamProvider:String(item._liriqoProvider||item.upstreamProvider||""),
+   firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
     Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null
   }))
  });
