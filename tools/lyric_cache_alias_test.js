@@ -309,7 +309,7 @@ const wrongTitleVideo = {...targetVideo, id: "wrong-title", title: "다른 노�
 if (sharedLyricCacheMatches(correctCache, wrongTitleVideo)) {
   throw new Error("Cache accepted a different song title");
 }
-const trackVideo = {id:"track-test",title:"스탠딩 에그 - 오래된 노래",channelTitle:"Standing Egg",duration:240};
+const trackVideo = sourceVideo;
 const missingStartTrack = {title:"오래된 노래",artist:"스탠딩 에그",confidence:0.95,duration:230,timestamp:null};
 if (selectTrackStart([missingStartTrack], trackVideo) !== null) {
   throw new Error("TrackID accepted a missing timestamp as a zero-second song start");
