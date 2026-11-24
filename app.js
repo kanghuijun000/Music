@@ -2469,6 +2469,14 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   artistName:selected.artistName||selected.artist||"",score:Number(selected._score)||0,
   synced:Boolean(selected._synced),videoBound:Boolean(selected._videoBound),
   candidateCount:candidates.length,
+  firstLineTime:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   finiteTimestampSeconds(selected.ttmlLines[0]?.time):null,
+  firstLineEffectiveTime:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   getLyricLineStartTime(selected.ttmlLines[0],selected.ttmlLines,0):null,
+  firstLineFingerprint:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   getLyricTextFingerprint(selected.ttmlLines[0]?.text):"",
+  firstLineTextLength:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   String(selected.ttmlLines[0]?.text||"").length:0,
   alternatives:candidates.filter(item=>item!==selected&&item._synced).slice(0,5).map(item=>({
    provider:item._source||"",trackName:item.trackName||item.title||"",
    artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
@@ -2830,6 +2838,12 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
     lines:(lyricState.lines||[]).map((line,index)=>({time:getLyricLineStartTime(line,lyricState.lines,index),baseTime:finiteTimestampSeconds(line.time),microAdjustmentSeconds:Number((getLyricLineStartTime(line,lyricState.lines,index)-finiteTimestampSeconds(line.time)).toFixed(3)),text:String(line.text||"")})),
+    firstLineTiming:lyricState.lines?.length?{
+     baseTime:finiteTimestampSeconds(lyricState.lines[0]?.time),
+     effectiveTime:getLyricLineStartTime(lyricState.lines[0],lyricState.lines,0),
+     textFingerprint:getLyricTextFingerprint(lyricState.lines[0]?.text),
+     wordCount:Array.isArray(lyricState.lines[0]?.words)?lyricState.lines[0].words.length:0
+    }:null,
     wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
     wordSynced:Boolean(lyricState.wordSynced),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
