@@ -30,14 +30,38 @@ const names = [
   "canonicalArtistIdentity",
   "artistIdentityMatches",
   "getLyricsIdentity",
+  "expectedTrackIdentity",
+  "selectIdentifiedTrack",
+  "selectTrackStart",
   "cachedArtistIdentityNames",
   "sharedLyricCacheMatches",
   "restoreTimedLineSpacing",
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
+  "finiteTimestampSeconds",
+  "normalizeVideoBoundLyricsToSongTimeline",
+  "getVideoLyricOffset",
   "getLyricLineStartTime",
 ];
 const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const missingOffsetLines = normalizeVideoBoundLyricsToSongTimeline([{time:10,text:"line"}], null);
+if (missingOffsetLines.length !== 0) throw new Error("A missing video-to-song offset must not promote video-bound lyrics");
+const normalizedWithMissingWord = normalizeVideoBoundLyricsToSongTimeline([
+ {time:null,text:"missing line"},
+ {time:10,text:"valid line",words:[{text:"missing",start:null,end:null},{text:"valid",start:10.1,end:10.3}]}
+], 5);
+if (normalizedWithMissingWord.length !== 1 || normalizedWithMissingWord[0].time !== 5) throw new Error("Missing line timestamps must be rejected during timeline normalization");
+if (normalizedWithMissingWord[0].words[0].start !== null) throw new Error("Missing word timestamps must not be rewritten to zero during normalization");
+if (Math.abs(normalizedWithMissingWord[0].words[1].start - 5.1) > 1e-9) throw new Error("Valid word timestamps must still be normalized by the detected offset");
+if (getVideoLyricOffset("video", null) !== null) throw new Error("A missing TrackID offset must not become a zero-second offset");
+if (getVideoLyricOffset("video", "") !== null) throw new Error("An empty TrackID offset must remain missing");
+if (getVideoLyricOffset("video", 0) !== 0) throw new Error("A genuine zero-second TrackID offset must remain valid");
+const missingTimestamp = {time:null,text:"누락된 시간",words:[]};
+if (!Number.isNaN(getLyricLineStartTime(missingTimestamp))) throw new Error("A missing line timestamp must not be coerced to zero");
+const nullWordTimestamp = {time:0.2,text:"hello world",words:[
+ {text:"hello",start:null,end:0.1},{text:"world",start:0.3,end:0.48}
+]};
+if (getLyricLineStartTime(nullWordTimestamp)!==0.2) throw new Error("A missing first-word timestamp shifted the line to zero");
 const noWordTiming = {time:2.0,text:"가사 한 줄",words:[]};
 if (getLyricLineStartTime(noWordTiming)!==2.0) throw new Error("Lines without word timing must retain their original timestamp");
 const alignedWordTiming = {time:2.0,text:"첫 음절로 시작",words:[
@@ -299,6 +323,21 @@ const wrongTitleVideo = {...targetVideo, id: "wrong-title", title: "다른 노�
 if (sharedLyricCacheMatches(correctCache, wrongTitleVideo)) {
   throw new Error("Cache accepted a different song title");
 }
-console.log("PASS: cross-upload artist alias reuse remains title- and artist-verified");
+const trackVideo = sourceVideo;
+const missingStartTrack = {title:"오래된 노래",artist:"스탠딩 에그",confidence:0.95,duration:230,timestamp:null};
+if (selectTrackStart([missingStartTrack], trackVideo) !== null) {
+  throw new Error("TrackID accepted a missing timestamp as a zero-second song start");
+}
+if (selectIdentifiedTrack([missingStartTrack], trackVideo) !== null) {
+  throw new Error("Audio identification accepted a missing timestamp as a zero-second song start");
+}
+const zeroStartTrack = {...missingStartTrack,timestamp:0};
+if (selectTrackStart([zeroStartTrack], trackVideo)?.timestamp !== 0) {
+  throw new Error("A genuine zero-second TrackID start was incorrectly rejected");
+}
+if (selectIdentifiedTrack([zeroStartTrack], trackVideo)?.timestamp !== 0) {
+  throw new Error("A genuine zero-second audio-identification start was incorrectly rejected");
+}
+console.log("PASS: cross-upload cache identity and strict TrackID timestamp validation");
 `;
 vm.runInNewContext(code, {console});
