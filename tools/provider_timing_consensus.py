@@ -140,7 +140,8 @@ def analyze_result(result: dict[str, Any], cluster_tolerance_seconds: float = 0.
         "status": (
             "AMBIGUOUS_PROVIDER_TIMING"
             if any(group["ambiguous"] for group in analyses)
-            else "NO_MULTI_CLUSTER_CONFLICT"
+            else "SINGLE_TIMING_CLUSTER" if rows
+            else "NO_TIMING_EVIDENCE"
         ),
         "automatic_correction_applied": False,
         "note": "Timestamp disagreement is diagnostic only; no audio-grounded correction is inferred.",
