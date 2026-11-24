@@ -153,7 +153,7 @@ function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
 let lyricPreviewRenderedToken=0;
 let lyricLastObservedPlayerTime=null;
 function getLyricTransitionDuration(index){
- const start=Number(lyricState.lines[index]?.time),next=Number(lyricState.lines[index+1]?.time);
+ const start=finiteTimestampSeconds(lyricState.lines[index]?.time),next=finiteTimestampSeconds(lyricState.lines[index+1]?.time);
  if(!Number.isFinite(start)||!Number.isFinite(next))return 180;
  const gap=next-start;
  if(gap<=0)return 110;
@@ -853,7 +853,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  // Video-bound lyrics are normalized by applyTrackOffset before they are reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp),identified);
  const hasVerifiedSyncedLyrics=lyricState.lines.length>=2&&
-  lyricState.lines.every(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim());
+  lyricState.lines.every(line=>Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim());
  // A same-track synced result is already the best usable result; never replace it
  // with a plain-text response from a later provider search.
  if(hasLyrics&&sameTrack&&hasVerifiedSyncedLyrics){
@@ -1452,7 +1452,7 @@ function renderLyrics(){
   if(index<0)lyricPreviewRenderedToken=lyricLoadToken;
   if(!lyricFlowAudit.renderedRequests.includes(lyricLoadToken)){
    lyricFlowAudit.renderedRequests.push(lyricLoadToken);
-   recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:Number(lyricState.lines[0]?.time)||0,currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
+   recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:finiteTimestampSeconds(lyricState.lines[0]?.time),currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
   }
  el.lyricsView.replaceChildren();
  const start=index<0?0:Math.max(0,index-1),end=index<0?Math.min(lyricState.lines.length,3):Math.min(lyricState.lines.length,index+2);
@@ -2464,8 +2464,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   alternatives:candidates.filter(item=>item!==selected&&item._synced).slice(0,5).map(item=>({
    provider:item._source||"",trackName:item.trackName||item.title||"",
    artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
-   videoBound:Boolean(item._videoBound),firstLineTime:Number.isFinite(Number(item.ttmlLines?.[0]?.time))?
-    Number(Number(item.ttmlLines[0].time).toFixed(3)):null
+   videoBound:Boolean(item._videoBound),firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
+    Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null
   }))
  });
  if(!selected){
