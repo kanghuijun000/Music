@@ -10,7 +10,7 @@ function recordLyricFlow(stage,details={}){
  let playerTime=null;try{const value=Number(ytPlayer?.getCurrentTime?.());if(Number.isFinite(value))playerTime=Number(value.toFixed(3));}catch(_){}
  lyricFlowAudit.events.push({stage,at:new Date().toISOString(),elapsedMs:Date.now()-lyricFlowAudit.startedAt,playerTime,
   loading:Boolean(lyricState.loading),lineCount:lyricState.lines.length,offsetSeconds:Number(lyricOffsetSeconds)||0,
-  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
   effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   timingBasis:lyricTimingBasis,...details});
  if(lyricFlowAudit.events.length>60)lyricFlowAudit.events.shift();
@@ -18,6 +18,18 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
+
+// Verified per-upload first-lyric calibration. This is deliberately separate
+// from song/provider timestamps and from legacy manual video corrections.
+// Love Yourself (웅키 lyric upload) was reported about 150 ms late; only this
+// exact upload receives the small advance. Refine/remove only with new evidence.
+const FIRST_LINE_CALIBRATION_SECONDS_BY_VIDEO=Object.freeze({
+ "TKDpOEkT0cY":0.15
+});
+function getVideoFirstLineCalibrationSeconds(videoId){
+ const value=FIRST_LINE_CALIBRATION_SECONDS_BY_VIDEO[String(videoId||"")];
+ return Number.isFinite(value)?value:0;
+}
 
 // Upload-specific playback-layer corrections only; never rewrite shared song lyrics.
 // Positive values advance lyric display; negative values delay it.
@@ -66,7 +78,7 @@ function getLyricLineStartTime(line,lines=null,index=-1){
 }
 
 function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
- return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
+ return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS-getVideoFirstLineCalibrationSeconds(videoId);
 }
 function getLyricTimelineTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
@@ -78,7 +90,7 @@ function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideo
 }
 function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
- const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
+ const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId)+getVideoFirstLineCalibrationSeconds(videoId);
  if(!Number.isFinite(relative)||relative<0)return -1;
  const lyricTime=getLyricTimelineTime(time,videoId);
  if(!Number.isFinite(lyricTime))return -1;
@@ -1515,7 +1527,7 @@ function getPlaybackAuditReport(){
   lyricTrack:currentLyricsTrack?{title:currentLyricsTrack.title,artist:currentLyricsTrack.artist,duration:currentLyricsTrack.duration,source:currentLyricsTrack.source,upstreamProvider:currentLyricsTrack.upstreamProvider}:null,lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice():[],startedAt:lyricFlowAudit.startedAt||null},
    
   timingBasis:lyricTimingBasis,lyricOffsetSeconds,
-  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
   effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
   playerState:ytPlayer?.getPlayerState?.()??null,playerTime:Number(ytPlayer?.getCurrentTime?.()||0),samples:playbackAudit.samples,
