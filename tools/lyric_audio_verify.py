@@ -160,6 +160,9 @@ def measure_first_line_anchor(line_time, candidates, app_offset, max_audio_time=
         "first_line_suggested_offset_delta_seconds":round(residual,3),
         "first_line_text_similarity":round(similarity,3),
         "first_line_matched_word_count":last-first+1,
+        "measurement_uncertainty_seconds":None,
+        "calibration_eligible":False,
+        "calibration_block_reason":"ASR timestamp uncertainty has not been independently measured or repeat-confirmed",
         "automatic_correction_applied":False,
         "warning":"ASR word timestamps are diagnostic estimates; confirm independently before changing playback timing."
     }
