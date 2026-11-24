@@ -18,6 +18,9 @@ class ProviderTimingConsensusTests(unittest.TestCase):
                  "lineCount": 59, "firstLines": [{"time": 16.32, "effectiveTime": 16.32, "textFingerprint": "same"}]},
                 {"stage": "lyric_candidate_timing_evidence", "provider": "LRCLIB",
                  "trackName": "Sold Out", "artistName": "Hawk Nelson", "synced": True,
+                 "lineCount": 59, "firstLines": [{"time": 16.68, "effectiveTime": 16.68, "textFingerprint": "same"}]},
+                {"stage": "lyric_candidate_timing_evidence", "provider": "LRCLIB",
+                 "trackName": "Sold Out", "artistName": "Hawk Nelson", "synced": True,
                  "lineCount": 59, "firstLines": [{"time": 21.83, "effectiveTime": 21.83, "textFingerprint": "same"}]},
                 {"stage": "lyric_candidate_timing_evidence", "provider": "LRCLIB",
                  "trackName": "Sold Out", "artistName": "Hawk Nelson", "synced": True,
@@ -28,7 +31,7 @@ class ProviderTimingConsensusTests(unittest.TestCase):
         self.assertEqual(report["status"], "AMBIGUOUS_PROVIDER_TIMING")
         group = report["first_line_groups"][0]
         self.assertEqual(group["cluster_count"], 2)
-        self.assertAlmostEqual(group["cluster_separation_seconds"], 5.57, places=2)
+        self.assertAlmostEqual(group["cluster_separation_seconds"], 5.45, places=2)
         self.assertEqual(report["automatic_correction_applied"], False)
 
     def test_deduplicates_repeated_provider_responses(self):
@@ -45,6 +48,8 @@ class ProviderTimingConsensusTests(unittest.TestCase):
              "firstLines": [{"time": 1.0, "textFingerprint": "same"}]},
             {"stage": "lyric_candidate_timing_evidence", "provider": "B", "synced": True,
              "firstLines": [{"time": 2.0, "textFingerprint": ""}]},
+            {"stage": "lyric_candidate_timing_evidence", "provider": "C", "synced": True,
+             "firstLines": [{"time": 2.0, "textFingerprint": "empty", "textLength": 0}]},
         ]}
         report = analyze_result(result)
         self.assertEqual(report["candidate_count"], 0)
