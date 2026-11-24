@@ -87,8 +87,16 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  return candidate;
 }
 
+function getLyricTextFingerprint(value){
+ const normalized=String(value||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+ if(!normalized)return "";
+ let hash=2166136261;
+ for(let i=0;i<normalized.length;i++){hash^=normalized.charCodeAt(i);hash=Math.imul(hash,16777619);}
+ return (hash>>>0).toString(16).padStart(8,"0");
+}
+
 // Read-only QA evidence for the existing word-anchor refinement.
-// This helper never changes lyric timestamps or playback timing.
+// Fingerprints let QA compare text alignment without exporting lyric text.
 function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
  const source=Array.isArray(lines)?lines:[];
  const count=Math.max(0,Math.min(10,Number(limit)||5));
@@ -101,13 +109,15 @@ function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
    Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
   return {
    lineIndex:index,
-   text:String(line?.text||""),
+   textFingerprint:getLyricTextFingerprint(line?.text),
+   textLength:String(line?.text||"").length,
    baseLineTime:round(base),
    effectiveLineTime:round(effective),
    appliedWordAnchorDelta:round(Number.isFinite(base)&&Number.isFinite(effective)?effective-base:NaN),
    wordCount:words.length,
    firstWords:words.slice(0,6).map(word=>({
-    text:String(word?.text||""),start:round(word?.start),end:round(word?.end)
+    textFingerprint:getLyricTextFingerprint(word?.text),
+    textLength:String(word?.text||"").length,start:round(word?.start),end:round(word?.end)
    }))
   };
  });
@@ -1936,9 +1946,11 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     videoBound:Boolean(valid._videoBound),lineCount:timingLines.length,
     firstLines:timingLines.slice(0,3).map(line=>({
      time:safeSeconds(line?.time),
-     text:String(line?.text||""),
+     textFingerprint:getLyricTextFingerprint(line?.text),
+     textLength:String(line?.text||"").length,
      words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
-      text:String(word?.text||""),
+      textFingerprint:getLyricTextFingerprint(word?.text),
+      textLength:String(word?.text||"").length,
       start:safeSeconds(word?.start),
       end:safeSeconds(word?.end)
      }))
