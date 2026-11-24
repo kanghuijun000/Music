@@ -1364,14 +1364,14 @@ function parseLyricsfile(source){
    saveLine();line={text:parseYamlText(s.slice(7).trim()),time:NaN,end:NaN,words:[]};insideWords=false;continue;
   }
   if(!line)continue;
-  if(indent===4&&s.startsWith("start_ms:")){line.time=Number(s.slice(9).trim())/1000;continue;}
-  if(indent===4&&s.startsWith("end_ms:")){line.end=Number(s.slice(7).trim())/1000;continue;}
+  if(indent===4&&s.startsWith("start_ms:")){line.time=providerMillisecondsToSeconds(s.slice(9).trim());continue;}
+  if(indent===4&&s.startsWith("end_ms:")){line.end=providerMillisecondsToSeconds(s.slice(7).trim());continue;}
   if(indent===4&&s==="words:"){insideWords=true;continue;}
   if(indent===6&&insideWords&&s.startsWith("- text:")){
    saveWord();word={text:parseYamlText(s.slice(7).trim()),start:NaN,end:NaN};continue;
   }
-  if(indent===8&&insideWords&&word&&s.startsWith("start_ms:")){word.start=Number(s.slice(9).trim())/1000;continue;}
-  if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=Number(s.slice(7).trim())/1000;continue;}
+  if(indent===8&&insideWords&&word&&s.startsWith("start_ms:")){word.start=providerMillisecondsToSeconds(s.slice(9).trim());continue;}
+  if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=providerMillisecondsToSeconds(s.slice(7).trim());continue;}
  }
  saveLine();
  return output.filter(item=>Number.isFinite(item.time)&&!isCreditMetadata(item.text)).sort((a,b)=>a.time-b.time);
