@@ -7,12 +7,16 @@ on:
       - ".github/workflows/first-line-calibration-tests.yml"
       - "tools/lyric_audio_verify.py"
       - "tools/lyric_audio_verify_test.py"
+      - "tools/first_line_runtime_test.js"
+      - "app.js"
   push:
-    branches: [sync-final-calibration, sync-final-calibration-native]
+    branches: [sync-final-calibration, sync-final-calibration-native, sync-microfilter-final, sync-microfilter-final-native]
     paths:
       - ".github/workflows/first-line-calibration-tests.yml"
       - "tools/lyric_audio_verify.py"
       - "tools/lyric_audio_verify_test.py"
+      - "tools/first_line_runtime_test.js"
+      - "app.js"
 
 permissions:
   contents: read
