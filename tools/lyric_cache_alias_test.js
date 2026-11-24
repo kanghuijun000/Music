@@ -39,10 +39,20 @@ const names = [
   "normalizeTimedLyricsSpacing",
   "preserveTimedTextSpacing",
   "finiteTimestampSeconds",
+  "normalizeVideoBoundLyricsToSongTimeline",
   "getVideoLyricOffset",
   "getLyricLineStartTime",
 ];
 const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
+const missingOffsetLines = normalizeVideoBoundLyricsToSongTimeline([{time:10,text:"line"}], null);
+if (missingOffsetLines.length !== 0) throw new Error("A missing video-to-song offset must not promote video-bound lyrics");
+const normalizedWithMissingWord = normalizeVideoBoundLyricsToSongTimeline([
+ {time:null,text:"missing line"},
+ {time:10,text:"valid line",words:[{text:"missing",start:null,end:null},{text:"valid",start:10.1,end:10.3}]}
+], 5);
+if (normalizedWithMissingWord.length !== 1 || normalizedWithMissingWord[0].time !== 5) throw new Error("Missing line timestamps must be rejected during timeline normalization");
+if (normalizedWithMissingWord[0].words[0].start !== null) throw new Error("Missing word timestamps must not be rewritten to zero during normalization");
+if (Math.abs(normalizedWithMissingWord[0].words[1].start - 5.1) > 1e-9) throw new Error("Valid word timestamps must still be normalized by the detected offset");
 if (getVideoLyricOffset("video", null) !== null) throw new Error("A missing TrackID offset must not become a zero-second offset");
 if (getVideoLyricOffset("video", "") !== null) throw new Error("An empty TrackID offset must remain missing");
 if (getVideoLyricOffset("video", 0) !== 0) throw new Error("A genuine zero-second TrackID offset must remain valid");
