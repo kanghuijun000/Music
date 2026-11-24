@@ -165,6 +165,16 @@ const invalidGap = {
 assert.equal(context.getLyricLineStartTime(invalidGap), 10.0,
   "implausible gaps between the first two words must be rejected");
 
+const validLineBeforeMissingNeighbor = [
+  { time: 10.0, text: "hello world", words: [
+    { text: "hello", start: 10.05, end: 10.18 },
+    { text: "world", start: 10.22, end: 10.48 }
+  ] },
+  { time: null, text: "invalid neighbor" }
+];
+assert.ok(Math.abs(context.getLyricLineStartTime(validLineBeforeMissingNeighbor[0], validLineBeforeMissingNeighbor, 0) - 10.05) < 1e-9,
+  "a missing adjacent-line timestamp must not falsely block a valid word anchor");
+
 const evidence = context.getLyricWordTimingEvidence([lineAt50ms], 1);
 assert.equal(evidence.length, 1);
 assert.equal(evidence[0].wordCount, 2);
