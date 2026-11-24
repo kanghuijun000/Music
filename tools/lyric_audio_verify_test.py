@@ -63,4 +63,19 @@ newjeans_identity, newjeans_result = verify_parsed_identity(
 assert newjeans_identity[1] == "Ditto" and norm(newjeans_identity[2]) == norm("NewJeans"), newjeans_identity
 assert newjeans_result["identity_verified"], newjeans_result
 
-print("PASS: exact collaboration, unrelated artist rejection, VEVO normalization, and official-video title parsing")
+
+# First-line calibration diagnostics must detect small signed offsets without
+# treating them as automatic corrections.
+near_late = verifier.measure_first_line_anchor(
+    5.0, [(0.91, 5.05, 5.42, 0, 2)], 0.0)
+assert near_late["verified"] and abs(near_late["first_line_signed_error_seconds"] - 0.05) < 1e-9, near_late
+near_early = verifier.measure_first_line_anchor(
+    5.0, [(0.94, 4.85, 5.20, 0, 2)], 0.0)
+assert near_early["verified"] and abs(near_early["first_line_signed_error_seconds"] + 0.15) < 1e-9, near_early
+assert near_late["automatic_correction_applied"] is False, near_late
+assert not verifier.measure_first_line_anchor(
+    5.0, [(0.60, 5.05, 5.42, 0, 2)], 0.0)["verified"], "low-confidence phrase match must not be accepted"
+assert not verifier.measure_first_line_anchor(
+    5.0, [], 0.0)["verified"], "missing vocal evidence must remain unverified"
+
+print("PASS: identity matching, first-line offset diagnostics, and conservative no-auto-correction safeguards")
