@@ -1953,17 +1953,23 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
     videoBound:Boolean(valid._videoBound),sameVideoSource:Boolean(valid._sameVideoSource),
     upstreamProvider:String(valid._liriqoProvider||valid.upstreamProvider||""),lineCount:timingLines.length,
-    firstLines:timingLines.slice(0,3).map(line=>({
-     time:safeSeconds(line?.time),
-     textFingerprint:getLyricTextFingerprint(line?.text),
-     textLength:String(line?.text||"").length,
-     words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
-      textFingerprint:getLyricTextFingerprint(word?.text),
-      textLength:String(word?.text||"").length,
-      start:safeSeconds(word?.start),
-      end:safeSeconds(word?.end)
-     }))
-    }))
+    firstLines:timingLines.slice(0,3).map((line,index)=>{
+     const baseTime=finiteTimestampSeconds(line?.time);
+     const effectiveTime=getLyricLineStartTime(line,timingLines,index);
+     return {
+      time:safeSeconds(baseTime),effectiveTime:safeSeconds(effectiveTime),
+      wordAnchorDelta:safeSeconds(Number.isFinite(baseTime)&&Number.isFinite(effectiveTime)?effectiveTime-baseTime:null),
+      textFingerprint:getLyricTextFingerprint(line?.text),
+      textLength:String(line?.text||"").length,
+      wordCount:Array.isArray(line?.words)?line.words.length:0,
+      words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
+       textFingerprint:getLyricTextFingerprint(word?.text),
+       textLength:String(word?.text||"").length,
+       start:safeSeconds(word?.start),
+       end:safeSeconds(word?.end)
+      }))
+     };
+    })
    });
    if(valid._synced&&Number(valid._score)>=220&&!firstVerifiedCandidateNotified){
     firstVerifiedCandidateNotified=true;recordLyricFlow("first_verified_synced_candidate",{requestId,provider,score:Number(valid._score)||0});
@@ -2468,7 +2474,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    videoBound:Boolean(item._videoBound),sameVideoSource:Boolean(item._sameVideoSource),
    upstreamProvider:String(item._liriqoProvider||item.upstreamProvider||""),
    firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
-    Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null
+    Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null,
+   firstLineEffectiveTime:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    Number(getLyricLineStartTime(item.ttmlLines[0],item.ttmlLines,0).toFixed(3)):null
   }))
  });
  if(!selected){
