@@ -83,8 +83,8 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  // Adjacent lines share a midpoint boundary. Never let a refined timestamp
  // cross that boundary and reverse the provider's original line ordering.
  if(Array.isArray(lines)&&Number.isInteger(index)&&index>=0){
-  const previous=index>0?Number(lines[index-1]?.time):NaN;
-  const next=index+1<lines.length?Number(lines[index+1]?.time):NaN;
+  const previous=index>0?finiteTimestampSeconds(lines[index-1]?.time):NaN;
+  const next=index+1<lines.length?finiteTimestampSeconds(lines[index+1]?.time):NaN;
   if(Number.isFinite(previous)&&candidate<=(previous+base)/2)return base;
   if(Number.isFinite(next)&&candidate>=(base+next)/2)return base;
  }
