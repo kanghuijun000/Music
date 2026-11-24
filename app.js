@@ -18,6 +18,8 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
+// Timestamps are millisecond-based; absorb sub-millisecond IEEE-754 boundary noise only.
+const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
 
 // Provisional user-reported per-upload first-lyric calibration. This is deliberately separate
 // from song/provider timestamps and from legacy manual video corrections.
@@ -115,10 +117,10 @@ function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideo
 function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
  const lyricTime=getLyricTimelineTime(time,videoId);
- if(!Number.isFinite(lyricTime)||lyricTime<0)return -1;
+ if(!Number.isFinite(lyricTime)||lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS<0)return -1;
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){
-  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;
+  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;
   else break;
  }
  return index;
@@ -1414,7 +1416,7 @@ function renderLyrics(){
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
  const lyricTime=getLyricTimelineTime(current,currentVideoId);
  let index=-1;
- if(timelineReady&&Number.isFinite(lyricTime)&&lyricTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}}
+ if(timelineReady&&Number.isFinite(lyricTime)&&lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&(index>=0?timelineReady:lyricPreviewRenderedToken===lyricLoadToken))return;
