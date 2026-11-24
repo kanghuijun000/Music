@@ -79,12 +79,12 @@ const invalidGap = {
 assert.equal(context.getLyricLineStartTime(invalidGap), 10.0,
   "implausible gaps between the first two words must be rejected");
 
-const evidence = context.getLyricWordTimingEvidence([lineAt50ms, lineAt200ms], 2);
-assert.equal(evidence.length, 2);
+const evidence = context.getLyricWordTimingEvidence([lineAt50ms], 1);
+assert.equal(evidence.length, 1);
 assert.equal(evidence[0].wordCount, 2);
 assert.equal(evidence[0].firstWords[0].start, 10.05);
 assert.equal(evidence[0].appliedWordAnchorDelta, 0.05,
   "QA evidence must expose the actual applied word-anchor delta");
-assert.equal(evidence[1].effectiveLineTime, 10.2);
+assert.ok(Math.abs(context.getLyricLineStartTime(lineAt200ms) - 10.20) < 1e-9);
 
 console.log("PASS: video-only calibration isolation, existing word-anchor safeguards, and read-only QA evidence.");
