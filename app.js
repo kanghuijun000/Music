@@ -140,8 +140,9 @@ function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideo
 }
 function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
+ const relativeTime=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
  const lyricTime=getLyricTimelineTime(time,videoId);
- if(!Number.isFinite(lyricTime)||lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS<0)return -1;
+ if(!Number.isFinite(relativeTime)||relativeTime<0||!Number.isFinite(lyricTime))return -1;
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){
   if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;
@@ -1442,9 +1443,10 @@ function renderLyrics(){
  const previousIndex=lyricState.lastIndex;
  const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
+ const relativeTime=Number(current)-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(currentVideoId);
  const lyricTime=getLyricTimelineTime(current,currentVideoId);
  let index=-1;
- if(timelineReady&&Number.isFinite(lyricTime)&&lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;else break;}}
+ if(timelineReady&&Number.isFinite(relativeTime)&&relativeTime>=0&&Number.isFinite(lyricTime)){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&(index>=0?timelineReady:lyricPreviewRenderedToken===lyricLoadToken))return;
