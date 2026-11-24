@@ -264,7 +264,12 @@ def main() -> int:
                 report["app_lyric_track"] = app_snapshot.get("track") or {}
                 report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
                 report["app_lyric_offset_seconds"] = app_snapshot.get("lyricOffsetSeconds")
-                report["lyric_flow_events"] = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])[-30:]
+                flow_events = ((app_snapshot.get("lyricFlow") or {}).get("events") or [])
+                report["lyric_flow_events"] = flow_events[-60:]
+                report["lyric_candidate_timing_evidence"] = [
+                    event for event in flow_events
+                    if event.get("stage") in ("lyric_candidate_timing_evidence", "lyric_candidate_selected")
+                ]
                 static_issues = app_snapshot.get("staticValidation")
                 if isinstance(static_issues, list):
                     blocking_issues = [issue for issue in static_issues if issue != "동기화 가사가 없고 일반 가사만 있습니다."]
