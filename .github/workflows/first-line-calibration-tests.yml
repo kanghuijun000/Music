@@ -8,6 +8,8 @@ on:
       - "tools/lyric_audio_verify.py"
       - "tools/lyric_audio_verify_test.py"
       - "tools/first_line_runtime_test.js"
+      - "tools/provider_timing_consensus.py"
+      - "tools/provider_timing_consensus_test.py"
       - "app.js"
   push:
     branches: [sync-final-calibration, sync-final-calibration-native, sync-microfilter-final, sync-microfilter-final-native]
@@ -16,6 +18,8 @@ on:
       - "tools/lyric_audio_verify.py"
       - "tools/lyric_audio_verify_test.py"
       - "tools/first_line_runtime_test.js"
+      - "tools/provider_timing_consensus.py"
+      - "tools/provider_timing_consensus_test.py"
       - "app.js"
 
 permissions:
@@ -37,3 +41,4 @@ jobs:
           python tools/lyric_audio_verify_test.py
           node tools/first_line_runtime_test.js
           node tools/lyric_cache_alias_test.js
+          python tools/provider_timing_consensus_test.py
