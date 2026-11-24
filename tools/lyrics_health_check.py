@@ -156,7 +156,7 @@ def check_static() -> list[dict]:
             "item.plain||item.plainLyrics" in app and '==="plain"?item.lyrics' in app
         ),
         "LiriQo millisecond timestamps are converted to seconds": (
-            "time:Number(line.start)/1000" in app and "start:Number(word.start)/1000" in app
+            "time:providerMillisecondsToSeconds(line?.start)" in app and "start:providerMillisecondsToSeconds(word?.start)" in app
         ),
         "LiriQo requests are cancelled when the user changes songs": (
             "lyricFallbackAbortController" in app
