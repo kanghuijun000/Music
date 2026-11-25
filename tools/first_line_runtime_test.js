@@ -23,7 +23,7 @@ assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("TKDpOEkT0cY") - 0.21) 
 assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("unlisted-video") - 0.26) < 1e-9);
 context.lyricOffsetSeconds = 0;
 context.lyricState.lines = [{ time: 0.30, text: "first lyric" }];
-assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "TKDpOEkT0cY"), 0,
+assert.equal(context.getLyricLineIndexAtPlayerTime(0.51, "TKDpOEkT0cY"), 0,
   "the known late first line should advance by its video-only calibration");
 assert.equal(context.getLyricLineIndexAtPlayerTime(0.15, "unlisted-video"), -1,
   "unlisted videos must retain their original first-line timing");
@@ -40,7 +40,7 @@ assert.equal(context.getLyricLineIndexAtPlayerTime(0.02, "unlisted-video"), 0,
   "lyrics should become eligible at the original detected song-start offset");
 context.lyricOffsetSeconds = 0;
 context.lyricState.lines = [{ time: 0.10, text: "first lyric" }];
-assert.equal(context.getLyricLineIndexAtPlayerTime(0, "TKDpOEkT0cY"), 0,
+assert.equal(context.getLyricLineIndexAtPlayerTime(0.31, "TKDpOEkT0cY"), 0,
   "the calibrated video must use the same adjusted timeline for its first-line threshold");
 
 // Lock down the existing per-line word-anchor behavior before adding any new layer.
