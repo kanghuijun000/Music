@@ -19,7 +19,7 @@ vm.runInContext(timingBlock, context);
 
 assert.equal(context.getVideoFirstLineCalibrationSeconds("TKDpOEkT0cY"), 0.15);
 assert.equal(context.getVideoFirstLineCalibrationSeconds("unlisted-video"), 0);
-assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("TKDpOEkT0cY") - 0.08) < 1e-9);
+assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("TKDpOEkT0cY") - 0.21) < 1e-9);
 assert.ok(Math.abs(context.getLyricTimelineOffsetSeconds("unlisted-video") - 0.26) < 1e-9);
 context.lyricOffsetSeconds = 0;
 context.lyricState.lines = [{ time: 0.30, text: "first lyric" }];
