@@ -103,7 +103,7 @@ jobs:
           if "signingConfigs {" not in s:
               s = s.replace("    buildTypes {", signing + "\n    buildTypes {", 1)
           if "signingConfig signingConfigs.release" not in s:
-              s, release_count = re.subn(r'(release\s*\{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
+              s, release_count = re.subn(r'(buildTypes\s*\{\s*release\s*\{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
           else:
               release_count = 1
           if code_count != 1 or name_count != 1 or release_count != 1 or "signingConfig signingConfigs.release" not in s:
