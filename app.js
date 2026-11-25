@@ -10,7 +10,7 @@ function recordLyricFlow(stage,details={}){
  let playerTime=null;try{const value=Number(ytPlayer?.getCurrentTime?.());if(Number.isFinite(value))playerTime=Number(value.toFixed(3));}catch(_){}
  lyricFlowAudit.events.push({stage,at:new Date().toISOString(),elapsedMs:Date.now()-lyricFlowAudit.startedAt,playerTime,
   loading:Boolean(lyricState.loading),lineCount:lyricState.lines.length,offsetSeconds:Number(lyricOffsetSeconds)||0,
-  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
   effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   timingBasis:lyricTimingBasis,...details});
  if(lyricFlowAudit.events.length>60)lyricFlowAudit.events.shift();
@@ -18,6 +18,30 @@ function recordLyricFlow(stage,details={}){
 
 // Small display compensation for polling and paint latency.
 const LYRIC_LEAD_SECONDS=0.04;
+// Timestamps are millisecond-based; tolerate at most 1 ms of floating-point boundary noise.
+const LYRIC_TIMELINE_EPSILON_SECONDS=0.001;
+function finiteTimestampSeconds(value){
+ if(value===null||value===undefined||typeof value==="boolean"||
+  (typeof value==="string"&&!value.trim()))return NaN;
+ const number=Number(value);
+ return Number.isFinite(number)?number:NaN;
+}
+function providerMillisecondsToSeconds(value){
+ const number=finiteTimestampSeconds(value);
+ return Number.isFinite(number)?number/1000:NaN;
+}
+
+// Provisional user-reported per-upload first-lyric calibration. This is deliberately separate
+// from song/provider timestamps and from legacy manual video corrections.
+// Love Yourself (웅키 lyric upload) was reported about 150 ms late; only this
+// exact upload receives the small advance. Refine/remove only with new evidence.
+const FIRST_LINE_CALIBRATION_SECONDS_BY_VIDEO=Object.freeze({
+ "TKDpOEkT0cY":0.15
+});
+function getVideoFirstLineCalibrationSeconds(videoId){
+ const value=FIRST_LINE_CALIBRATION_SECONDS_BY_VIDEO[String(videoId||"")];
+ return Number.isFinite(value)?value:0;
+}
 
 // Upload-specific playback-layer corrections only; never rewrite shared song lyrics.
 // Positive values advance lyric display; negative values delay it.
@@ -33,10 +57,12 @@ function getVideoManualAdvanceSeconds(videoId){
 const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS=0.30;
 const LYRIC_WORD_ANCHOR_LEGACY_SECONDS=0.12;
 function getLyricLineStartTime(line,lines=null,index=-1){
- const base=Number(line?.time);
+ const base=finiteTimestampSeconds(line?.time);
  if(!Number.isFinite(base)||base<0)return NaN;
  const words=(Array.isArray(line?.words)?line.words:[])
-  .filter(word=>Number.isFinite(Number(word?.start))&&Number(word.start)>=0&&String(word?.text||"").trim())
+  .filter(word=>word?.start!==null&&word?.start!==undefined&&typeof word.start!=="boolean"&&
+   !(typeof word.start==="string"&&!word.start.trim())&&Number.isFinite(Number(word.start))&&
+   Number(word.start)>=0&&String(word?.text||"").trim())
   .sort((a,b)=>Number(a.start)-Number(b.start));
  if(words.length<2)return base;
  const first=words[0],second=words[1];
@@ -57,16 +83,52 @@ function getLyricLineStartTime(line,lines=null,index=-1){
  // Adjacent lines share a midpoint boundary. Never let a refined timestamp
  // cross that boundary and reverse the provider's original line ordering.
  if(Array.isArray(lines)&&Number.isInteger(index)&&index>=0){
-  const previous=index>0?Number(lines[index-1]?.time):NaN;
-  const next=index+1<lines.length?Number(lines[index+1]?.time):NaN;
+  const previous=index>0?finiteTimestampSeconds(lines[index-1]?.time):NaN;
+  const next=index+1<lines.length?finiteTimestampSeconds(lines[index+1]?.time):NaN;
   if(Number.isFinite(previous)&&candidate<=(previous+base)/2)return base;
   if(Number.isFinite(next)&&candidate>=(base+next)/2)return base;
  }
  return candidate;
 }
 
+function getLyricTextFingerprint(value){
+ const normalized=String(value||"").normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
+ if(!normalized)return "";
+ let hash=2166136261;
+ for(let i=0;i<normalized.length;i++){hash^=normalized.charCodeAt(i);hash=Math.imul(hash,16777619);}
+ return (hash>>>0).toString(16).padStart(8,"0");
+}
+
+// Read-only QA evidence for the existing word-anchor refinement.
+// Fingerprints let QA compare text alignment without exporting lyric text.
+function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
+ const source=Array.isArray(lines)?lines:[];
+ const count=Math.max(0,Math.min(10,Number(limit)||5));
+ return source.slice(0,count).map((line,index)=>{
+  const base=finiteTimestampSeconds(line?.time);
+  const effective=getLyricLineStartTime(line,source,index);
+  const words=Array.isArray(line?.words)?line.words:[];
+  const round=value=>value===null||value===undefined||typeof value==="boolean"||
+   (typeof value==="string"&&!value.trim())?null:
+   Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
+  return {
+   lineIndex:index,
+   textFingerprint:getLyricTextFingerprint(line?.text),
+   textLength:String(line?.text||"").length,
+   baseLineTime:round(base),
+   effectiveLineTime:round(effective),
+   appliedWordAnchorDelta:round(Number.isFinite(base)&&Number.isFinite(effective)?effective-base:NaN),
+   wordCount:words.length,
+   firstWords:words.slice(0,6).map(word=>({
+    textFingerprint:getLyricTextFingerprint(word?.text),
+    textLength:String(word?.text||"").length,start:round(word?.start),end:round(word?.end)
+   }))
+  };
+ });
+}
+
 function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
- return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS;
+ return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS-getVideoFirstLineCalibrationSeconds(videoId);
 }
 function getLyricTimelineTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
@@ -78,13 +140,12 @@ function getLyricPlayerTimeForLine(line,lines=null,index=-1,videoId=currentVideo
 }
 function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
- const relative=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
- if(!Number.isFinite(relative)||relative<0)return -1;
+ const relativeTime=time-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(videoId);
  const lyricTime=getLyricTimelineTime(time,videoId);
- if(!Number.isFinite(lyricTime))return -1;
+ if(!Number.isFinite(relativeTime)||relativeTime<0||!Number.isFinite(lyricTime))return -1;
  let index=-1;
  for(let i=0;i<lyricState.lines.length;i++){
-  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;
+  if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;
   else break;
  }
  return index;
@@ -93,7 +154,7 @@ function getLyricLineIndexAtPlayerTime(playerTime,videoId=currentVideoId){
 let lyricPreviewRenderedToken=0;
 let lyricLastObservedPlayerTime=null;
 function getLyricTransitionDuration(index){
- const start=Number(lyricState.lines[index]?.time),next=Number(lyricState.lines[index+1]?.time);
+ const start=finiteTimestampSeconds(lyricState.lines[index]?.time),next=finiteTimestampSeconds(lyricState.lines[index+1]?.time);
  if(!Number.isFinite(start)||!Number.isFinite(next))return 180;
  const gap=next-start;
  if(gap<=0)return 110;
@@ -107,7 +168,7 @@ const TRACK_ANALYSIS_CACHE_KEY="music_track_timing_v1";
 const TRACK_ANALYSIS_CACHE_LIMIT=80;
 let lyricOffsetSeconds=0,trackAnalysisToken=0,lyricTimingBasis="catalog";
 // Never apply an unverified per-video offset. Use only a matched track timestamp from analysis.
-function getVideoLyricOffset(videoId,detected=0){const value=Number(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):0;}
+function getVideoLyricOffset(videoId,detected=0){const value=finiteTimestampSeconds(detected);return Number.isFinite(value)&&value>=0?Math.min(value,1800):null;}
 function readTrackAnalysisCache(){try{const value=JSON.parse(localStorage.getItem(TRACK_ANALYSIS_CACHE_KEY)||"{}");return value&&typeof value==="object"?value:{};}catch(_){return {};}}
 function writeTrackAnalysisCache(cache){try{const entries=Object.entries(cache).sort((a,b)=>(Number(b[1]?.savedAt)||0)-(Number(a[1]?.savedAt)||0));localStorage.setItem(TRACK_ANALYSIS_CACHE_KEY,JSON.stringify(Object.fromEntries(entries.slice(0,TRACK_ANALYSIS_CACHE_LIMIT))));}catch(error){console.warn("Track timing cache could not be saved:",error);}}
 function trackText(value){return String(value||"").toLocaleLowerCase().normalize("NFKC").replace(/\[[^\]]*\]|\([^)]*\)/g," ").replace(/\b(official|music video|lyrics?|audio|video|visuali[sz]er|mv|topic|4k|hd|remaster(?:ed)?|live|performance|vevo)\b/gi," ").replace(/가사|뮤직비디오|뮤비|공식영상|오디오|라이브|리마스터/gi," ").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
@@ -501,7 +562,8 @@ function readAllStoredLyricEntries(){
  return [...entries.entries()];
 }
 function hasUsableCachedLyrics(item){
- return Boolean(item&&Array.isArray(item.lines)&&item.lines.length>=2&&item.lines.every(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()));
+ return Boolean(item&&Array.isArray(item.lines)&&item.lines.length>=2&&item.lines.every(line=>
+  line&&Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim()));
 }
 function prepareSharedCacheForVideo(item,sourceKey,targetVideoId){
  if(!hasUsableCachedLyrics(item))return null;
@@ -572,7 +634,9 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
   const videoId=currentVideoId;
   const cached=lyricCache.get(videoId)||readStoredLyric(videoId);
   if(!cached||cached.timingBasis!=="video"||!Array.isArray(cached.lines)||!cached.lines.length||!cached.videoMetadata)return false;
-  const offset=Math.max(0,Math.min(1800,Number(sourceOffset)||0));
+  const parsedOffset=finiteTimestampSeconds(sourceOffset);
+  if(!Number.isFinite(parsedOffset)||parsedOffset<0)return false;
+  const offset=Math.min(1800,parsedOffset);
   // Convert line and word timestamps from this video's timeline to the
   // identified song timeline. Keep the original video cache as a fallback.
   const normalizedLines=normalizeVideoBoundLyricsToSongTimeline(cached.lines,offset);
@@ -596,7 +660,7 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
  if(!expected.title||!expected.artist)return null;
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
   const title=trackSimilarity(track.title,expected.title),artist=trackSimilarity(track.artist,expected.artist);
-  const confidence=Number(track.confidence)||0,duration=Number(track.duration)||0,timestamp=Number(track.timestamp);
+  const confidence=Number(track.confidence)||0,duration=Number(track.duration)||0,timestamp=finiteTimestampSeconds(track.timestamp);
   // A YouTube upload may contain an edited intro before the identified song.
   // Permit the video to be longer than the song, but keep the reverse mismatch tight.
   const durationMatches=!duration||!videoDuration||
@@ -619,15 +683,18 @@ function promoteVideoLyricsToSongCache(sourceOffset,identifiedTrack=null){
 }
 
 function normalizeVideoBoundLyricsToSongTimeline(lines,sourceOffset){
- const offset=Number(sourceOffset);
+ const offset=finiteTimestampSeconds(sourceOffset);
  if(!Number.isFinite(offset)||offset<0)return [];
  return (Array.isArray(lines)?lines:[])
-  .filter(line=>Number.isFinite(Number(line?.time))&&Number(line.time)>=offset)
-  .map(line=>({...line,time:Number(line.time)-offset,
-   words:Array.isArray(line.words)?line.words.map(word=>({...word,
-    start:Number.isFinite(Number(word.start))?Math.max(0,Number(word.start)-offset):word.start,
-    end:Number.isFinite(Number(word.end))?Math.max(0,Number(word.end)-offset):word.end
-   })).filter(word=>!Number.isFinite(Number(word.end))||Number(word.end)>=0):line.words
+  .filter(line=>Number.isFinite(finiteTimestampSeconds(line?.time))&&finiteTimestampSeconds(line.time)>=offset)
+  .map(line=>({...line,time:finiteTimestampSeconds(line.time)-offset,
+   words:Array.isArray(line.words)?line.words.map(word=>{
+    const start=finiteTimestampSeconds(word?.start),end=finiteTimestampSeconds(word?.end);
+    return {...word,
+     start:Number.isFinite(start)?Math.max(0,start-offset):word.start,
+     end:Number.isFinite(end)?Math.max(0,end-offset):word.end
+    };
+   }).filter(word=>!Number.isFinite(finiteTimestampSeconds(word.end))||finiteTimestampSeconds(word.end)>=0):line.words
   }));
 }
 async function resolveReferenceVideoSongOffset(referenceVideo){
@@ -708,8 +775,9 @@ async function resolveReferenceVideoSongOffset(referenceVideo){
 }
 
 function applyTrackOffset(seconds,identifiedTrack=null){
- const hasMatch=seconds!==null&&seconds!==undefined&&Number.isFinite(Number(seconds));
- const value=hasMatch?Number(seconds):0;
+ const parsedOffset=finiteTimestampSeconds(seconds);
+ const hasMatch=Number.isFinite(parsedOffset)&&parsedOffset>=0;
+ const value=hasMatch?Math.min(parsedOffset,1800):0;
  if(lyricTimingBasis==="video"){
   if(hasMatch)promoteVideoLyricsToSongCache(value,identifiedTrack);
   return;
@@ -747,7 +815,7 @@ function selectIdentifiedTrack(tracks,video){
  const videoDuration=Number(video?.duration)||0;
  const candidates=(Array.isArray(tracks)?tracks:[]).map(track=>{
   const title=String(track?.title||"").trim(),artist=String(track?.artist||"").trim();
-  const confidence=Number(track?.confidence),duration=Number(track?.duration),timestamp=Number(track?.timestamp);
+  const confidence=Number(track?.confidence),duration=Number(track?.duration),timestamp=finiteTimestampSeconds(track?.timestamp);
   return {track,title,artist,confidence,duration,timestamp,key:trackText(title)+"|"+trackText(artist)};
  }).filter(item=>item.title&&item.artist&&!item.track?.isUnknown&&Number.isFinite(item.confidence)&&item.confidence>=0.80&&
   Number.isFinite(item.duration)&&item.duration>=45&&Number.isFinite(item.timestamp)&&item.timestamp>=0&&
@@ -789,7 +857,7 @@ async function tryLoadLyricsFromIdentifiedTrack(video,tracks,initialLyricsPromis
  // Video-bound lyrics are normalized by applyTrackOffset before they are reused.
  applyTrackOffset(getVideoLyricOffset(video.id,identified.timestamp),identified);
  const hasVerifiedSyncedLyrics=lyricState.lines.length>=2&&
-  lyricState.lines.every(line=>Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim());
+  lyricState.lines.every(line=>Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim());
  // A same-track synced result is already the best usable result; never replace it
  // with a plain-text response from a later provider search.
  if(hasLyrics&&sameTrack&&hasVerifiedSyncedLyrics){
@@ -1321,14 +1389,14 @@ function parseLyricsfile(source){
    saveLine();line={text:parseYamlText(s.slice(7).trim()),time:NaN,end:NaN,words:[]};insideWords=false;continue;
   }
   if(!line)continue;
-  if(indent===4&&s.startsWith("start_ms:")){line.time=Number(s.slice(9).trim())/1000;continue;}
-  if(indent===4&&s.startsWith("end_ms:")){line.end=Number(s.slice(7).trim())/1000;continue;}
+  if(indent===4&&s.startsWith("start_ms:")){line.time=providerMillisecondsToSeconds(s.slice(9).trim());continue;}
+  if(indent===4&&s.startsWith("end_ms:")){line.end=providerMillisecondsToSeconds(s.slice(7).trim());continue;}
   if(indent===4&&s==="words:"){insideWords=true;continue;}
   if(indent===6&&insideWords&&s.startsWith("- text:")){
    saveWord();word={text:parseYamlText(s.slice(7).trim()),start:NaN,end:NaN};continue;
   }
-  if(indent===8&&insideWords&&word&&s.startsWith("start_ms:")){word.start=Number(s.slice(9).trim())/1000;continue;}
-  if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=Number(s.slice(7).trim())/1000;continue;}
+  if(indent===8&&insideWords&&word&&s.startsWith("start_ms:")){word.start=providerMillisecondsToSeconds(s.slice(9).trim());continue;}
+  if(indent===8&&insideWords&&word&&s.startsWith("end_ms:")){word.end=providerMillisecondsToSeconds(s.slice(7).trim());continue;}
  }
  saveLine();
  return output.filter(item=>Number.isFinite(item.time)&&!isCreditMetadata(item.text)).sort((a,b)=>a.time-b.time);
@@ -1379,9 +1447,9 @@ function renderLyrics(){
  const observedDelta=Number.isFinite(Number(current))&&Number.isFinite(Number(previousObservedTime))?Number(current)-Number(previousObservedTime):null;
  lyricLastObservedPlayerTime=Number.isFinite(Number(current))?Number(current):null;
  const relativeTime=Number(current)-(Number(lyricOffsetSeconds)||0)+getVideoManualAdvanceSeconds(currentVideoId);
- const lyricTime=Math.max(0,getLyricTimelineTime(current,currentVideoId));
+ const lyricTime=getLyricTimelineTime(current,currentVideoId);
  let index=-1;
- if(timelineReady&&relativeTime>=0){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime)index=i;else break;}}
+ if(timelineReady&&Number.isFinite(relativeTime)&&relativeTime>=0&&Number.isFinite(lyricTime)){for(let i=0;i<lyricState.lines.length;i++){if(getLyricLineStartTime(lyricState.lines[i],lyricState.lines,i)<=lyricTime+LYRIC_TIMELINE_EPSILON_SECONDS)index=i;else break;}}
  // 플레이어 타임라인이 준비되기 전에도 첫 세 줄을 미리 보여준다.
  const wordIndex=-1;
  if(index===lyricState.lastIndex&&wordIndex===lyricState.lastWordIndex&&(index>=0?timelineReady:lyricPreviewRenderedToken===lyricLoadToken))return;
@@ -1389,7 +1457,7 @@ function renderLyrics(){
   if(index<0)lyricPreviewRenderedToken=lyricLoadToken;
   if(!lyricFlowAudit.renderedRequests.includes(lyricLoadToken)){
    lyricFlowAudit.renderedRequests.push(lyricLoadToken);
-   recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:Number(lyricState.lines[0]?.time)||0,currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
+   recordLyricFlow("first_lyrics_rendered_for_request",{requestId:lyricLoadToken,firstLineTime:finiteTimestampSeconds(lyricState.lines[0]?.time),currentLineIndex:index,timelineReady,playerTime:Number(current)||0});
   }
  el.lyricsView.replaceChildren();
  const start=index<0?0:Math.max(0,index-1),end=index<0?Math.min(lyricState.lines.length,3):Math.min(lyricState.lines.length,index+2);
@@ -1465,11 +1533,11 @@ function auditValidateLoadedLyrics(){
  if(!lines.length)problems.push(lyricState.plain?"동기화 가사가 없고 일반 가사만 있습니다.":"표시할 가사가 없습니다.");
  if(lines.length){
   if(lines.length<2)problems.push("가사 줄이 2개 미만입니다.");
-  if(lines.some(line=>!Number.isFinite(Number(line.time))||Number(line.time)<0))problems.push("잘못된 타임스탬프가 있습니다.");
-  if(lines.some((line,index)=>index>0&&Number(line.time)<Number(lines[index-1].time)))problems.push("타임스탬프 순서가 뒤섞였습니다.");
-  if(new Set(lines.map(line=>Math.round(Number(line.time)*100))).size<2)problems.push("서로 다른 타임스탬프가 2개 미만입니다.");
+  if(lines.some(line=>!Number.isFinite(finiteTimestampSeconds(line.time))||finiteTimestampSeconds(line.time)<0))problems.push("잘못된 타임스탬프가 있습니다.");
+  if(lines.some((line,index)=>index>0&&finiteTimestampSeconds(line.time)<finiteTimestampSeconds(lines[index-1].time)))problems.push("타임스탬프 순서가 뒤섞였습니다.");
+  if(new Set(lines.map(line=>Math.round(finiteTimestampSeconds(line.time)*100))).size<2)problems.push("서로 다른 타임스탬프가 2개 미만입니다.");
   const duration=Number(ytPlayer?.getDuration?.())||Number(selectedVideoDuration)||0;
-  if(duration&&lines.some(line=>Number(line.time)>duration+90))problems.push("영상 길이보다 지나치게 늦은 가사 타임스탬프가 있습니다.");
+  if(duration&&lines.some(line=>finiteTimestampSeconds(line.time)>duration+90))problems.push("영상 길이보다 지나치게 늦은 가사 타임스탬프가 있습니다.");
   if(lines.some(line=>!String(line.text||"").trim()))problems.push("내용이 비어 있는 가사 줄이 있습니다.");
   const spacingCheck=normalizeTimedLyricsSpacing(lines,lyricState.plain||"");
   if(spacingCheck.unsafe)problems.push("한국어 가사 띄어쓰기를 검증할 수 없습니다.");
@@ -1515,9 +1583,10 @@ function getPlaybackAuditReport(){
   lyricTrack:currentLyricsTrack?{title:currentLyricsTrack.title,artist:currentLyricsTrack.artist,duration:currentLyricsTrack.duration,source:currentLyricsTrack.source,upstreamProvider:currentLyricsTrack.upstreamProvider}:null,lyricFlow:{events:lyricFlowAudit.videoId===currentVideoId?lyricFlowAudit.events.slice():[],startedAt:lyricFlowAudit.startedAt||null},
    
   timingBasis:lyricTimingBasis,lyricOffsetSeconds,
-  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+  videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
   effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
   syncedLineCount:lyricState.lines.length,plainLyricPresent:Boolean(String(lyricState.plain||"").trim()),
+  wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
   playerState:ytPlayer?.getPlayerState?.()??null,playerTime:Number(ytPlayer?.getCurrentTime?.()||0),samples:playbackAudit.samples,
   missingTicks:playbackAudit.missingTicks,mismatchTicks:playbackAudit.mismatchTicks,uiTransitionCount:playbackAudit.transitions.length,
   medianUiDelayMs:auditMedian(delays),userMarkedVocalStarts:playbackAudit.marks.length,medianUserMarkedOffsetMs:auditMedian(vocalOffsets),
@@ -1663,7 +1732,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const cached=identifiedTrack?findIdentifiedLyricCache(video,identifiedTrack):
   (validVideoCache||findSharedLyricCache(video));
  const cachedPlain=String(cached?.plain||"").split(/\r?\n/).filter(line=>line.trim()&&!isCreditMetadata(line)).join("\n");
- const cachedLines=(cached?.lines||[]).filter(item=>item&&Number.isFinite(Number(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:Number(item.time)}));
+ const cachedLines=(cached?.lines||[]).filter(item=>item&&Number.isFinite(finiteTimestampSeconds(item.time))&&String(item.text||"").trim()&&!isCreditMetadata(item.text)).map(item=>({...item,time:finiteTimestampSeconds(item.time)}));
  const cacheSpacing=normalizeTimedLyricsSpacing(cachedLines,cachedPlain);
  const spacingRecoveredLines=cacheSpacing.lines;
  const cacheSpacingRecovered=cacheSpacing.restored;
@@ -1808,7 +1877,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if((identity.artistKnown||extraArtists.length)&&(!itemArtist||singer<75)&&!exactVideoIdentityWithoutArtist){item._rejectCode="MATCH_ARTIST_MISMATCH";record(provider,item._rejectCode,"가수 정보 불일치 ("+Math.round(singer)+")");return null;}
   }
   const plain=String(item.plainLyrics||item.plain||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
-  let lines=extractLines(item).filter(line=>line&&Number.isFinite(Number(line.time))&&Number(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
+  let lines=extractLines(item).filter(line=>line&&Number.isFinite(finiteTimestampSeconds(line.time))&&finiteTimestampSeconds(line.time)>=0&&String(line.text||"").trim()&&!isCreditMetadata(line.text))
    .map((line,index)=>({...line,time:Number(line.time),_order:index}))
    .sort((a,b)=>a.time-b.time);
   const spacing=normalizeTimedLyricsSpacing(lines,plain.join("\n"));
@@ -1880,6 +1949,34 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   const valid=validate(item,extraArtists,extraTitles,provider);
   if(valid){
    valid._source=provider;candidates.push(valid);
+   const timingLines=Array.isArray(valid.ttmlLines)?valid.ttmlLines:[];
+   const safeSeconds=value=>value===null||value===undefined||typeof value==="boolean"||
+    (typeof value==="string"&&!value.trim())?null:
+    Number.isFinite(Number(value))?Number(Number(value).toFixed(3)):null;
+   recordLyricFlow("lyric_candidate_timing_evidence",{
+    provider,trackName:valid.trackName||valid.title||"",artistName:valid.artistName||valid.artist||"",
+    duration:Number(valid.duration)||0,score:Number(valid._score)||0,synced:Boolean(valid._synced),
+    videoBound:Boolean(valid._videoBound),sameVideoSource:Boolean(valid._sameVideoSource),
+    sourceVideoId:String(valid._unisonSourceVideoId||valid.sourceVideoId||""),
+    upstreamProvider:String(valid._liriqoProvider||valid.upstreamProvider||""),lineCount:timingLines.length,
+    firstLines:timingLines.slice(0,3).map((line,index)=>{
+     const baseTime=finiteTimestampSeconds(line?.time);
+     const effectiveTime=getLyricLineStartTime(line,timingLines,index);
+     return {
+      time:safeSeconds(baseTime),effectiveTime:safeSeconds(effectiveTime),
+      wordAnchorDelta:safeSeconds(Number.isFinite(baseTime)&&Number.isFinite(effectiveTime)?effectiveTime-baseTime:null),
+      textFingerprint:getLyricTextFingerprint(line?.text),
+      textLength:String(line?.text||"").length,
+      wordCount:Array.isArray(line?.words)?line.words.length:0,
+      words:(Array.isArray(line?.words)?line.words:[]).slice(0,4).map(word=>({
+       textFingerprint:getLyricTextFingerprint(word?.text),
+       textLength:String(word?.text||"").length,
+       start:safeSeconds(word?.start),
+       end:safeSeconds(word?.end)
+      }))
+     };
+    })
+   });
    if(valid._synced&&Number(valid._score)>=220&&!firstVerifiedCandidateNotified){
     firstVerifiedCandidateNotified=true;recordLyricFlow("first_verified_synced_candidate",{requestId,provider,score:Number(valid._score)||0});
      
@@ -2241,9 +2338,10 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     const rawWords=Array.isArray(line.words)?line.words:
      (Array.isArray(item?.words?.[line.id])?item.words[line.id]:[]);
     const words=rawWords.map(word=>({
-     text:String(word.text||""),start:Number(word.start)/1000,end:Number(word.end)/1000
+     text:String(word?.text||""),start:providerMillisecondsToSeconds(word?.start),
+     end:providerMillisecondsToSeconds(word?.end)
     })).filter(word=>word.text&&Number.isFinite(word.start)&&Number.isFinite(word.end)&&word.end>word.start);
-    return {time:Number(line.start)/1000,text:String(line.text||""),words};
+    return {time:providerMillisecondsToSeconds(line?.start),text:String(line?.text||""),words};
    }).filter(line=>Number.isFinite(line.time)&&line.time>=0&&line.text.trim());
    if(normalized.length>=2)return normalized;
    if(typeof item?.lrc==="string"){const parsed=parseLrc(item.lrc);if(parsed.length>=2)return parsed;}
@@ -2371,6 +2469,35 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const selected=candidates.find(item=>item._synced&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2)||
   candidates.filter(item=>!item._synced&&String(item.plainLyrics||"").trim().length>=12)
    .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0]||null;
+ if(selected)recordLyricFlow("lyric_candidate_selected",{
+  provider:selected._source||"",trackName:selected.trackName||selected.title||"",
+  artistName:selected.artistName||selected.artist||"",score:Number(selected._score)||0,
+  synced:Boolean(selected._synced),videoBound:Boolean(selected._videoBound),
+  candidateCount:candidates.length,
+  firstLineTime:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   finiteTimestampSeconds(selected.ttmlLines[0]?.time):null,
+  firstLineEffectiveTime:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   getLyricLineStartTime(selected.ttmlLines[0],selected.ttmlLines,0):null,
+  firstLineFingerprint:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   getLyricTextFingerprint(selected.ttmlLines[0]?.text):"",
+  firstLineTextLength:Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length?
+   String(selected.ttmlLines[0]?.text||"").length:0,
+  alternatives:candidates.filter(item=>item!==selected&&item._synced).slice(0,5).map(item=>({
+   provider:item._source||"",trackName:item.trackName||item.title||"",
+   artistName:item.artistName||item.artist||"",score:Number(item._score)||0,
+   videoBound:Boolean(item._videoBound),sameVideoSource:Boolean(item._sameVideoSource),
+   sourceVideoId:String(item._unisonSourceVideoId||item.sourceVideoId||""),
+   upstreamProvider:String(item._liriqoProvider||item.upstreamProvider||""),
+   firstLineTime:Number.isFinite(finiteTimestampSeconds(item.ttmlLines?.[0]?.time))?
+    Number(finiteTimestampSeconds(item.ttmlLines[0].time).toFixed(3)):null,
+   firstLineEffectiveTime:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    Number(getLyricLineStartTime(item.ttmlLines[0],item.ttmlLines,0).toFixed(3)):null,
+   firstLineFingerprint:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    getLyricTextFingerprint(item.ttmlLines[0]?.text):"",
+   firstLineTextLength:Array.isArray(item.ttmlLines)&&item.ttmlLines.length?
+    String(item.ttmlLines[0]?.text||"").length:0
+  }))
+ });
  if(!selected){
   lyricState.loading=false;
   if(aiAssistButton)aiAssistButton.hidden=false;
@@ -2719,11 +2846,19 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
    return {
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
-    lines:(lyricState.lines||[]).map((line,index)=>({time:getLyricLineStartTime(line,lyricState.lines,index),baseTime:Number(line.time),microAdjustmentSeconds:Number((getLyricLineStartTime(line,lyricState.lines,index)-Number(line.time)).toFixed(3)),text:String(line.text||"")})),
+    lines:(lyricState.lines||[]).map((line,index)=>({time:getLyricLineStartTime(line,lyricState.lines,index),baseTime:finiteTimestampSeconds(line.time),microAdjustmentSeconds:Number((getLyricLineStartTime(line,lyricState.lines,index)-finiteTimestampSeconds(line.time)).toFixed(3)),text:String(line.text||"")})),
+    firstLineTiming:lyricState.lines?.length?{
+     baseTime:finiteTimestampSeconds(lyricState.lines[0]?.time),
+     effectiveTime:getLyricLineStartTime(lyricState.lines[0],lyricState.lines,0),
+     textFingerprint:getLyricTextFingerprint(lyricState.lines[0]?.text),
+     wordCount:Array.isArray(lyricState.lines[0]?.words)?lyricState.lines[0].words.length:0
+    }:null,
+    wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
+    wordSynced:Boolean(lyricState.wordSynced),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
     timingBasis:lyricTimingBasis,lyricOffsetSeconds,
-    videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
+    videoManualAdvanceSeconds:getVideoManualAdvanceSeconds(currentVideoId),firstLineCalibrationSeconds:getVideoFirstLineCalibrationSeconds(currentVideoId),lyricLeadSeconds:LYRIC_LEAD_SECONDS,
     effectiveAppOffsetSeconds:Number(getLyricTimelineOffsetSeconds(currentVideoId).toFixed(3)),
     track:currentLyricsTrack?{title:currentLyricsTrack.title||currentLyricsTrack.trackName||"",
       artist:currentLyricsTrack.artist||currentLyricsTrack.artistName||"",

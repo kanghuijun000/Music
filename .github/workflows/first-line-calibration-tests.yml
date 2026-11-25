@@ -1,0 +1,46 @@
+name: First Lyric Calibration Unit Tests
+
+on:
+  pull_request:
+    branches: [main, native-migration]
+    paths:
+      - ".github/workflows/first-line-calibration-tests.yml"
+      - "tools/lyric_audio_verify.py"
+      - "tools/lyric_audio_verify_test.py"
+      - "tools/first_line_runtime_test.js"
+      - "tools/lyric_cache_alias_test.js"
+      - "tools/provider_timing_consensus.py"
+      - "tools/provider_timing_consensus_test.py"
+      - "app.js"
+  push:
+    branches: [sync-final-calibration, sync-final-calibration-native, sync-microfilter-final, sync-microfilter-final-native]
+    paths:
+      - ".github/workflows/first-line-calibration-tests.yml"
+      - "tools/lyric_audio_verify.py"
+      - "tools/lyric_audio_verify_test.py"
+      - "tools/first_line_runtime_test.js"
+      - "tools/lyric_cache_alias_test.js"
+      - "tools/provider_timing_consensus.py"
+      - "tools/provider_timing_consensus_test.py"
+      - "app.js"
+
+permissions:
+  contents: read
+
+jobs:
+  first-line-calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check complete app JavaScript syntax
+        run: node --check app.js
+      - name: Run identity and first-line timing tests
+        run: |
+          python tools/lyric_audio_verify_test.py
+          node tools/first_line_runtime_test.js
+          node tools/lyric_cache_alias_test.js
+          python tools/provider_timing_consensus_test.py

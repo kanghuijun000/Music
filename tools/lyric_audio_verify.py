@@ -119,6 +119,56 @@ def identify(video_id):
                 break
     return title,track,artist,author,description
 
+def measure_first_line_anchor(line_time, candidates, app_offset, max_audio_time=45.0):
+    """Measure only the first displayed lyric against its earliest matching vocal phrase.
+
+    This is diagnostic evidence, not an automatic playback correction. ASR word
+    timestamps can be uncertain, so callers must retain the raw confidence and
+    must not apply the suggested delta without independent confirmation.
+    """
+    try:
+        line_time=float(line_time)
+        app_offset=float(app_offset)
+    except (TypeError, ValueError):
+        return {"verified":False,"reason":"invalid_timing_input"}
+    if not math.isfinite(line_time) or not math.isfinite(app_offset):
+        return {"verified":False,"reason":"non_finite_timing_input"}
+    valid=[]
+    for item in candidates or []:
+        try:
+            similarity,start,end,first,last=item
+            similarity=float(similarity);start=float(start);end=float(end)
+            first=int(first);last=int(last)
+        except (TypeError, ValueError):
+            continue
+        if (math.isfinite(similarity) and math.isfinite(start) and math.isfinite(end)
+                and similarity>=0.72 and 0<=start<=max_audio_time and end>=start
+                and first>=0 and last>first):
+            valid.append((start,-similarity,end,first,last,similarity))
+    if not valid:
+        return {"verified":False,"reason":"no_confident_first_line_vocal_match"}
+    start,_,end,first,last,similarity=min(valid)
+    expected=line_time+app_offset
+    residual=start-expected
+    return {
+        "verified":True,
+        "method":"earliest_text_matched_first_lyric_phrase",
+        "first_line_vocal_start_seconds":round(start,3),
+        "first_line_vocal_end_seconds":round(end,3),
+        "first_line_expected_display_seconds":round(expected,3),
+        "first_line_signed_error_seconds":round(residual,3),
+        # The app's positive calibration advances lyrics; a positive residual
+        # means the vocal starts later, so the required calibration delta is negative.
+        "first_line_suggested_offset_delta_seconds":round(-residual,3),
+        "first_line_text_similarity":round(similarity,3),
+        "first_line_matched_word_count":last-first+1,
+        "measurement_uncertainty_seconds":None,
+        "calibration_eligible":False,
+        "calibration_block_reason":"ASR timestamp uncertainty has not been independently measured or repeat-confirmed",
+        "automatic_correction_applied":False,
+        "warning":"ASR word timestamps are diagnostic estimates; confirm independently before changing playback timing."
+    }
+
 def verify(audio_path,video_id,app_snapshot,identified=None):
     report={"app_lyrics_loaded":False,"identity_verified":False,
             "transcription_verified":False,"lyric_content_verified":False,
@@ -251,6 +301,13 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
                         candidates.append((ratio,words[start_index][0],words[end_index][1],start_index,end_index))
             candidates_by_line.append(candidates)
 
+        # Isolate the first displayed lyric as its own diagnostic anchor.
+        # This never mutates source timestamps or changes the app's runtime offset.
+        app_offset_for_anchor=effective_app_offset(app_snapshot)
+        first_line_anchor=measure_first_line_anchor(
+            float(lines[0]["time"]),candidates_by_line[0],app_offset_for_anchor
+        )
+
         def score_constant_offset(offset):
             matches=[]
             used=set()
@@ -319,6 +376,7 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
                       p90_vocal_lyric_residual_seconds=round(p90_residual,3),
                       mean_text_similarity=round(average,3))
         report.update(app_applied_offset_seconds=round(app_offset,3),
+                      first_line_anchor=first_line_anchor,
                       video_manual_advance_seconds=round(float(app_snapshot.get("videoManualAdvanceSeconds") or 0),3),
                       lyric_lead_seconds=round(float(app_snapshot.get("lyricLeadSeconds",0.04) if app_snapshot.get("lyricLeadSeconds") is not None else 0.04),3),
                       app_to_vocal_offset_error_seconds=round(offset_error,3))
