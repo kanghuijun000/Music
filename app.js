@@ -43,6 +43,16 @@ function getVideoFirstLineCalibrationSeconds(videoId){
  return Number.isFinite(value)?value:0;
 }
 
+// Additional whole-timeline delay based on a user-reported playback observation.
+// Scoped to one exact YouTube upload; does not modify shared lyrics or other videos.
+const VIDEO_TIMELINE_DELAY_SECONDS_BY_VIDEO=Object.freeze({
+ "TKDpOEkT0cY":0.70
+});
+function getVideoTimelineDelaySeconds(videoId){
+ const value=VIDEO_TIMELINE_DELAY_SECONDS_BY_VIDEO[String(videoId||"")];
+ return Number.isFinite(value)&&value>=0?Math.min(value,2):0;
+}
+
 // Upload-specific playback-layer corrections only; never rewrite shared song lyrics.
 // Positive values advance lyric display; negative values delay it.
 function getVideoManualAdvanceSeconds(videoId){
@@ -128,7 +138,7 @@ function getLyricWordTimingEvidence(lines=lyricState.lines,limit=5){
 }
 
 function getLyricTimelineOffsetSeconds(videoId=currentVideoId){
- return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS-getVideoFirstLineCalibrationSeconds(videoId);
+ return (Number(lyricOffsetSeconds)||0)-getVideoManualAdvanceSeconds(videoId)-LYRIC_LEAD_SECONDS-getVideoFirstLineCalibrationSeconds(videoId)+getVideoTimelineDelaySeconds(videoId);
 }
 function getLyricTimelineTime(playerTime,videoId=currentVideoId){
  const time=Number(playerTime);
