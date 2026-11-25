@@ -46,7 +46,7 @@ function getVideoFirstLineCalibrationSeconds(videoId){
 // Additional whole-timeline delay based on a user-reported playback observation.
 // Scoped to one exact YouTube upload; does not modify shared lyrics or other videos.
 const VIDEO_TIMELINE_DELAY_SECONDS_BY_VIDEO=Object.freeze({
- "TKDpOEkT0cY":0.35
+ "TKDpOEkT0cY":0.20
 });
 function getVideoTimelineDelaySeconds(videoId){
  const value=VIDEO_TIMELINE_DELAY_SECONDS_BY_VIDEO[String(videoId||"")];
