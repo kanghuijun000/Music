@@ -1,0 +1,134 @@
+name: Music v194 Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - native-v194
+    paths:
+      - 'app.js'
+      - 'index.html'
+      - 'style.css'
+      - 'manifest.json'
+      - 'sw.js'
+      - 'install.html'
+      - 'icons/**'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - '.github/workflows/android-native-v194.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    env:
+      MUSIC_V194_KEYSTORE_BASE64: ${{ secrets.MUSIC_V194_KEYSTORE_BASE64 }}
+      MUSIC_V194_KEYSTORE_PASSWORD: ${{ secrets.MUSIC_V194_KEYSTORE_PASSWORD }}
+      MUSIC_V194_KEY_ALIAS: ${{ secrets.MUSIC_V194_KEY_ALIAS }}
+      MUSIC_V194_KEY_PASSWORD: ${{ secrets.MUSIC_V194_KEY_PASSWORD }}
+    steps:
+      - name: Check out v194 branch only
+        uses: actions/checkout@v4
+        with:
+          ref: native-v194
+
+      - name: Validate signing secrets
+        shell: bash
+        run: |
+          test -n "$MUSIC_V194_KEYSTORE_BASE64" || { echo "Missing MUSIC_V194_KEYSTORE_BASE64"; exit 1; }
+          test -n "$MUSIC_V194_KEYSTORE_PASSWORD" || { echo "Missing MUSIC_V194_KEYSTORE_PASSWORD"; exit 1; }
+          test -n "$MUSIC_V194_KEY_ALIAS" || { echo "Missing MUSIC_V194_KEY_ALIAS"; exit 1; }
+          test -n "$MUSIC_V194_KEY_PASSWORD" || { echo "Missing MUSIC_V194_KEY_PASSWORD"; exit 1; }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Capacitor dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Stage the current Music web app
+        run: |
+          mkdir -p www/icons
+          cp index.html app.js style.css manifest.json sw.js install.html www/
+          cp icons/* www/icons/
+
+      - name: Generate Android project
+        run: npx cap add android
+
+      - name: Synchronize bundled web assets
+        run: npx cap sync android
+
+      - name: Configure stable v194 signing and version
+        run: |
+          echo "$MUSIC_V194_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/music-v194-release.keystore"
+          test -s "$RUNNER_TEMP/music-v194-release.keystore"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+          p = Path("android/app/build.gradle")
+          s = p.read_text()
+          version_code = 194000 + int(os.environ["GITHUB_RUN_NUMBER"])
+          s, code_count = re.subn(r'versionCode\s+\d+', 'versionCode ' + str(version_code), s, count=1)
+          s, name_count = re.subn(r'versionName\s+"[^"]+"', 'versionName "194"', s, count=1)
+          signing = """
+              signingConfigs {
+                  release {
+                      storeFile file(System.getenv("RUNNER_TEMP") + "/music-v194-release.keystore")
+                      storePassword System.getenv("MUSIC_V194_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("MUSIC_V194_KEY_ALIAS")
+                      keyPassword System.getenv("MUSIC_V194_KEY_PASSWORD")
+                  }
+              }
+          """
+          if "signingConfigs {" not in s:
+              s = s.replace("    buildTypes {", signing + "\n    buildTypes {", 1)
+          if "signingConfig signingConfigs.release" not in s:
+              s, release_count = re.subn(r'(release\s*\{)', r'\1\n            signingConfig signingConfigs.release', s, count=1)
+          else:
+              release_count = 1
+          if code_count != 1 or name_count != 1 or release_count != 1 or "signingConfig signingConfigs.release" not in s:
+              raise SystemExit("Gradle signing/version configuration verification failed")
+          p.write_text(s)
+          print("Configured versionCode", version_code, "and stable release signing")
+          PY
+          grep -nE 'applicationId|versionCode|versionName|signingConfig' android/app/build.gradle
+
+      - name: Verify v194 package identity
+        run: |
+          grep -R 'applicationId.*com.kanghuijun.music.v194' android/app/build.gradle*
+          ! grep -R 'applicationId.*com.kanghuijun.music.v193' android/app/build.gradle*
+
+      - name: Build signed release APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Verify APK signature
+        run: apksigner verify --verbose android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Publish v194 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Music-v194-signed-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
