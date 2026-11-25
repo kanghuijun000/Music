@@ -123,7 +123,7 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Verify APK signature
-        run: apksigner verify --verbose android/app/build/outputs/apk/release/app-release.apk
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
 
       - name: Publish v194 APK
         uses: actions/upload-artifact@v4
