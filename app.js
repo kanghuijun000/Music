@@ -1747,7 +1747,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  const spacingRecoveredLines=cacheSpacing.lines;
  const cacheSpacingRecovered=cacheSpacing.restored;
  const cacheSpacingRepairFailed=Boolean(cached&&cacheSpacing.unsafe);
- if(cached&&hasUsableCachedLyrics(cached)&&!usePuter&&!cacheSpacingRepairFailed){
+ const cachedRomanizedKorean=Boolean(cached&&isLikelyRomanizedKoreanCandidate({lines:cachedLines,plainLyrics:cachedPlain}));
+ if(cached&&hasUsableCachedLyrics(cached)&&!usePuter&&!cacheSpacingRepairFailed&&!cachedRomanizedKorean){
   lyricState.lines=spacingRecoveredLines;
   lyricState.plain=cachedPlain;
   if(cacheSpacingRecovered){
@@ -1767,6 +1768,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  if(cacheSpacingRepairFailed){
   recordLyricFlow("cached_lyrics_spacing_repair_failed",{requestId,track:cached.trackName||"",lineCount:cachedLines.length,plainHasHangulSpacing:/[가-힣].*\s.*[가-힣]/u.test(cachedPlain)});
   record("로컬 캐시","CACHE_SPACING_REPAIR_FAILED","저장된 한국어 싱크 가사의 띄어쓰기를 원문에서 복구하지 못해 제공처를 다시 검색합니다.");
+ }else if(cachedRomanizedKorean&&!usePuter){
+  record("로컬 캐시","ROMANIZED_KOREAN_CACHE_BYPASSED","저장된 한국어 곡의 로마자 가사를 사용하지 않고 정상 원문을 다시 검색합니다.");
  }else if(cached&&!usePuter){
   record("로컬 캐시","CACHE_EMPTY","저장된 항목에 표시 가능한 가사가 없어 새로 검색합니다.");
  }
@@ -1816,7 +1819,8 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   return /[가-힣]/u.test(String(value||""));
  }
  function candidateLyricsText(item){
-  const timed=(Array.isArray(item?.ttmlLines)?item.ttmlLines:[]).map(line=>String(line?.text||""));
+  const sourceLines=Array.isArray(item?.ttmlLines)?item.ttmlLines:(Array.isArray(item?.lines)?item.lines:[]);
+  const timed=sourceLines.map(line=>String(line?.text||""));
   const plain=String(item?.plainLyrics||"");
   return (timed.join("\n")+"\n"+plain).trim();
  }
