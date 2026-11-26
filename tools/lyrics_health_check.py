@@ -164,12 +164,12 @@ def check_static() -> list[dict]:
         ),
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
         "app and service-worker versions agree": bool(
-            re.search(r"app\\.js\\?v=([^\\\"&]+)", index)
+            re.search(r"app\.js\?v=([^\"&]+)", index)
             and re.search(r'CACHE_VERSION="([^"]+)"', sw)
-            and re.search(r"\\./app\\.js\\?v=([^\\\"&]+)", sw)
-            and re.search(r"app\\.js\\?v=([^\\\"&]+)", index).group(1)
+            and re.search(r"\./app\.js\?v=([^\"&]+)", sw)
+            and re.search(r"app\.js\?v=([^\"&]+)", index).group(1)
                 == re.search(r'CACHE_VERSION="([^"]+)"', sw).group(1)
-                == re.search(r"\\./app\\.js\\?v=([^\\\"&]+)", sw).group(1)),
+                == re.search(r"\./app\.js\?v=([^\"&]+)", sw).group(1)),
     }
     for name, ok in checks.items():
         results.append({"category": "static", "name": name, "status": "PASS" if ok else "FAIL"})
