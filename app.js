@@ -2520,6 +2520,35 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    if(lyricFallbackAbortController===fallbackController)lyricFallbackAbortController=null;
   }
  }
+ if(candidates.length===0&&!lyricSignal.aborted&&hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" "))){
+  // Last-resort plain Hangul retrieval is independent of the timed provider.
+  // It never fabricates timestamps and only runs when every timed/plain provider returned no candidate.
+  const provider="Lyrics.ovh/한글 일반 가사 대체";
+  const lookups=[];
+  if(identity.artist&&identity.title)lookups.push([String(identity.artist).trim(),String(identity.title).trim()]);
+  for(const variant of (identity.queries||[]).slice(0,4)){
+   const pair=[String(variant.artist||"").trim(),String(variant.title||"").trim()];
+   if(pair[0]&&pair[1]&&!lookups.some(old=>old[0]===pair[0]&&old[1]===pair[1]))lookups.push(pair);
+  }
+  for(const [lookupArtist,lookupTitle] of lookups.slice(0,3)){
+   try{
+    const url=new URL("https://api.lyrics.ovh/v1/"+encodeURIComponent(lookupArtist)+"/"+encodeURIComponent(lookupTitle));
+    const {data}=await fetchJson(url,{},7000,provider);
+    const plain=String(data?.lyrics||"").trim();
+    if(!hasHangulText(plain))continue;
+    const valid=accept(provider,{trackName:lookupTitle,artistName:lookupArtist,
+     duration:Number(video.duration)||0,ttmlLines:[],syncedLyrics:"",plainLyrics:plain,
+     matchConfidence:0,_independentPlainSource:true},[lookupArtist],[lookupTitle]);
+    if(valid){
+     record(provider,"HANGUL_PLAIN_FALLBACK","다른 제공처가 모두 실패해 검증된 한글 일반 가사를 대체 경로로 확보했습니다. 싱크 타임스탬프는 만들지 않았습니다.");
+     break;
+    }
+   }catch(error){
+    if(error?.code!=="CANCELLED"&&error?.status!==404&&error?.status!==429)
+     record(provider,error?.code||"PROVIDER_ERROR",error?.message||"한글 일반 가사 대체 검색 실패",error?.elapsed||0,error?.status||"");
+   }
+  }
+ }
  if(candidates.length===0&&usePuter){
   try{
    const ai=await puterAIAlternateSearch(track,artist,channel,video.duration,normalize,
