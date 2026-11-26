@@ -3035,6 +3035,8 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
    let playerState=null,playerTime=0;
    try{if(ytPlayer){playerState=ytPlayer.getPlayerState();playerTime=Number(ytPlayer.getCurrentTime())||0;}}catch(_){}
    const renderedIndex=Number(lyricState.lastIndex);
+   const hangulTimedLineCount=(lyricState.lines||[]).filter(line=>/[가-힣]/u.test(String(line?.text||""))).length;
+   const latinOnlyTimedLineCount=(lyricState.lines||[]).filter(line=>/[a-z]/i.test(String(line?.text||""))&&!/[가-힣]/u.test(String(line?.text||""))).length;
    return {
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
@@ -3046,6 +3048,7 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
      wordCount:Array.isArray(lyricState.lines[0]?.words)?lyricState.lines[0].words.length:0
     }:null,
     wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
+    hangulTimedLineCount,latinOnlyTimedLineCount,
     wordSynced:Boolean(lyricState.wordSynced),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),
