@@ -1,5 +1,5 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="pwa-korean-sync-restore-20261126-1";
+const CACHE_VERSION="pwa-hangul-lyrics-restore-20261126-2";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
