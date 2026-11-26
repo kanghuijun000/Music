@@ -149,12 +149,24 @@ def check_static() -> list[dict]:
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "Korean romanized sync does not suppress the Hangul-capable LiriQo fallback": (
             "const requiresHangulSync=hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(\" \"));" in app
-            and "item._synced&&(!requiresHangulSync||hasHangulLyrics(item))" in app
+            and "item._synced&&(!requiresHangulSync||hasHangulTimedLyrics(item))" in app
             and 'const provider="LiriQo";' in app
             and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
         ),
+        "Hangul timed-line detection is independent of Hangul plain lyrics": (
+            "function candidateTimedLyricsText(item)" in app
+            and "function candidatePlainLyricsText(item)" in app
+            and "function hasHangulTimedLyrics(item)" in app
+            and "hasHangulText(candidateTimedLyricsText(item))" in app
+            and "const lyrics=candidateTimedLyricsText(item);" in app
+        ),
+        "the same candidate's Hangul plain lyrics can restore its romanized sync": (
+            "hasHangulPlainLyrics(romanized)" in app
+            and "restoreRomanizedKoreanSync(romanized.ttmlLines,candidate.plainLyrics)" in app
+            and "selected=asHangulPlainFallback(plainCandidates[0])" in app
+        ),
         "LiriQo does not stop after romanized-only sync when Hangul sync is required": (
-            "if(valid&&valid._synced&&(!requiresHangulSync||hasHangulLyrics(valid)))return true;" in app
+            "if(valid&&valid._synced&&(!requiresHangulSync||hasHangulTimedLyrics(valid)))return true;" in app
             and 'videoUrl.searchParams.set("full","1");' in app
             and 'songUrl.searchParams.set("full","1");' in app
             and 'LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);' in app
