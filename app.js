@@ -2565,14 +2565,47 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    record("가사 복원","ORIGINAL_SCRIPT_SYNC_PREFERRED","동일 곡으로 검증된 한글 싱크 가사를 우선 선택했습니다.");
   }else if(isLikelyRomanizedKoreanCandidate(selected)&&Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length>=3){
    const romanized=selected;
-   const plainCandidates=candidates.filter(item=>item!==romanized&&hasHangulLyrics(item)&&String(item.plainLyrics||"").trim().length>=20).filter(item=>{
+   let plainCandidates=candidates.filter(item=>item!==romanized&&hasHangulLyrics(item)&&String(item.plainLyrics||"").trim().length>=20).filter(item=>{
     const titleOk=trackSimilarity(item.trackName||item.title||"",romanized.trackName||romanized.title||"")>=0.92;
     const artistOk=trackSimilarity(item.artistName||item.artist||"",romanized.artistName||romanized.artist||"")>=0.82;
     const a=Number(item.duration)||0,b=Number(romanized.duration)||0;
     return titleOk&&artistOk&&(!a||!b||Math.abs(a-b)<=Math.max(15,b*0.12));
    }).sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0));
+   // The timed providers may return only romanization. Make one independent
+   // plain-lyrics lookup by the verified track identity before giving up.
+   if(!plainCandidates.length&&!lyricSignal.aborted){
+    const provider="Lyrics.ovh/원문 복원";
+    const title=String(romanized.trackName||romanized.title||identity.title||"").trim();
+    const singer=String(romanized.artistName||romanized.artist||identity.artist||"").trim();
+    const lookupPairs=[];
+    if(title&&singer)lookupPairs.push([singer,title]);
+    for(const variant of (identity.queries||[]).slice(0,2)){
+     const pair=[String(variant.artist||"").trim(),String(variant.title||"").trim()];
+     if(pair[0]&&pair[1]&&!lookupPairs.some(old=>old[0]===pair[0]&&old[1]===pair[1]))lookupPairs.push(pair);
+    }
+    for(const [lookupArtist,lookupTitle] of lookupPairs.slice(0,2)){
+     try{
+      const url=new URL("https://api.lyrics.ovh/v1/"+encodeURIComponent(lookupArtist)+"/"+encodeURIComponent(lookupTitle));
+      const {data}=await fetchJson(url,{},7000,provider);
+      const plain=String(data?.lyrics||"").trim();
+      if(!hasHangulText(plain)){record(provider,"NO_HANGUL_ORIGINAL","응답에 복원 가능한 한글 원문이 없었습니다.");continue;}
+      const valid=accept(provider,{trackName:lookupTitle,artistName:lookupArtist,
+       duration:Number(romanized.duration)||0,ttmlLines:[],syncedLyrics:"",plainLyrics:plain,
+       matchConfidence:0,_independentPlainSource:true},[lookupArtist],[lookupTitle]);
+      if(valid){
+       plainCandidates.push(valid);
+       record(provider,"HANGUL_SOURCE_FOUND","별도 제공처에서 한글 일반 가사를 확보했습니다. 로마자 싱크와 줄별 대응을 검증합니다.");
+       break;
+      }
+     }catch(error){
+      if(error?.code!=="CANCELLED"&&error?.status!==404&&error?.status!==429)
+       record(provider,error?.code||"PROVIDER_ERROR",error?.message||"한글 원문 검색 실패",error?.elapsed||0,error?.status||"");
+     }
+    }
+   }
    let restored=null,restoredFrom=null;
    for(const candidate of plainCandidates){const attempt=restoreRomanizedKoreanSync(romanized.ttmlLines,candidate.plainLyrics);if(attempt){restored=attempt;restoredFrom=candidate;break;}}
+
    if(restored){
     selected={...romanized,ttmlLines:restored.lines,plainLyrics:restored.lines.map(line=>line.text).join("\n"),_synced:true,_romanizedRestored:true,_restoredFrom:restoredFrom._source||"verified Hangul lyrics"};
     romanizedKoreanBlocked=false;
