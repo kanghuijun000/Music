@@ -147,8 +147,9 @@ def check_static() -> list[dict]:
         "Beomjin Korean-English artist alias is explicit and narrow": '["범진","beomjin","beom jin","beom-jin"]' in app and artist_match("Beomjin", "범진") and not artist_match("Beom", "범진"),
         "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
-        "LiriQo runs only as a fallback when no usable non-romanized synced lyrics were found": (
-            "if(!candidates.some(item=>item._synced&&!isLikelyRomanizedKoreanCandidate(item)))" in app
+        "Korean romanized sync does not suppress the Hangul-capable LiriQo fallback": (
+            "const requiresHangulSync=hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(\" \"));" in app
+            and "item._synced&&(!requiresHangulSync||hasHangulLyrics(item))" in app
             and 'const provider="LiriQo";' in app
             and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
         ),
