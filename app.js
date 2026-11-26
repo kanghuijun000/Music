@@ -1818,42 +1818,6 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  function hasHangulText(value){
   return /[가-힣]/u.test(String(value||""));
  }
- function candidateLyricsText(item){
-  const sourceLines=Array.isArray(item?.ttmlLines)?item.ttmlLines:(Array.isArray(item?.lines)?item.lines:[]);
-  const timed=sourceLines.map(line=>String(line?.text||""));
-  const plain=String(item?.plainLyrics||"");
-  return (timed.join("\n")+"\n"+plain).trim();
- }
- function isLikelyRomanizedKoreanCandidate(item){
-  const expectedText=[identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" ");
-  if(!hasHangulText(expectedText))return false;
-  const lyrics=candidateLyricsText(item);
-  if(!lyrics||hasHangulText(lyrics))return false;
-  const words=(lyrics.toLowerCase().match(/[a-z]+/g)||[]);
-  if(words.length<8)return false;
-  const romanizedSignals=new Set([
-   "eonjena","sarang","saranghae","geudae","nae","ne","nega","nan","naui","uri",
-   "jigeum","isseo","isseoseo","eopseo","oneul","geureohge","gyeoteul",
-   "jikyeojuneun","dahaengiya","hamkke","mianhae","bogo","sipeo","gaseum",
-   "nunmul","geot","jeongmal","eotteohge","neo","geu"
-  ]);
-  let matches=0;
-  for(const word of new Set(words))if(romanizedSignals.has(word))matches++;
-  return matches>=2;
- }
- function hasHangulLyrics(item){
-  return hasHangulText(candidateLyricsText(item));
- }
- function extractLines(item){
-  if(Array.isArray(item?.ttmlLines)&&item.ttmlLines.length)return item.ttmlLines;
-  if(typeof item?.ttml==="string"){const parsed=parseTtml(item.ttml);if(parsed.length)return parsed;}
-  if(item?.lyricsfile){const parsed=parseLyricsfile(item.lyricsfile);if(parsed.length)return parsed;}
-  if(item?.syncedLyrics){
-   const enhanced=parseEnhancedLrc(item.syncedLyrics);
-   if(enhanced.length)return enhanced;
-   const lrc=parseLrc(item.syncedLyrics);
-   if(lrc.length)return lrc;
-  }
   // Conservative Hangul-to-Romanization comparison for restoring romanized sync.
   function hangulToRomanized(value){
    const onset=["g","kk","n","d","tt","r","m","b","pp","s","ss","","j","jj","ch","k","t","p","h"];
@@ -1890,6 +1854,43 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    }
    const average=total/restored.length,coverage=new Set(used).size/source.length;
    return average>=0.84&&coverage>=0.72?{lines:restored,average,coverage}:null;
+  }
+
+ function candidateLyricsText(item){
+  const sourceLines=Array.isArray(item?.ttmlLines)?item.ttmlLines:(Array.isArray(item?.lines)?item.lines:[]);
+  const timed=sourceLines.map(line=>String(line?.text||""));
+  const plain=String(item?.plainLyrics||"");
+  return (timed.join("\n")+"\n"+plain).trim();
+ }
+ function isLikelyRomanizedKoreanCandidate(item){
+  const expectedText=[identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" ");
+  if(!hasHangulText(expectedText))return false;
+  const lyrics=candidateLyricsText(item);
+  if(!lyrics||hasHangulText(lyrics))return false;
+  const words=(lyrics.toLowerCase().match(/[a-z]+/g)||[]);
+  if(words.length<8)return false;
+  const romanizedSignals=new Set([
+   "eonjena","sarang","saranghae","geudae","nae","ne","nega","nan","naui","uri",
+   "jigeum","isseo","isseoseo","eopseo","oneul","geureohge","gyeoteul",
+   "jikyeojuneun","dahaengiya","hamkke","mianhae","bogo","sipeo","gaseum",
+   "nunmul","geot","jeongmal","eotteohge","neo","geu"
+  ]);
+  let matches=0;
+  for(const word of new Set(words))if(romanizedSignals.has(word))matches++;
+  return matches>=2;
+ }
+ function hasHangulLyrics(item){
+  return hasHangulText(candidateLyricsText(item));
+ }
+ function extractLines(item){
+  if(Array.isArray(item?.ttmlLines)&&item.ttmlLines.length)return item.ttmlLines;
+  if(typeof item?.ttml==="string"){const parsed=parseTtml(item.ttml);if(parsed.length)return parsed;}
+  if(item?.lyricsfile){const parsed=parseLyricsfile(item.lyricsfile);if(parsed.length)return parsed;}
+  if(item?.syncedLyrics){
+   const enhanced=parseEnhancedLrc(item.syncedLyrics);
+   if(enhanced.length)return enhanced;
+   const lrc=parseLrc(item.syncedLyrics);
+   if(lrc.length)return lrc;
   }
 
   return [];
