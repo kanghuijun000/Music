@@ -147,8 +147,8 @@ def check_static() -> list[dict]:
         "Beomjin Korean-English artist alias is explicit and narrow": '["범진","beomjin","beom jin","beom-jin"]' in app and artist_match("Beomjin", "범진") and not artist_match("Beom", "범진"),
         "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
-        "LiriQo runs only as a fallback when no synced lyrics were found": (
-            "if(!candidates.some(item=>item._synced))" in app
+        "LiriQo runs only as a fallback when no usable non-romanized synced lyrics were found": (
+            "if(!candidates.some(item=>item._synced&&!isLikelyRomanizedKoreanCandidate(item)))" in app
             and 'const provider="LiriQo";' in app
             and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
         ),
@@ -164,12 +164,12 @@ def check_static() -> list[dict]:
         ),
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
         "app and service-worker versions agree": bool(
-            re.search(r"app\.js\?v=(\d+)", index)
-            and re.search(r'CACHE_VERSION="v(\d+)"', sw)
-            and re.search(r"\./app\.js\?v=(\d+)", sw)
-            and re.search(r"app\.js\?v=(\d+)", index).group(1)
-                == re.search(r'CACHE_VERSION="v(\d+)"', sw).group(1)
-                == re.search(r"\./app\.js\?v=(\d+)", sw).group(1)),
+            re.search(r"app\\.js\\?v=([^\\\"&]+)", index)
+            and re.search(r'CACHE_VERSION="([^"]+)"', sw)
+            and re.search(r"\\./app\\.js\\?v=([^\\\"&]+)", sw)
+            and re.search(r"app\\.js\\?v=([^\\\"&]+)", index).group(1)
+                == re.search(r'CACHE_VERSION="([^"]+)"', sw).group(1)
+                == re.search(r"\\./app\\.js\\?v=([^\\\"&]+)", sw).group(1)),
     }
     for name, ok in checks.items():
         results.append({"category": "static", "name": name, "status": "PASS" if ok else "FAIL"})
