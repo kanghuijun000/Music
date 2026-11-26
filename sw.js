@@ -6,7 +6,7 @@ const APP_SHELL=[
  "./index.html",
  "./install.html",
  "./style.css",
- "./app.js?v=193-lyrics-repair-1",
+ "./app.js?v=pwa-hangul-lyrics-restore-20261126-2",
  "./manifest.json",
  "./icons/music-icon.svg",
  "./icons/icon-192.svg",
