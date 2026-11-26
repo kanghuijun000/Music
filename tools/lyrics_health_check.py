@@ -163,6 +163,10 @@ def check_static() -> list[dict]:
             "lyricFallbackAbortController" in app
             and "if(lyricFallbackAbortController)lyricFallbackAbortController.abort" in app
         ),
+        "QA exposes Hangul-vs-Latin timed lyric counts without lyric text": (
+            "hangulTimedLineCount" in app and "latinOnlyTimedLineCount" in app
+            and 'report["hangul_timed_line_count"]' in probe
+        ),
         "last-resort Hangul plain fallback only runs when no candidate exists": (
             "if(candidates.length===0&&!lyricSignal.aborted&&hasHangulText(" in app
             and 'const provider="Lyrics.ovh/한글 일반 가사 대체";' in app
