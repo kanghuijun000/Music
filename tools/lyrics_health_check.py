@@ -163,6 +163,11 @@ def check_static() -> list[dict]:
             "lyricFallbackAbortController" in app
             and "if(lyricFallbackAbortController)lyricFallbackAbortController.abort" in app
         ),
+        "last-resort Hangul plain fallback only runs when no candidate exists": (
+            "if(candidates.length===0&&!lyricSignal.aborted&&hasHangulText(" in app
+            and 'const provider="Lyrics.ovh/한글 일반 가사 대체";' in app
+            and "싱크 타임스탬프는 만들지 않았습니다." in app
+        ),
         "lyric cache namespace exists": bool(re.search(r"music_lyrics_cache_v\d+", app)),
         "app and service-worker versions agree": bool(
             re.search(r"app\.js\?v=([^\"&]+)", index)
