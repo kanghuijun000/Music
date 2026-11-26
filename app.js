@@ -2073,6 +2073,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    let body=null,lookupMode="video",lookupArtist="",pendingSourceAlignment=null;
    const videoUrl=new URL("https://unison.boidu.dev/lyrics");
    videoUrl.searchParams.set("v",video.id);
+   videoUrl.searchParams.set("full","1");
    try{const result=await fetchJson(videoUrl,{},8000,provider+"/영상 ID");body=result.data;}
    catch(error){if(error?.code!=="HTTP_404")throw error;}
    if(!body?.success||!body?.data?.lyrics){
@@ -2082,6 +2083,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
       const songUrl=new URL("https://unison.boidu.dev/lyrics");
       songUrl.searchParams.set("song",variant.title);
       songUrl.searchParams.set("artist",variant.artist);
+    songUrl.searchParams.set("full","1");
       const result=await fetchJson(songUrl,{},8000,provider+"/곡·가수 검색");
       if(result.data?.success&&result.data?.data?.lyrics){body=result.data;lookupMode="song";lookupArtist=variant.artist;break;}
      }catch(error){if(error?.code!=="HTTP_404"&&error?.code!=="CANCELLED")record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");}
@@ -2418,7 +2420,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    
   const fallbackController=new AbortController();
   lyricFallbackAbortController=fallbackController;
-  const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),7500);
+  const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);
   const makeLines=item=>{
    const timed=Array.isArray(item?.timed)?item.timed:[];
    const normalized=timed.map(line=>{
@@ -2458,7 +2460,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      matchConfidence:0,_liriqoProvider:item.upstreamProvider||item.provider||item.lyricsSource||"",
      _sameVideoSource:String(data.videoId||"")===String(video.id)},
      queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
-    if(valid)return Boolean(valid._synced);
+    if(valid&&valid._synced&&(!requiresHangulSync||hasHangulLyrics(valid)))return true;
    }
    return false;
   };
