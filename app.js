@@ -2397,7 +2397,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
  if(outcome==="candidate"){
   // A romanized Korean result is not sufficient: briefly allow other providers to return the original script.
   if(candidates.some(isLikelyRomanizedKoreanCandidate)){
-   await Promise.race([allJobs,delay(2500)]);
+   await Promise.race([allJobs,delay(5000)]);
    if(requestId!==lyricLoadToken)return;
   }
   // Give other fast providers a short chance to return a stronger verified match.
