@@ -22,6 +22,7 @@ BASE_FIXTURES = [
     {"title": "밤편지", "artist": "아이유", "duration": 0, "kind": "regression"},
     {"title": "사랑인걸", "artist": "모세", "duration": 0, "kind": "baseline"},
     {"title": "인사", "artist": "범진", "duration": 215, "kind": "strict-match"},
+    {"title": "언제나", "artist": "허각", "duration": 230, "kind": "hangul-sync-recovery"},
     {"title": "좋은 밤 좋은 꿈", "artist": "너드커넥션", "duration": 0, "kind": "baseline"},
     {"title": "Home Sweet Home", "artist": "카더가든", "duration": 206, "kind": "regression"},
     {"title": "Counting Stars", "artist": "OneRepublic", "duration": 0, "kind": "regression"},
@@ -216,7 +217,7 @@ def provider_check(provider: str, fixture: dict) -> dict:
     elif provider == "Karalyr":
         url = "https://karalyr.com/api/get?" + q({"track_name": title, "artist_name": artist})
     elif provider == "LiriQo":
-        url = "https://api.liriqo-alfarrizi.my.id/v1/lyrics?" + q({"title": title, "artist": artist})
+        url = "https://api.liriqo-alfarrizi.my.id/v1/lyrics?" + q({"title": title, "artist": artist, "full": "1"})
     else:
         endpoint = {
             "Better Lyrics/TTML": "/getLyrics",
@@ -332,6 +333,14 @@ def provider_check(provider: str, fixture: dict) -> dict:
     plain = selected.get("plain") or selected.get("plainLyrics") or ""
     plain_count = sum(1 for line in str(plain).splitlines() if line.strip())
     result["timed_lines"] = count
+    if provider == "LiriQo" and isinstance(timed, list):
+        result["hangul_timed_lines"] = sum(
+            1 for line in timed if isinstance(line, dict)
+            and re.search(r"[가-힣]", str(line.get("text") or ""))
+            and isinstance(line.get("start"), (int, float))
+        )
+    else:
+        result["hangul_timed_lines"] = None
     result["plain_lines"] = plain_count
     result["lyric_mode"] = "synced" if count >= 2 else "plain" if plain_count >= 2 else "none"
     result["status"] = "PASS" if count >= 2 or plain_count >= 2 else "WARN"
