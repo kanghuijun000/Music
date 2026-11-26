@@ -153,6 +153,12 @@ def check_static() -> list[dict]:
             and 'const provider="LiriQo";' in app
             and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
         ),
+        "LiriQo does not stop after romanized-only sync when Hangul sync is required": (
+            "if(valid&&valid._synced&&(!requiresHangulSync||hasHangulLyrics(valid)))return true;" in app
+            and 'videoUrl.searchParams.set("full","1");' in app
+            and 'songUrl.searchParams.set("full","1");' in app
+            and 'LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);' in app
+        ),
         "LiriQo plain-text results can be used as a final fallback": (
             "item.plain||item.plainLyrics" in app and '==="plain"?item.lyrics' in app
         ),
