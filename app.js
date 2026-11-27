@@ -1839,33 +1839,86 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
   function restoreRomanizedKoreanSync(timedLines,hangulText){
    const timed=(Array.isArray(timedLines)?timedLines:[]).filter(line=>String(line?.text||"").trim());
-   const source=String(hangulText||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&hasHangulText(line));
-   if(timed.length<3||source.length<3)return null;
-   const restored=[],used=[];let cursor=0,total=0;
-   for(const timedLine of timed){
-    let best=null;
-    for(let start=cursor;start<Math.min(source.length,cursor+3);start++)for(let count=1;count<=3&&start+count<=source.length;count++){
-     const group=source.slice(start,start+count),score=lyricTextSimilarity(timedLine.text,hangulToRomanized(group.join(" ")));
-     if(!best||score>best.score)best={start,count,score,text:group.join(" ")};
+   const source=String(hangulText||"").split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!isCreditMetadata(line));
+   const hangulSourceCount=source.filter(hasHangulText).length;
+   if(timed.length<3||hangulSourceCount<3)return null;
+   // Global monotonic alignment avoids greedy early matches shifting every later line.
+   // Plain sources may contain extra lines or different line breaks, so source skips
+   // are allowed with a penalty; timed lines themselves are never silently dropped.
+   const maxGroupLines=4;
+   const dp=Array.from({length:timed.length+1},()=>Array(source.length+1).fill(null));
+   dp[0][0]={objective:0,totalSimilarity:0,minSimilarity:1,mappedHangul:0,path:[]};
+   const update=(i,j,state)=>{
+    const old=dp[i][j];
+    if(!old||state.objective>old.objective+1e-9||
+      (Math.abs(state.objective-old.objective)<=1e-9&&state.mappedHangul>old.mappedHangul))dp[i][j]=state;
+   };
+   for(let i=0;i<=timed.length;i++){
+    for(let j=0;j<=source.length;j++){
+     const state=dp[i][j];if(!state)continue;
+     if(j<source.length){
+      const skipPenalty=hasHangulText(source[j])?0.055:0.015;
+      update(i,j+1,{...state,objective:state.objective-skipPenalty});
+     }
+     if(i>=timed.length||j>=source.length)continue;
+     for(let count=1;count<=maxGroupLines&&j+count<=source.length;count++){
+      const group=source.slice(j,j+count),groupText=group.join(" ");
+      const containsHangul=group.some(hasHangulText);
+      const comparisonText=containsHangul?hangulToRomanized(groupText):groupText;
+      const similarity=lyricTextSimilarity(timed[i].text,comparisonText);
+      if(similarity<0.70)continue;
+      const mappedHangul=group.filter(hasHangulText).length;
+      const groupingPenalty=(count-1)*0.012;
+      const nextPath=state.path.concat([{text:containsHangul?groupText:String(timed[i].text||""),similarity,containsHangul}]);
+      update(i+1,j+count,{
+       objective:state.objective+similarity-groupingPenalty,
+       totalSimilarity:state.totalSimilarity+similarity,
+       minSimilarity:Math.min(state.minSimilarity,similarity),
+       mappedHangul:state.mappedHangul+mappedHangul,
+       path:nextPath
+      });
+     }
     }
-    if(!best||best.score<0.78)return null;
-    restored.push({...timedLine,text:best.text,words:[]});for(let i=0;i<best.count;i++)used.push(best.start+i);
-    total+=best.score;cursor=best.start+best.count;
    }
-   const average=total/restored.length,coverage=new Set(used).size/source.length;
-   return average>=0.84&&coverage>=0.72?{lines:restored,average,coverage}:null;
+   let best=null;
+   for(let j=0;j<=source.length;j++){
+    const state=dp[timed.length][j];
+    if(state&&(!best||state.objective>best.objective+1e-9||
+      (Math.abs(state.objective-best.objective)<=1e-9&&state.mappedHangul>best.mappedHangul)))best=state;
+   }
+   if(!best||best.path.length!==timed.length)return null;
+   const average=best.totalSimilarity/timed.length;
+   const coverage=best.mappedHangul/hangulSourceCount;
+   if(best.minSimilarity<0.70||average<0.84||coverage<0.70||best.mappedHangul<3)return null;
+   const lines=timed.map((line,index)=>({...line,text:best.path[index].text,
+    words:best.path[index].containsHangul?[]:(Array.isArray(line.words)?line.words:[])}));
+   return {lines,average,coverage,minSimilarity:best.minSimilarity};
   }
 
- function candidateLyricsText(item){
+ function candidateTimedLyricsText(item){
   const sourceLines=Array.isArray(item?.ttmlLines)?item.ttmlLines:(Array.isArray(item?.lines)?item.lines:[]);
-  const timed=sourceLines.map(line=>String(line?.text||""));
-  const plain=String(item?.plainLyrics||"");
-  return (timed.join("\n")+"\n"+plain).trim();
+  return sourceLines.map(line=>String(line?.text||"")).join("\n").trim();
+ }
+ function candidatePlainLyricsText(item){
+  return String(item?.plainLyrics||"").trim();
+ }
+ function candidateLyricsText(item){
+  return (candidateTimedLyricsText(item)+"\n"+candidatePlainLyricsText(item)).trim();
+ }
+ function hasHangulTimedLyrics(item){
+  return hasHangulText(candidateTimedLyricsText(item));
+ }
+ function hasHangulPlainLyrics(item){
+  return hasHangulText(candidatePlainLyricsText(item));
+ }
+ function requiresHangulLyricsScript(trackIdentity){
+  const titleCandidates=[trackIdentity?.title,...(Array.isArray(trackIdentity?.titles)?trackIdentity.titles:[])].filter(Boolean);
+  return titleCandidates.some(title=>hasHangulText(title));
  }
  function isLikelyRomanizedKoreanCandidate(item){
-  const expectedText=[identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" ");
-  if(!hasHangulText(expectedText))return false;
-  const lyrics=candidateLyricsText(item);
+  if(!requiresHangulLyricsScript(identity))return false;
+  // Judge the timed lines independently: Hangul plain lyrics must not mask romanized sync.
+  const lyrics=candidateTimedLyricsText(item);
   if(!lyrics||hasHangulText(lyrics))return false;
   const words=(lyrics.toLowerCase().match(/[a-z]+/g)||[]);
   if(words.length<8)return false;
@@ -1879,8 +1932,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   for(const word of new Set(words))if(romanizedSignals.has(word))matches++;
   return matches>=2;
  }
- function hasHangulLyrics(item){
-  return hasHangulText(candidateLyricsText(item));
+ function asHangulPlainFallback(item){
+  return {...item,ttmlLines:[],lines:[],ttml:"",lyricsfile:"",syncedLyrics:"",
+   _synced:false,_romanizedRestorationFallback:true,plainLyrics:candidatePlainLyricsText(item)};
  }
  function extractLines(item){
   if(Array.isArray(item?.ttmlLines)&&item.ttmlLines.length)return item.ttmlLines;
@@ -2040,6 +2094,9 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     videoBound:Boolean(valid._videoBound),sameVideoSource:Boolean(valid._sameVideoSource),
     sourceVideoId:String(valid._unisonSourceVideoId||valid.sourceVideoId||""),
     upstreamProvider:String(valid._liriqoProvider||valid.upstreamProvider||""),lineCount:timingLines.length,
+    plainLineCount:candidatePlainLyricsText(valid).split(/\r?\n/).filter(line=>line.trim()).length,
+    hangulPlainLineCount:candidatePlainLyricsText(valid).split(/\r?\n/).filter(line=>hasHangulText(line)).length,
+    latinOnlyPlainLineCount:candidatePlainLyricsText(valid).split(/\r?\n/).filter(line=>/[a-z]/i.test(line)&&!hasHangulText(line)).length,
     firstLines:timingLines.slice(0,3).map((line,index)=>{
      const baseTime=finiteTimestampSeconds(line?.time);
      const effectiveTime=getLyricLineStartTime(line,timingLines,index);
@@ -2073,6 +2130,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
    let body=null,lookupMode="video",lookupArtist="",pendingSourceAlignment=null;
    const videoUrl=new URL("https://unison.boidu.dev/lyrics");
    videoUrl.searchParams.set("v",video.id);
+   videoUrl.searchParams.set("full","1");
    try{const result=await fetchJson(videoUrl,{},8000,provider+"/영상 ID");body=result.data;}
    catch(error){if(error?.code!=="HTTP_404")throw error;}
    if(!body?.success||!body?.data?.lyrics){
@@ -2082,6 +2140,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
       const songUrl=new URL("https://unison.boidu.dev/lyrics");
       songUrl.searchParams.set("song",variant.title);
       songUrl.searchParams.set("artist",variant.artist);
+    songUrl.searchParams.set("full","1");
       const result=await fetchJson(songUrl,{},8000,provider+"/곡·가수 검색");
       if(result.data?.success&&result.data?.data?.lyrics){body=result.data;lookupMode="song";lookupArtist=variant.artist;break;}
      }catch(error){if(error?.code!=="HTTP_404"&&error?.code!=="CANCELLED")record(provider+"/곡·가수 검색",error?.code||"PROVIDER_ERROR",error?.message||"검색 실패",error?.elapsed||0,error?.status||"");}
@@ -2411,13 +2470,14 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   await allJobs;
  }
  if(requestId!==lyricLoadToken)return;
- if(!candidates.some(item=>item._synced&&!isLikelyRomanizedKoreanCandidate(item))){recordLyricFlow("provider_search_race_finished",{requestId,outcome,candidateCount:candidates.length});
+ const requiresHangulSync=requiresHangulLyricsScript(identity);
+ if(!candidates.some(item=>item._synced&&(!requiresHangulSync||hasHangulTimedLyrics(item)))){recordLyricFlow("provider_search_race_finished",{requestId,outcome,candidateCount:candidates.length,requiresHangulSync});
   
   const provider="LiriQo";recordLyricFlow("liriqo_fallback_started",{requestId,candidateCount:candidates.length});
    
   const fallbackController=new AbortController();
   lyricFallbackAbortController=fallbackController;
-  const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),7500);
+  const fallbackTimer=setTimeout(()=>fallbackController.abort(Object.assign(new Error("LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);
   const makeLines=item=>{
    const timed=Array.isArray(item?.timed)?item.timed:[];
    const normalized=timed.map(line=>{
@@ -2457,7 +2517,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
      matchConfidence:0,_liriqoProvider:item.upstreamProvider||item.provider||item.lyricsSource||"",
      _sameVideoSource:String(data.videoId||"")===String(video.id)},
      queryArtist?[queryArtist]:[],[identity.title,...identity.titles]);
-    if(valid)return Boolean(valid._synced);
+    if(valid&&valid._synced&&(!requiresHangulSync||hasHangulTimedLyrics(valid)))return true;
    }
    return false;
   };
@@ -2485,6 +2545,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   try{
    const videoUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
    videoUrl.searchParams.set("v",video.id);
+   videoUrl.searchParams.set("full","1");
    const attempts=[(async()=>{
     const data=await request(videoUrl,"영상 ID 검색");
     if(data&&tryResult(data))return true;
@@ -2502,6 +2563,7 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     const songUrl=new URL("https://api.liriqo-alfarrizi.my.id/v1/lyrics");
     songUrl.searchParams.set("title",variant.title);
     songUrl.searchParams.set("artist",variant.artist);
+    songUrl.searchParams.set("full","1");
     if(video.duration)songUrl.searchParams.set("duration",String(Math.round(Number(video.duration))));
     attempts.push((async()=>{
      const data=await request(songUrl,"곡·가수 검색 ("+variant.artist+")");
@@ -2517,6 +2579,35 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }finally{
    clearTimeout(fallbackTimer);
    if(lyricFallbackAbortController===fallbackController)lyricFallbackAbortController=null;
+  }
+ }
+ if(candidates.length===0&&!lyricSignal.aborted&&hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" "))){
+  // Last-resort plain Hangul retrieval is independent of the timed provider.
+  // It never fabricates timestamps and only runs when every timed/plain provider returned no candidate.
+  const provider="Lyrics.ovh/한글 일반 가사 대체";
+  const lookups=[];
+  if(identity.artist&&identity.title)lookups.push([String(identity.artist).trim(),String(identity.title).trim()]);
+  for(const variant of (identity.queries||[]).slice(0,4)){
+   const pair=[String(variant.artist||"").trim(),String(variant.title||"").trim()];
+   if(pair[0]&&pair[1]&&!lookups.some(old=>old[0]===pair[0]&&old[1]===pair[1]))lookups.push(pair);
+  }
+  for(const [lookupArtist,lookupTitle] of lookups.slice(0,3)){
+   try{
+    const url=new URL("https://api.lyrics.ovh/v1/"+encodeURIComponent(lookupArtist)+"/"+encodeURIComponent(lookupTitle));
+    const {data}=await fetchJson(url,{},7000,provider);
+    const plain=String(data?.lyrics||"").trim();
+    if(!hasHangulText(plain))continue;
+    const valid=accept(provider,{trackName:lookupTitle,artistName:lookupArtist,
+     duration:Number(video.duration)||0,ttmlLines:[],syncedLyrics:"",plainLyrics:plain,
+     matchConfidence:0,_independentPlainSource:true},[lookupArtist],[lookupTitle]);
+    if(valid){
+     record(provider,"HANGUL_PLAIN_FALLBACK","다른 제공처가 모두 실패해 검증된 한글 일반 가사를 대체 경로로 확보했습니다. 싱크 타임스탬프는 만들지 않았습니다.");
+     break;
+    }
+   }catch(error){
+    if(error?.code!=="CANCELLED"&&error?.status!==404&&error?.status!==429)
+     record(provider,error?.code||"PROVIDER_ERROR",error?.message||"한글 일반 가사 대체 검색 실패",error?.elapsed||0,error?.status||"");
+   }
   }
  }
  if(candidates.length===0&&usePuter){
@@ -2556,16 +2647,19 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   candidates.filter(item=>!item._synced&&String(item.plainLyrics||"").trim().length>=12)
    .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0))[0]||null;
  let romanizedKoreanBlocked=false;
- const expectedKoreanScript=hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(" "));
- if(expectedKoreanScript&&selected&&!hasHangulLyrics(selected)){
-  const syncedHangulCandidates=candidates.filter(item=>item._synced&&hasHangulLyrics(item)&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2)
+ const expectedKoreanScript=requiresHangulLyricsScript(identity);
+ if(expectedKoreanScript&&selected&&!hasHangulTimedLyrics(selected)){
+  const syncedHangulCandidates=candidates.filter(item=>item._synced&&hasHangulTimedLyrics(item)&&Array.isArray(item.ttmlLines)&&item.ttmlLines.length>=2)
    .sort((a,b)=>(Number(b._score)||0)-(Number(a._score)||0));
   if(syncedHangulCandidates.length){
    selected=syncedHangulCandidates[0];
    record("가사 복원","ORIGINAL_SCRIPT_SYNC_PREFERRED","동일 곡으로 검증된 한글 싱크 가사를 우선 선택했습니다.");
-  }else if(isLikelyRomanizedKoreanCandidate(selected)&&Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length>=3){
+  }else if(Array.isArray(selected.ttmlLines)&&selected.ttmlLines.length>=3){
    const romanized=selected;
-   let plainCandidates=candidates.filter(item=>item!==romanized&&hasHangulLyrics(item)&&String(item.plainLyrics||"").trim().length>=20).filter(item=>{
+   let plainCandidates=[
+    ...(hasHangulPlainLyrics(romanized)&&candidatePlainLyricsText(romanized).length>=20?[romanized]:[]),
+    ...candidates.filter(item=>item!==romanized&&hasHangulPlainLyrics(item)&&candidatePlainLyricsText(item).length>=20)
+   ].filter(item=>{
     const titleOk=trackSimilarity(item.trackName||item.title||"",romanized.trackName||romanized.title||"")>=0.92;
     const artistOk=trackSimilarity(item.artistName||item.artist||"",romanized.artistName||romanized.artist||"")>=0.82;
     const a=Number(item.duration)||0,b=Number(romanized.duration)||0;
@@ -2610,9 +2704,16 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
     selected={...romanized,ttmlLines:restored.lines,plainLyrics:restored.lines.map(line=>line.text).join("\n"),_synced:true,_romanizedRestored:true,_restoredFrom:restoredFrom._source||"verified Hangul lyrics"};
     romanizedKoreanBlocked=false;
     record("가사 복원","ROMANIZED_SYNC_RESTORED","로마자 싱크의 타임스탬프를 보존하고 검증된 한글 원문을 줄별로 연결했습니다. 일치도 "+Math.round(restored.average*100)+"%, 원문 커버리지 "+Math.round(restored.coverage*100)+"%.");
-   }else{
+   }else if(plainCandidates.length){
+    selected=asHangulPlainFallback(plainCandidates[0]);romanizedKoreanBlocked=false;
+    record("가사 복원","HANGUL_PLAIN_FALLBACK","싱크 줄 연결을 검증하지 못해도 같은 곡으로 검증된 한글 일반 가사는 유지합니다.");
+   }else if(isLikelyRomanizedKoreanCandidate(romanized)){
     romanizedKoreanBlocked=true;selected=null;
     record("가사 복원","ROMANIZED_SYNC_ALIGNMENT_UNCERTAIN","한글 원문과 로마자 싱크의 줄별 대응을 충분히 검증하지 못해 자동 복원을 보류했습니다.");
+   }else{
+    // A Latin-script song by a Korean artist is not automatically romanized Korean.
+    // Keep it unchanged unless the text itself matches known Korean romanization signals.
+    record("가사 복원","NON_HANGUL_SYNC_PRESERVED","한글 원문과의 대응은 확인되지 않았고 로마자 한국어 신호도 부족해 기존 싱크를 변경하지 않았습니다.");
    }
   }else if(isLikelyRomanizedKoreanCandidate(selected)){
    romanizedKoreanBlocked=true;selected=null;
@@ -2620,6 +2721,12 @@ async function loadLyrics(video,usePuter=false,identifiedTrack=null){
   }
  }
 
+ recordLyricFlow("lyric_candidate_resolution",{
+  candidateCount:candidates.length,selected:Boolean(selected),selectedProvider:selected?String(selected._source||""):"",
+  selectedSynced:Boolean(selected?._synced),selectedHangulTimed:Boolean(selected&&hasHangulTimedLyrics(selected)),
+  selectedHangulPlain:Boolean(selected&&hasHangulPlainLyrics(selected)),romanizedKoreanBlocked,
+  providerDiagnostics:diagnostics.map(item=>({provider:item.provider,code:item.code,status:item.status||"",count:item.count||1,elapsed:item.elapsed||0})).slice(0,40)
+ });
  if(selected)recordLyricFlow("lyric_candidate_selected",{
   provider:selected._source||"",trackName:selected.trackName||selected.title||"",
   artistName:selected.artistName||selected.artist||"",score:Number(selected._score)||0,
@@ -2994,6 +3101,11 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
    let playerState=null,playerTime=0;
    try{if(ytPlayer){playerState=ytPlayer.getPlayerState();playerTime=Number(ytPlayer.getCurrentTime())||0;}}catch(_){}
    const renderedIndex=Number(lyricState.lastIndex);
+   const hangulTimedLineCount=(lyricState.lines||[]).filter(line=>/[가-힣]/u.test(String(line?.text||""))).length;
+   const latinOnlyTimedLineCount=(lyricState.lines||[]).filter(line=>/[a-z]/i.test(String(line?.text||""))&&!/[가-힣]/u.test(String(line?.text||""))).length;
+   const plainLines=String(lyricState.plain||"").split(/\r?\n/).filter(line=>line.trim());
+   const hangulPlainLineCount=plainLines.filter(line=>/[가-힣]/u.test(line)).length;
+   const latinOnlyPlainLineCount=plainLines.filter(line=>/[a-z]/i.test(line)&&!/[가-힣]/u.test(line)).length;
    return {
     playerReady:Boolean(ytReady&&ytPlayer),playerState,playerTime,playerError:ytPlayerError,
     videoId:currentVideoId,
@@ -3005,6 +3117,7 @@ if(new URLSearchParams(location.search).get("qa")==="1"){
      wordCount:Array.isArray(lyricState.lines[0]?.words)?lyricState.lines[0].words.length:0
     }:null,
     wordTimingEvidence:getLyricWordTimingEvidence(lyricState.lines,5),
+    hangulTimedLineCount,latinOnlyTimedLineCount,plainLineCount:plainLines.length,hangulPlainLineCount,latinOnlyPlainLineCount,
     wordSynced:Boolean(lyricState.wordSynced),
     plainLyricsPresent:Boolean(String(lyricState.plain||"").trim()),
     lyricsLoading:Boolean(lyricState.loading),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare the live Music app's rendered lyric source with transient player audio."""
 from __future__ import annotations
-import array, difflib, json, math, re, sys, urllib.parse, urllib.request, wave
+import array, difflib, hashlib, json, math, re, sys, urllib.parse, urllib.request, wave
 from pathlib import Path
 
 def clean_video_suffix(value):
@@ -223,9 +223,6 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
             report["overall"]="IDENTITY_ONLY"
             report["reason"]="Audio capture intentionally skipped for this retrieval-only video fixture"
             return report
-        if len(lines)<6:
-            report["reason"]="The app did not load enough synced lyric lines for audio verification"
-            return report
 
         # Decode the captured 16 kHz WAV ourselves and pass PCM samples to
         # faster-whisper. This avoids PyAV's file-opening metadata_errors
@@ -277,8 +274,19 @@ def verify(audio_path,video_id,app_snapshot,identified=None):
         report["asr_language_probability"]=round(float(getattr(info,"language_probability",0) or 0),3)
         report["asr_word_count"]=len(words)
         report["transcription_verified"]=bool(len(words)>=6 and info.language_probability>=0.35)
+        # Keep only an opaque fingerprint and timing coverage in the CI report.
+        # Recognized words remain transient and are never persisted as lyrics.
+        transcript_for_fingerprint=" ".join(item[2] for item in words)
+        report["asr_candidate_fingerprint"]=hashlib.sha256(transcript_for_fingerprint.encode("utf-8")).hexdigest()[:16] if transcript_for_fingerprint else None
+        report["asr_candidate_start_seconds"]=round(words[0][0],3) if words else None
+        report["asr_candidate_end_seconds"]=round(words[-1][1],3) if words else None
         if not report["transcription_verified"]:
             report["reason"]="Speech recognition did not produce sufficiently confident vocal text"
+            return report
+        if len(lines)<6:
+            report["overall"]="ASR_CANDIDATE_ONLY"
+            report["asr_candidate_available"]=True
+            report["reason"]="ASR produced a candidate transcript, but the app supplied fewer than six timed lyric lines; content matching and sync remain unverified"
             return report
 
         # Build candidate vocal word groups for each displayed app lyric line.

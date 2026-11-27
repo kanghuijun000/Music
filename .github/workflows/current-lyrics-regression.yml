@@ -6,8 +6,10 @@ on:
     paths:
       - ".github/workflows/current-lyrics-regression.yml"
       - "tools/historical_lyrics_regression.py"
+      - "tools/lyrica_korean_sync_probe.py"
       - "tools/youtube_audio_probe.py"
       - "tools/lyric_audio_verify.py"
+      - "tools/lyric_audio_verify_test.py"
       - "tools/provider_timing_consensus.py"
       - "tools/provider_timing_consensus_test.py"
       - "app.js"
@@ -35,6 +37,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lyrica-korean-sync-probe:
+    name: "Live Lyrica probe — 허각 언제나"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Query Lyrica sources without storing lyric text
+        run: python tools/lyrica_korean_sync_probe.py
+
+      - name: Upload metadata-only diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lyrica-korean-sync-probe
+          path: lyrica-korean-sync-probe.json
+          if-no-files-found: warn
+          retention-days: 14
+
   current-main:
     name: "21-video regression — current app vs baseline"
     runs-on: ubuntu-latest
@@ -58,6 +87,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
+
+      - name: Run lyric verifier unit checks
+        run: python tools/lyric_audio_verify_test.py
 
       - name: Run baseline app against the same fixed video set
         continue-on-error: true

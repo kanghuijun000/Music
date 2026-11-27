@@ -42,6 +42,7 @@ FIXED = [
     {"name": "Sold Out — exact previously tested lyric video", "video_id": "GspDybPhOeY", "audio_check": False, "seconds": 25},
     {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE", "audio_check": False, "seconds": 25},
     {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q", "audio_check": False, "seconds": 25},
+    {"name": "언제나 — 허각 (Hangul sync recovery target)", "video_id": "MQ8EdGX3DZE", "expect_hangul_timed": True, "audio_check": True, "seconds": 45},
     {"name": "인사 — Beomjin (exact short-title user video)", "video_id": "bbqr6NkJ88A", "audio_check": True, "seconds": 45},
     {"name": "사랑인걸 — exact user video with reported constant lag", "video_id": "6RsbVu2fG_o", "audio_check": True, "seconds": 45},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection (웅키 lyric video)", "video_id": "mTonMiKVZRw", "audio_check": False, "seconds": 25},
@@ -135,6 +136,11 @@ def main():
                         "artist": verification.get("app_track_artist"),
                     },
                     "timed_line_count": detail.get("app_renderer", {}).get("timed_line_count", 0),
+                    "hangul_timed_line_count": detail.get("hangul_timed_line_count", 0),
+                    "latin_only_timed_line_count": detail.get("latin_only_timed_line_count", 0),
+                    "hangul_plain_line_count": detail.get("hangul_plain_line_count", 0),
+                    "latin_only_plain_line_count": detail.get("latin_only_plain_line_count", 0),
+                    "expect_hangul_timed": bool(test.get("expect_hangul_timed", False)),
                     "plain_lyrics_present": detail.get("app_renderer", {}).get("plain_lyrics_present", False),
                     "timing_basis": detail.get("app_renderer", {}).get("timing_basis"),
                     "lyric_verification": detail.get("lyric_verification", {}),
@@ -167,6 +173,8 @@ def main():
     results = report["results"]
     report["summary"] = {
         "songs_tested": len(results),
+        "hangul_timed_lyrics_loaded": sum(1 for x in results if int(x.get("hangul_timed_line_count") or 0) >= 2),
+        "hangul_plain_lyrics_loaded": sum(1 for x in results if int(x.get("hangul_plain_line_count") or 0) >= 2),
         "synced_lyrics_loaded": sum(1 for x in results if int(x.get("timed_line_count") or 0) >= 2),
         "plain_only": sum(1 for x in results if x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
         "no_lyrics_loaded": sum(1 for x in results if not x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
@@ -189,7 +197,7 @@ def main():
     out = ROOT / f"historical-lyrics-regression-{sha[:10]}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or x.get("app_static_validation_passed") is False or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
+    retrieval_failures = [x for x in results if x.get("error") or not (x.get("lyric_verification") or {}).get("identity_verified") or not (int(x.get("timed_line_count") or 0) >= 2 or x.get("plain_lyrics_present")) or (x.get("expect_hangul_timed") and int(x.get("hangul_timed_line_count") or 0) < 2) or x.get("app_static_validation_passed") is False or x.get("verification_status") not in ("PASS", "INCONCLUSIVE")]
     if args.commit.upper() == "HEAD" and not report["summary"]["vocal_sync_passed"]:
         report["summary"]["sync_gate"] = "NO_AUDIO_SYNC_PASS"
         out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

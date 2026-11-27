@@ -1,12 +1,12 @@
 const CACHE_PREFIX="music-pwa-";
-const CACHE_VERSION="pwa-hangul-lyrics-restore-20261126-2";
+const CACHE_VERSION="pwa-hangul-lyrics-restore-20261126-5";
 const CACHE_NAME=CACHE_PREFIX+CACHE_VERSION;
 const APP_SHELL=[
  "./",
  "./index.html",
  "./install.html",
  "./style.css",
- "./app.js?v=193-lyrics-repair-1",
+ "./app.js?v=pwa-hangul-lyrics-restore-20261126-5",
  "./manifest.json",
  "./icons/music-icon.svg",
  "./icons/icon-192.svg",
