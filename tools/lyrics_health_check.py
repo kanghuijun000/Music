@@ -152,7 +152,7 @@ def check_static() -> list[dict]:
         "underscore-separated lyric-video suffix is normalized": "|_|[-–—]" in app,
         "shared plain lyric cache fallback is absent": "findSharedPlainLyricCache" not in app,
         "Korean romanized sync does not suppress the Hangul-capable LiriQo fallback": (
-            "const requiresHangulSync=hasHangulText([identity.title,identity.artist,...(identity.titles||[])].filter(Boolean).join(\" \"));" in app
+            "const requiresHangulSync=requiresHangulLyricsScript(identity);" in app
             and "item._synced&&(!requiresHangulSync||hasHangulTimedLyrics(item))" in app
             and 'const provider="LiriQo";' in app
             and 'jobs.push((async()=>{\n  const provider="LiriQo";' not in app
