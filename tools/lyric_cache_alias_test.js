@@ -42,6 +42,13 @@ const names = [
   "normalizeVideoBoundLyricsToSongTimeline",
   "getVideoLyricOffset",
   "getLyricLineStartTime",
+  "hasHangulText",
+  "hangulToRomanized",
+  "lyricAlignmentNormalize",
+  "lyricTextSimilarity",
+  "isCreditMetadata",
+  "restoreRomanizedKoreanSync",
+  "requiresHangulLyricsScript",
 ];
 const code = `const LYRIC_WORD_ANCHOR_MAX_ADJUSTMENT_SECONDS = 0.30;\nconst LYRIC_WORD_ANCHOR_LEGACY_SECONDS = 0.12;\nconst ARTIST_IDENTITY_ALIASES = [["버즈", "buzz"], ["카더가든", "car the garden"], ["너드커넥션", "nerd connection"], ["범진", "beomjin", "beom jin", "beom-jin"]];\n` + names.map(extractFunction).join("\n") + String.raw`
 const missingOffsetLines = normalizeVideoBoundLyricsToSongTimeline([{time:10,text:"line"}], null);
@@ -337,6 +344,60 @@ if (selectTrackStart([zeroStartTrack], trackVideo)?.timestamp !== 0) {
 }
 if (selectIdentifiedTrack([zeroStartTrack], trackVideo)?.timestamp !== 0) {
   throw new Error("A genuine zero-second audio-identification start was incorrectly rejected");
+}
+
+const koreanTitleIdentity={title:"언제나",titles:["언제나"],artist:"허각"};
+if (!requiresHangulLyricsScript(koreanTitleIdentity)) throw new Error("A Hangul song title did not require Hangul lyric script");
+const englishTitleKoreanArtist={title:"Home Sweet Home",titles:["Home Sweet Home"],artist:"카더가든"};
+if (requiresHangulLyricsScript(englishTitleKoreanArtist)) throw new Error("A Hangul artist name incorrectly forced Hangul lyrics for an English title");
+const bilingualTitleIdentity={title:"Home Sweet Home",titles:["Home Sweet Home","홈 스위트 홈"],artist:"카더가든"};
+if (!requiresHangulLyricsScript(bilingualTitleIdentity)) throw new Error("A Hangul title alias was ignored");
+const romanizedTimed=[
+ {time:5.18,text:"eonjena hamkke",words:[]},
+ {time:11.44,text:"useumyeo geudae",words:[]},
+ {time:17.42,text:"nae gyeote",words:[]}
+];
+const hangulPlain=[
+ "Intro metadata",
+ "언제나",
+ "함께",
+ "웃으며",
+ "그대",
+ "내",
+ "곁에",
+ "Outro metadata"
+].join("\n");
+const restoredRomanized=restoreRomanizedKoreanSync(romanizedTimed,hangulPlain);
+if (!restoredRomanized) throw new Error("Global alignment failed when Hangul plain lyrics used different line breaks and extra metadata");
+if (restoredRomanized.lines.map(line=>line.text).join("|")!=="언제나 함께|웃으며 그대|내 곁에") {
+ throw new Error("Global alignment did not restore the correct Hangul lyric groups");
+}
+if (restoredRomanized.lines.some((line,index)=>line.time!==romanizedTimed[index].time)) {
+ throw new Error("Romanized-to-Hangul restoration changed provider timestamps");
+}
+const unrelatedTimed=[
+ {time:1,text:"completely unrelated phrase",words:[]},
+ {time:4,text:"another unrelated sentence",words:[]},
+ {time:7,text:"nothing matches this",words:[]}
+];
+if (restoreRomanizedKoreanSync(unrelatedTimed,hangulPlain)!==null) {
+ throw new Error("Global alignment accepted unrelated Hangul source lyrics");
+}
+const mixedTimed=[
+ {time:1,text:"neoreul saranghae",words:[]},
+ {time:4,text:"I need you tonight",words:[{text:"I",start:4,end:4.1}]},
+ {time:7,text:"eonjena hamkke",words:[]},
+ {time:10,text:"useumyeo geudae",words:[]}
+];
+const mixedPlain="너를 사랑해\nI need you tonight\n언제나 함께\n웃으며 그대";
+const mixedRestored=restoreRomanizedKoreanSync(mixedTimed,mixedPlain);
+if (!mixedRestored || mixedRestored.lines[0].text!=="너를 사랑해" ||
+    mixedRestored.lines[1].text!=="I need you tonight" ||
+    mixedRestored.lines[2].text!=="언제나 함께" || mixedRestored.lines[3].text!=="웃으며 그대") {
+ throw new Error("Global alignment failed to preserve a matching English line in mixed-language lyrics");
+}
+if (mixedRestored.lines[1].words.length!==1 || mixedRestored.lines[0].words.length!==0) {
+ throw new Error("Word timing should be cleared only on lines whose script was replaced");
 }
 console.log("PASS: cross-upload cache identity and strict TrackID timestamp validation");
 `;
