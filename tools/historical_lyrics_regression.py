@@ -138,6 +138,8 @@ def main():
                     "timed_line_count": detail.get("app_renderer", {}).get("timed_line_count", 0),
                     "hangul_timed_line_count": detail.get("hangul_timed_line_count", 0),
                     "latin_only_timed_line_count": detail.get("latin_only_timed_line_count", 0),
+                    "hangul_plain_line_count": detail.get("hangul_plain_line_count", 0),
+                    "latin_only_plain_line_count": detail.get("latin_only_plain_line_count", 0),
                     "expect_hangul_timed": bool(test.get("expect_hangul_timed", False)),
                     "plain_lyrics_present": detail.get("app_renderer", {}).get("plain_lyrics_present", False),
                     "timing_basis": detail.get("app_renderer", {}).get("timing_basis"),
@@ -172,6 +174,7 @@ def main():
     report["summary"] = {
         "songs_tested": len(results),
         "hangul_timed_lyrics_loaded": sum(1 for x in results if int(x.get("hangul_timed_line_count") or 0) >= 2),
+        "hangul_plain_lyrics_loaded": sum(1 for x in results if int(x.get("hangul_plain_line_count") or 0) >= 2),
         "synced_lyrics_loaded": sum(1 for x in results if int(x.get("timed_line_count") or 0) >= 2),
         "plain_only": sum(1 for x in results if x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
         "no_lyrics_loaded": sum(1 for x in results if not x.get("plain_lyrics_present") and int(x.get("timed_line_count") or 0) < 2),
