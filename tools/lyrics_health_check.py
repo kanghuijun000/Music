@@ -110,6 +110,9 @@ def check_static() -> list[dict]:
     verifier = (ROOT / "tools/lyric_audio_verify.py").read_text(encoding="utf-8")
     probe = (ROOT / "tools/youtube_audio_probe.py").read_text(encoding="utf-8")
     results = []
+    liriqo_start = app.find('const provider="LiriQo";')
+    liriqo_end = app.find('if(candidates.length===0', liriqo_start) if liriqo_start >= 0 else -1
+    liriqo_block = app[liriqo_start:liriqo_end] if liriqo_start >= 0 and liriqo_end > liriqo_start else ""
     checks = {
         "parenthetical artist aliases take precedence over generic lyric-label parsing": "if(!artistKnown&&!leadingParentheticalArtist&&(hasExplicitLyricsLabel||hasOfficialVideoLabel)&&(parts.length===2||parts.length===1))" in app,
         "shared song lyric cache checks verified artist aliases from both uploads": "function cachedArtistIdentityNames(cached)" in app and "identity.artistAliases" in app and "cachedArtistIdentityNames(cached)" in app,
@@ -166,11 +169,25 @@ def check_static() -> list[dict]:
             and "restoreRomanizedKoreanSync(romanized.ttmlLines,candidate.plainLyrics)" in app
             and "selected=asHangulPlainFallback(plainCandidates[0])" in app
         ),
-        "LiriQo does not stop after romanized-only sync when Hangul sync is required": (
-            "if(valid&&valid._synced&&(!requiresHangulSync||hasHangulTimedLyrics(valid)))return true;" in app
-            and 'videoUrl.searchParams.set("full","1");' in app
-            and 'songUrl.searchParams.set("full","1");' in app
-            and 'LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);' in app
+        "LiriQo fallback requests full results in the actual LiriQo code path": (
+            bool(liriqo_block)
+            and 'videoUrl.searchParams.set("full","1");' in liriqo_block
+            and 'songUrl.searchParams.set("full","1");' in liriqo_block
+            and 'if(valid&&valid._synced&&(!requiresHangulSync||hasHangulTimedLyrics(valid)))return true;' in liriqo_block
+            and 'LiriQo 요청 제한 시간 초과"),{code:"TIMEOUT"})),15000);' in liriqo_block
+        ),
+        "Hangul script requirement is derived from song titles rather than artist names": (
+            "function requiresHangulLyricsScript(trackIdentity)" in app
+            and "trackIdentity?.title" in app
+            and "trackIdentity?.titles" in app
+            and "const requiresHangulSync=requiresHangulLyricsScript(identity);" in app
+            and "const expectedKoreanScript=requiresHangulLyricsScript(identity);" in app
+        ),
+        "romanized sync restoration uses global monotonic alignment with conservative thresholds": (
+            "const dp=Array.from({length:timed.length+1}" in app
+            and "const maxGroupLines=4;" in app
+            and "best.minSimilarity<0.70" in app
+            and "coverage<0.70" in app
         ),
         "LiriQo plain-text results can be used as a final fallback": (
             "item.plain||item.plainLyrics" in app and '==="plain"?item.lyrics' in app
@@ -182,9 +199,11 @@ def check_static() -> list[dict]:
             "lyricFallbackAbortController" in app
             and "if(lyricFallbackAbortController)lyricFallbackAbortController.abort" in app
         ),
-        "QA exposes Hangul-vs-Latin timed lyric counts without lyric text": (
+        "QA exposes Hangul-vs-Latin timed and plain lyric counts without lyric text": (
             "hangulTimedLineCount" in app and "latinOnlyTimedLineCount" in app
+            and "hangulPlainLineCount" in app and "latinOnlyPlainLineCount" in app
             and 'report["hangul_timed_line_count"]' in probe
+            and 'report["hangul_plain_line_count"]' in probe
         ),
         "last-resort Hangul plain fallback only runs when no candidate exists": (
             "if(candidates.length===0&&!lyricSignal.aborted&&hasHangulText(" in app
@@ -332,6 +351,8 @@ def provider_check(provider: str, fixture: dict) -> dict:
     count = timed_line_count(timed)
     plain = selected.get("plain") or selected.get("plainLyrics") or ""
     plain_count = sum(1 for line in str(plain).splitlines() if line.strip())
+    hangul_plain_count = sum(1 for line in str(plain).splitlines() if re.search(r"[가-힣]", line))
+    latin_only_plain_count = sum(1 for line in str(plain).splitlines() if re.search(r"[a-z]", line, re.I) and not re.search(r"[가-힣]", line))
     result["timed_lines"] = count
     if provider == "LiriQo" and isinstance(timed, list):
         result["hangul_timed_lines"] = sum(
@@ -342,6 +363,8 @@ def provider_check(provider: str, fixture: dict) -> dict:
     else:
         result["hangul_timed_lines"] = None
     result["plain_lines"] = plain_count
+    result["hangul_plain_lines"] = hangul_plain_count
+    result["latin_only_plain_lines"] = latin_only_plain_count
     result["lyric_mode"] = "synced" if count >= 2 else "plain" if plain_count >= 2 else "none"
     result["status"] = "PASS" if count >= 2 or plain_count >= 2 else "WARN"
     result["reason"] = "" if count >= 2 or plain_count >= 2 else "candidate_found_but_no_usable_lyrics"
