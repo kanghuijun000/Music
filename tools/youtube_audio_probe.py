@@ -266,6 +266,8 @@ def main() -> int:
                 report["app_lyrics_status"] = str(app_snapshot.get("lyricsStatus") or "")
                 report["hangul_timed_line_count"] = int(app_snapshot.get("hangulTimedLineCount") or 0)
                 report["latin_only_timed_line_count"] = int(app_snapshot.get("latinOnlyTimedLineCount") or 0)
+                report["hangul_plain_line_count"] = int(app_snapshot.get("hangulPlainLineCount") or 0)
+                report["latin_only_plain_line_count"] = int(app_snapshot.get("latinOnlyPlainLineCount") or 0)
                 report["app_lyric_track"] = app_snapshot.get("track") or {}
                 report["app_selected_first_line"] = app_snapshot.get("firstLineTiming")
                 report["app_lyric_timing_basis"] = app_snapshot.get("timingBasis")
