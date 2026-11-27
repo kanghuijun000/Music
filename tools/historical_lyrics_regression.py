@@ -42,7 +42,7 @@ FIXED = [
     {"name": "Sold Out — exact previously tested lyric video", "video_id": "GspDybPhOeY", "audio_check": False, "seconds": 25},
     {"name": "비망록 — Buzz (Flux Records Korea lyric upload)", "video_id": "Y7gpPlXyhDE", "audio_check": False, "seconds": 25},
     {"name": "사랑인걸 — Moses (웅키 lyric video)", "video_id": "yPqI1VAHX8Q", "audio_check": False, "seconds": 25},
-    {"name": "언제나 — 허각 (Hangul sync recovery target)", "video_id": "MQ8EdGX3DZE", "expect_hangul_timed": True, "audio_check": False, "seconds": 25},
+    {"name": "언제나 — 허각 (Hangul sync recovery target)", "video_id": "MQ8EdGX3DZE", "expect_hangul_timed": True, "audio_check": True, "seconds": 45},
     {"name": "인사 — Beomjin (exact short-title user video)", "video_id": "bbqr6NkJ88A", "audio_check": True, "seconds": 45},
     {"name": "사랑인걸 — exact user video with reported constant lag", "video_id": "6RsbVu2fG_o", "audio_check": True, "seconds": 45},
     {"name": "좋은 밤 좋은 꿈 — Nerd Connection (웅키 lyric video)", "video_id": "mTonMiKVZRw", "audio_check": False, "seconds": 25},
