@@ -9,6 +9,7 @@ on:
       - "tools/lyrica_korean_sync_probe.py"
       - "tools/youtube_audio_probe.py"
       - "tools/lyric_audio_verify.py"
+      - "tools/lyric_audio_verify_test.py"
       - "tools/provider_timing_consensus.py"
       - "tools/provider_timing_consensus_test.py"
       - "app.js"
@@ -86,6 +87,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install playwright faster-whisper
           python -m playwright install --with-deps chromium
+
+      - name: Run lyric verifier unit checks
+        run: python tools/lyric_audio_verify_test.py
 
       - name: Run baseline app against the same fixed video set
         continue-on-error: true
